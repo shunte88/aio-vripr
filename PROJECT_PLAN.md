@@ -1,0 +1,543 @@
+# Vinyl Capture Workstation — Delivery Plan
+
+**Version:** 0.1 (draft for review)
+**Date:** 2026-09-22
+**Basis:** [REQUIREMENTS.md](REQUIREMENTS.md) (§ references throughout point at it)
+**Delivery model:** solo developer + AI pairing, full-time (40+ h/week)
+**Progress measure:** milestones, not calendar — estimates below are relative weights only
+**Repository:** `aio-vripr` (currently a stub: LICENSE, README, REQUIREMENTS.md)
+
+---
+
+## 1. Strategy on one page
+
+The requirements describe a product in which the hard, unforgiving part — a real-time
+capture path that must never lose a sample, feeding an incrementally-committed SQLite
+project that must survive a power cut — sits *underneath* everything users will judge it
+by. So the plan is deliberately inverted against the temptation to build screens first:
+
+1. **Prove the foundation before building on it.** Two spikes (§47, §48) answer the only
+   questions that can invalidate the architecture: can CPAL give us a trustworthy,
+   honestly-reported capture stream on all three platforms, and can SQLite absorb
+   24/192 stereo indefinitely while analysis reads concurrently. Nothing else starts
+   until those pass.
+2. **Build the engine headless.** §4.5 already requires the core to be testable and
+   usable without the GUI. Treating that as a *delivery sequence*, not just a design
+   property, is the single strongest defence of §2 (no logic in the frontend): a
+   `vripr-cli` that can record, detect, identify, edit markers and export means logic
+   physically cannot leak into React, because React does not exist yet.
+3. **Add the shell last, and thin.** Tauri 2 + React arrives once the command/event
+   contract is stable and exercised by the CLI. The UI then binds to a proven API
+   instead of co-evolving with one.
+4. **Gate, don't schedule-and-hope.** Five gates with explicit exit criteria. Each gate
+   is a point at which the plan may legitimately change shape.
+
+**Gates**
+
+| Gate | Name | Passed when | Weight |
+|------|------|-------------|--------|
+| **G0** | Feasibility | Spikes pass on Tier 1 hardware; block strategy and IPC transport chosen on measured evidence; AUP3/AUP4 schemas documented | 17 |
+| **G1** | Headless core | Record → store → recover → detect → edit → export, all from the CLI, no GUI in existence | 96 |
+| **G2** | MVP release 0.1 | §44 scope plus Audacity import, GUI, packaged for every Tier 1 platform | 53 |
+| **G3** | Release 0.2 | §45 scope (chromaprint-next, AcoustID, evidence resolver, MP3/OGG) | 47 |
+| **G4** | Release 0.3+ | §46 scope (processing, click removal, Android, plugins) | re-plan at G3 |
+
+*Weight* is relative effort in sessions (~3 focused hours), used for sequencing and for
+noticing when something is running away — not for forecasting dates.
+
+---
+
+## 2. Inherited assets — audit
+
+An honest count first: **the existing VRipr contributes roughly a third of the eventual
+core, almost entirely in analysis and metadata.** Everything on the capture, storage,
+playback, encoding and UI axes is new. This matters for estimation — "porting VRipr"
+is not the shape of this project.
+
+### 2.1 From `/data2/vripr` (Rust, ~10.9k LOC, egui + Audacity pipe)
+
+| Asset | Verdict | Notes |
+|-------|---------|-------|
+| `src/audio/mod.rs` — RMS, spectral-flatness, HMM, guided detectors (~1.2k LOC) | **Port + refactor** | Algorithms are sound and land in `signal/`. But every entry point takes `path: &Path` and decodes via Symphonia. The refactor is to **split decode from analyse**: a `FeatureStream` (windowed RMS / flatness) fed either by the live capture tap or by a block reader. The analysis maths transfers largely unchanged. |
+| `DetectorConfig`, `GuidedDetectorConfig` | **Port** | Well-tuned vinyl defaults (gap-fill for pops, onset hysteresis for crackle) — real domain knowledge, keep verbatim as starting values. |
+| `src/audio/onnx_detect.rs` (+ `ort`, `ndarray`) | **Defer** | Optional cargo feature, Phase 3. Not in MVP; ORT has no macOS x86_64 prebuilts. |
+| `src/metadata/discogs.rs` (758 LOC) | **Port** | Behind a new provider trait (§28). |
+| `src/metadata/identify.rs` | **Split** | AcoustID + MusicBrainz HTTP → `fingerprint/acoustid` + `metadata/musicbrainz`; `duration_agreement`, `rank_score` → `identify/confidence` as the seed of the evidence model (§23). |
+| `src/metadata/genre.rs` | **Port as-is** | §32 requires genre normalization retained. |
+| `src/metadata/mod.rs` — `split_by_discogs_durations`, `assign_discogs_titles`, `compare_duration_report` | **Port** | Becomes metadata-duration evidence (§24). |
+| `src/tagging.rs` (lofty) | **Port** | Into `export/tagging`. |
+| `src/workers/export.rs` — token/template engine, sanitisation, Levenshtein token suggestions | **Port the templating** | ~300 LOC of naming-template logic transfers cleanly. |
+| `src/workers/export.rs` — actual encoding | **Does not exist** | VRipr delegates all encoding to Audacity over the pipe. **Encoders are net-new work** (see D5). |
+| `src/track.rs` `TrackMeta`, alpha numbering | **Remodel** | Becomes project schema entities (§29); alpha numbering retained. |
+| `src/config.rs` | **Remodel** | Informs §39 settings; storage moves to app config + project DB split. |
+| `src/pipe.rs`, `src/app.rs`, `src/ui/*`, `src/fonts.rs` (~4.3k LOC) | **Discard** | Audacity IPC and egui. `ui/waveform.rs` is worth reading for interaction behaviour before writing the React editor. |
+| `tests/*` | **Port selectively** | `test_track`, `test_template`, `test_tagging`, `test_identify` carry over with their subjects. |
+| `THIRD-PARTY-NOTICES.md`, `LICENSE-LGPL-2.1` | **Port now** | The LGPL relink story for chromaprint-next is already correctly worked out; do not re-solve it. |
+
+### 2.2 Other assets
+
+| Asset | Use |
+|-------|-----|
+| `/data2/vripr_training` — ~100 labelled 512 kB WAV excerpts + JSON labels, plus `boundary_detector.onnx` | **Boundary fixture corpus** (§41). Immediately usable as the regression set for the detector port. |
+| `/data2/chromaprint-next` — local checkout, `Fingerprinter::start/feed(&[i16])/finish`, bit-identical to C reference | Phase 2 dependency. Streaming `feed()` is exactly the shape §25 needs. Vendor/pin (see R6). |
+| `/data2/vriprpy`, `/data2/archive_vriprtk` (Python lineage) | Reference only. `Red Exposure.wav` (784 MB) is a useful long-capture test input. |
+
+### 2.3 Net-new capability (no ancestor)
+
+Capture pipeline · device management · SQLite block storage · transaction/checkpoint
+strategy · recovery · playback engine · metering · progressive waveform pyramid ·
+evidence resolver · encoders (FLAC/WAV/MP3/OGG) · project format + migrations ·
+Tauri/React application.
+
+---
+
+### 2.4 Test hardware and platform tiers
+
+Confirmed 2026-09-22. Development is on Linux x86_64.
+
+**These are test instruments, not design assumptions.** The product targets whatever
+CPAL enumerates on the host: typically a phono stage into a USB interface, which is the
+common case and must be a first-class path. Device capability is discovered and
+exposed (§7, §8), never assumed. The rigs below exist so that *we* can verify claims,
+particularly at the 24/192 ceiling.
+
+| Rig | Role |
+|-----|------|
+| **Pi 5 + HiFiBerry DAC+ADC Pro** (Burr-Brown, 24-bit 44.1–192 kHz **both directions**, RCA + balanced in, −12…+32 dB gain, no input anti-alias filter) | Primary capture *and* playback rig, and the aarch64 target. Exercises the full 24/192 requirement on a clean ALSA `hw:` path. Also hosts the `snd-aloop` software-loopback verification |
+| **Windows x86_64 + Michell Orbe / Rega / Roksan chain** | Primary real-world vinyl rig; WASAPI shared and exclusive verification |
+| **Tascam DA-3000** | Reference master recorder: generates a known-good 24/192 PCM corpus from the same vinyl passes. Its AES/EBU + S/PDIF I/O also allows an opportunistic digital loopback check (S1, method 3) |
+| **Android devices** | Phase 3 (AAudio). aarch64 work on the Pi de-risks this early |
+| **macOS** | **No hardware available.** See below |
+
+**Platform tiers.** §1 of the requirements names macOS a primary platform; without an Apple
+device that cannot be honoured on the same terms as the others, so the plan states the
+distinction rather than papering over it:
+
+- **Tier 1 — verified on hardware:** Linux x86_64, Linux aarch64 (Pi 5), Windows x86_64.
+- **Tier 2 — built and unit-tested in CI, no device verification:** macOS (aarch64 + x86_64) via GitHub Actions runners. Every non-device test runs; CoreAudio capture paths are exercised only by the file-backed simulation source. Released as "community-tested", with the gap stated in the README rather than discovered by a user.
+- **Tier 3 — future:** Android.
+
+Cross-compilation to all Tier 1 targets is established practice from VRipr. macOS is the
+exception: packaging and notarisation need Apple tooling, so CI runners do that job.
+
+**Consequence for §37/§41:** the acceptance runs (90-minute 24/192 soak, crash recovery,
+concurrent-read contention) execute on the Pi 5 and the Windows rig. The Pi is the more
+interesting of the two — lower I/O headroom on SD/NVMe makes it the honest worst case,
+so if the SQLite write path holds there it will hold on a desktop.
+
+---
+
+## 3. Decisions to lock
+
+Each has a recommendation and a deadline. Recording them as ADRs in `docs/adr/` keeps
+§49's "openly documented" promise honest from day one.
+
+| # | Decision | Recommendation | Lock by |
+|---|----------|----------------|---------|
+| **D1** | Native project format and extension, and the degree of Audacity compatibility (§12) | **Locked 2026-09-22.** Native `.vripr`, schema a deliberate superset of AUP4's (identical `sampleblocks` shape and summary columns) plus our own tables; SQLite `application_id` + `user_version` so the file self-identifies. Audacity interop is **import-only** (`.aup3` and `.aup4`, tier A). Export to Audacity is declined. | Locked |
+| **D2** | SQLite binding | `rusqlite` with `bundled` feature — synchronous, predictable, no async runtime on the writer thread; bundled build removes platform SQLite variance. `sqlx` is async-first and wrong here. | WP-02 |
+| **D3** | Block layout & size | Decide from S2 evidence. Starting hypothesis: interleaved stereo, native format, 1–4 s per block, one row per block. | G0 |
+| **D4** | Sample representation at rest | Store the device's bytes **verbatim** plus a format tag. §9 forbids conversion; converting to f32 at rest would silently break the bit-perfect claim. | WP-02 |
+| **D5** | Encoder stack | WAV: own writer (trivial, avoids `hound`'s format limits). FLAC: `flacenc` (pure Rust, Apache-2.0). MP3: `mp3lame-encoder` (LGPL, links libmp3lame) — Phase 2. Ogg Vorbis: `vorbis_rs` (LGPL) — Phase 2. Licensing consequence: MP3/OGG extend the LGPL relink obligation already established for chromaprint-next; alternatively make them optional features. | WP-14 (FLAC/WAV), G3 (MP3/OGG) |
+| **D6** | High-rate IPC transport | Tauri 2 **channels** (not the event bus) for meter and waveform deltas; pre-serialised compact payloads; coalesce to ≤60 Hz in Rust. Validate in S3. | G0 |
+| **D7** | Licence posture | MIT core + ported `THIRD-PARTY-NOTICES.md` + LGPL relink instructions; `cargo-deny` in CI to catch licence drift on every dependency bump. | WP-01 |
+| **D8** | Concurrency model | Tokio **only** for network/metadata/export I/O. Dedicated OS threads (with elevated priority where permitted) for capture writer, meter, waveform, detector. No async on the RT path (§10, §36). | WP-07 |
+| **D9** | Typed Rust↔TS contract | Generate TS types from Rust (`ts-rs` or `specta`) and fail CI on drift. Hand-written TS interfaces are how §2 erodes. | WP-15 |
+| **D10** | Toolchain floor | Rust edition 2024, pinned MSRV, `rust-toolchain.toml`; Node LTS; pnpm. | WP-01 |
+
+### 3.1 Candidate crate shortlist
+
+Deliberately leaning on mature Rust crates rather than hand-rolling. Each is a default
+to be confirmed, not a commitment; `cargo deny` policy (D7) applies to all of them.
+
+| Area | Candidate | Note |
+|------|-----------|------|
+| Capture/playback | `cpal` | Mandated by §5. Exclusive/hog-mode paths exercised in S1 |
+| Lock-free PCM handoff | `rtrb` (or `ringbuf`) | SPSC, allocation-free, exactly the §10 shape |
+| SQLite | `rusqlite` (bundled) | D2 |
+| Decode (fixtures, import) | `symphonia` | Already proven in VRipr |
+| FFT / spectral | `realfft` (+ `rustfft`) | VRipr uses `rustfft`; `realfft` is the better fit for real input |
+| Sample conversion / DSP | `dasp` | Format conversion **off** the bit-perfect path only |
+| Resampling | `rubato` | Fingerprint feed and future processing only — never the capture path |
+| FLAC encode | `flacenc` | Pure Rust, Apache-2.0 |
+| Tagging | `lofty` | Already proven in VRipr |
+| HTTP | `reqwest` (rustls) | Already proven in VRipr |
+| Fingerprint | `chromaprint-next` | Phase 2; vendor and pin (R6) |
+| Rust↔TS types | `ts-rs` or `specta` | D9 |
+| Errors / logging | `thiserror`, `anyhow`, `tracing` | §42 |
+| Testing | `proptest`, `criterion`, `insta`, `cargo-mutants` | §8 |
+
+### 3.2 Audacity compatibility — what the evidence says
+
+Researched 2026-09-22. Audacity 4.0.0 is released and does use a new `.aup4` SQLite
+project format, so the requirement is grounded in something real. The detail matters:
+
+**What an `.aup4` file contains:** four tables — `project`, `autosave`, `sampleblocks`,
+`project_history` (AUP3's `tags` table appears to be gone; metadata has presumably moved
+into the document). `sampleblocks` carries `blockid`, `sampleformat`, `summin`, `summax`,
+`sumrms`, `summary256`, `summary64k`, `samples` — roughly 1 MB, ~5 s of **mono** audio
+per block, blocks never updated in place.
+
+**The audio side is the easy half, and is genuinely good news.** That block table is
+almost exactly what §13 describes, and `summary256`/`summary64k` are a ready-made
+two-level waveform pyramid for §19. Adopting that shape for our own storage costs us
+nothing and buys mechanical convertibility.
+
+**The document is the hard half.** The project itself lives in a binary
+`ProjectSerializer` blob — a dictionary plus binary-XML encoding of Audacity's internal
+C++ object tree (wavetrack → clip → sequence → waveblock, envelopes, appearance data,
+thumbnails). It is undocumented, version-coupled to Audacity's internals, and its
+failure mode is severe: issue #12224 shows a project that will not open at all because
+the document references a `sampleblocks` row that isn't there. AUP3 → AUP4 conversion is
+also one-way — Audacity itself will not write back to AUP3.
+
+**Three separable tiers, with different risk profiles:**
+
+| Tier | Capability | Risk | Verdict |
+|------|-----------|------|---------|
+| **A** | **Import** AUP3 and AUP4 — read `sampleblocks`, parse the document, bring audio + clip boundaries into a project for metadata assignment, splitting and tagged export | Low. Read-only; a parse failure is a message to the user, never data loss. Directly serves the stated deliverable and the large AUP3 install base | **Take.** High value per unit of risk |
+| **B** | **Export** to AUP4 (and AUP3) — write a project Audacity can open | Medium. We must emit a valid document blob, but failures are immediately visible and cannot harm the user's master | **Declined.** The bridge runs one way: material comes *into* the workstation, and everything downstream of capture — splitting, tagging, export — is ours to do. Writing another project's undocumented binary document for a workflow nobody needs is cost without return |
+| **C** | **Native format *is* `.aup4`** — our working project file is literally an Audacity project | **High.** See below | **Declined** |
+
+**Why tier C is the one to decline.** §12–§16 require us to own the project format: our
+own schema versioning, transactional migrations, recovery semantics, and — critically —
+storage for things Audacity has nowhere to put (capture diagnostics, fingerprints,
+identification evidence, disc/side topology, marker provenance and confidence, export
+settings). Tier C means our persistence layer, the component the requirements are
+strictest about, is defined by an undocumented binary format owned by another project
+that changes it between major versions and has no obligation to us. Our extra tables
+would also be at the mercy of Audacity rewriting the file. There are three further
+snags: the `.aup4` extension collides on desktop file association, so a double-click
+opens the wrong application; Audacity's `sampleformat` set (int16, int24, float32) has
+no place for the 32-bit integer captures §8 requires, so tier C would quietly cap our
+format support; and Audacity is GPL, so the format must be reimplemented from
+observation rather than by lifting code into an MIT project.
+
+**The recommended shape** keeps almost all of the benefit: a native `.vripr` project whose
+schema is a **deliberate superset of AUP4's** — same `sampleblocks` table, same summary
+columns, same never-update-a-block discipline — plus our own tables for everything
+Audacity cannot hold. Conversion in both directions is then mechanical rather than
+lossy, we keep control of versioning and recovery, and "Open in Audacity" becomes an
+export action with an honest, testable contract. Architectural compatibility is what
+§12 actually asks for; this delivers it without handing over the foundations.
+
+**Decision (2026-09-22): tier A only, on a native `.vripr` AUP4-superset schema.** S5
+still runs — it is what makes the import parser possible — but its job narrows to
+understanding the two formats well enough to read them, and to fixing the exact
+`sampleblocks` shape our own schema will mirror.
+
+The superset discipline is worth stating precisely, because it is what keeps §12's
+"architecturally compatible" promise real: our `sampleblocks` table matches AUP4's
+column for column, we honour the never-update-a-block rule, and we compute the same
+`summary256`/`summary64k` pyramids. Everything the requirements need and Audacity has no
+room for — capture diagnostics, fingerprints, identification evidence, disc and side
+topology, marker provenance and confidence, export settings, our own schema versioning —
+lives in additional tables under our control. A third-party tool that understands AUP4
+can therefore already read our audio; §49's open specification documents the rest.
+
+---
+
+### 3.3 Non-goals
+
+Recorded so they are not re-argued, and so the documentation can state them plainly
+rather than leaving users to discover them:
+
+| Not doing | Decided | Why |
+|-----------|---------|-----|
+| **DSD / DSF support of any kind** — capture, import, split or export | 2026-09-22 | PCM only. Live DSD capture is in any case unreachable under the §5 CPAL mandate (CPAL exposes integer and float PCM; ALSA's `DSD_U8/U16/U32` are not surfaced), and DSD cannot carry the fades, gain or normalisation the processing roadmap assumes. Out of scope end to end; other tools serve it |
+| **Export to Audacity** (`.aup4` / `.aup3` writing) | 2026-09-22 | The bridge runs one way. Everything downstream of capture — splitting, tagging, export — is ours to do; emitting another project's undocumented binary document for a workflow nobody needs is cost without return |
+| **Native project format being literally `.aup4`** | 2026-09-22 | Would define our persistence layer by an undocumented, version-coupled format we do not control, cap us at Audacity's `sampleformat` set (no 32-bit integer, contra §8), and collide on desktop file association. Superseded by the AUP4-superset schema (D1) |
+| **Requiring particular capture hardware** | 2026-09-22 | Any CPAL-visible device, capability-driven. The rigs in §2.4 are test instruments |
+| **macOS device-level verification before 0.1** | 2026-09-22 | No Apple hardware. Tier 2: CI-built and unit-tested, gap stated in the README (R14) |
+
+---
+
+---
+
+## 4. Phase 0 — Feasibility spikes (Gate G0)
+
+Five spikes, ~17 sessions. Throwaway-by-default: the value is the evidence, though S1
+becomes a permanently useful diagnostic tool.
+
+### S1 — `vinyl-audio-test` (§47) — 6 sessions
+Implements all twelve listed behaviours: enumerate devices and formats, open a stream,
+create a SQLite project, capture into blocks, live peak/RMS, diagnostics, playback from
+SQLite, checksum verification, simulated interruption and recovery, requested-vs-
+negotiated format reporting, over/underrun and dropped-frame counts.
+
+**Verifying bit-perfection — three methods, none requiring special hardware.** §9 forbids
+claiming bit-perfect operation merely because CPAL is in use, so the claim needs
+evidence. In descending order of strength:
+
+1. **Software loopback (primary, zero cost, CI-able).** On Linux, the `snd-aloop` kernel
+   module presents a virtual device whose playback subdevice appears as a capture
+   subdevice. Play known PCM into it, capture it back, assert the bytes are identical,
+   at every rate and format. This tests our whole path — buffering, format handling,
+   block writing, readback — with no audio hardware involved, and runs on any developer's
+   machine and in CI.
+2. **Hardware-path evidence (per device, cheap).** On Linux, `/proc/asound/card*/pcm*/sub*/hw_params`
+   reports the parameters the hardware is actually running at, which is direct evidence
+   that no resampling was inserted. On Windows, a WASAPI exclusive-mode stream *is* the
+   hardware format by definition, so the negotiated config is the proof. This is what
+   `vinyl-audio-test` records and reports per device, and it is what the application
+   surfaces to the user (§9's "report requested and negotiated configurations").
+3. **Digital loopback (strongest, opportunistic).** Where a digital input happens to
+   exist, a known file out of a digital output and back in is the most complete proof.
+   Nice to have if the kit allows; not a prerequisite for anything, and not a reason to
+   buy hardware.
+
+**None of this constrains the product.** Any CPAL-visible input device is supported, and
+device support is capability-driven: enumerate what the device offers, expose only that
+(§8), report honestly what was negotiated (§9). The rigs listed in §2.4 are test
+instruments for our own confidence, not assumptions about the user's chain — the common
+case is a phono stage into a USB interface, and that must be a first-class path, not a
+degraded one.
+
+*Exit criteria:* runs on Linux x86_64, Linux aarch64 (Pi 5, ALSA `hw:` direct **and**
+PipeWire), Windows (WASAPI shared **and** exclusive); builds and runs its non-device
+tests on macOS CI. For each host it produces a written report of which
+capture modes are reachable, what CPAL actually negotiates, and where conversion is
+known to occur. **Explicitly acceptable outcome:** "exclusive mode is not reachable on
+host X" — that is a finding, not a failure, and it feeds §9's honesty requirement.
+
+### S2 — SQLite capture benchmark (§48) — 6 sessions
+The one you flagged: **24/192 stereo → bounded buffer → batched BLOB writes →
+simultaneous analysis reads**, under deliberate abuse.
+
+*Sweep:* block size {0.25, 0.5, 1, 2, 4, 8 s} × transaction batch {1, 4, 16, 64 blocks} ×
+journal mode {WAL, WAL2 if available} × sync {NORMAL, FULL} × page size {4 k, 8 k, 16 k,
+32 k} × formats {24/96, 24/192, 32f/192}.
+
+*Concurrent load:* two reader threads simulating waveform and fingerprint workers,
+reading recently-committed blocks while writing continues.
+
+*Abuse:* `SIGKILL` mid-transaction · power-fail simulation · disk-full · induced fsync
+stalls · WAL checkpoint under sustained write · 90-minute continuous run · copy/backup
+of a live project · VACUUM behaviour.
+
+*Acceptance:* zero dropped frames over 90 min at 24/192 with readers active · writer
+transaction p99 within one block-duration · WAL growth bounded under a stated ceiling ·
+after every kill, recovery reconstructs to the last committed block with all checksums
+passing · memory flat across the run.
+
+*Go/no-go:* if SQLite cannot sustain this, the documented fallback is **sidecar block
+file + SQLite index** (project becomes a directory or a container, losing §12's
+single-file property). Deciding this *now*, on measurements, is far cheaper than
+discovering it at M4 — and §48 already says capture reliability outranks database
+elegance.
+
+### S3 — Tauri 2 IPC throughput — 2 sessions
+60 Hz meter frames + progressive waveform deltas + position updates pushed into a React
+canvas for 30 minutes. Measure frame pacing, main-thread blocking, memory. Decides D6
+and whether waveform rendering needs a worker/OffscreenCanvas.
+
+### S4 — chromaprint-next streaming — 1 session
+Feed live-shaped PCM chunks (96 kHz → i16 downmix) through `Fingerprinter::feed()` and
+assert the fingerprint equals the offline fingerprint of the same region. Confirms §25's
+progressive-region approach before Phase 2 commits to it.
+
+### S5 — Audacity AUP3/AUP4 format probe — 2 sessions
+Groundwork for the import parser (WP-20), and it fixes the `sampleblocks` shape our own
+schema mirrors. Generate reference projects with Audacity 3.x and 4.0 locally
+(mono/stereo, each sample format, multi-clip, with labels and metadata), then: dump both
+schemas exactly; decode the `project` document blob far enough to enumerate
+track/clip/waveblock structure and confirm the dictionary + binary-XML encoding;
+establish where Audacity 4 keeps metadata now that `tags` appears to be gone; and
+confirm the summary-column layout so our pyramids are byte-compatible.
+
+With export declined, the awkward question — what Audacity does to unknown extra tables
+on open-modify-save — no longer needs answering. That is a real simplification: it was
+the one unknown with no graceful fallback.
+
+Clean-room discipline: Audacity is GPL. The format is established from generated files
+and published descriptions, and what we learn is written up as our own specification
+(which §49 wants anyway). No Audacity source is copied into this MIT codebase.
+
+*Exit criteria:* documented AUP3 and AUP4 schemas, a decoder for the document blob good
+enough to enumerate clips and labels, and a confirmed column-for-column target for our
+own `sampleblocks`.
+
+**Gate G0 exit:** D3 and D6 locked with data; per-platform capture-mode matrix
+published; bit-perfect loopback result recorded per host; schema v1 draft written
+against the measured block strategy and the AUP4 findings; any fallback architecture
+documented and costed.
+
+---
+
+## 5. Phase 1 — Headless core → MVP (Gates G1, G2)
+
+Sizes are in **sessions** (~3 focused hours, AI-paired) and serve as relative weights for
+sequencing, not as a forecast. Dependencies are hard unless noted.
+
+### 5.1 Work packages
+
+| WP | Scope | Req | Deps | Sess | Exit criteria |
+|----|-------|-----|------|------|---------------|
+| **01** | Workspace scaffold: cargo workspace per §6, CI matrix (Linux x86_64/aarch64, Windows, macOS), cross-compilation targets, clippy/fmt/deny gates, MSRV pin, licence + notices ported | §6, D7, D10 | — | 5 | Green CI on four targets; `cargo deny` clean |
+| **02** | `project`: schema v1 as an **AUP4 superset** (`sampleblocks` column-for-column, same summary pyramids, never-update-a-block), `application_id`/`user_version`, transactional migrations, create/open/validate, integrity check | §12, §16, §49 | S2, S5 | 8 | Round-trip + migration property tests; schema doc generated from source; `sampleblocks` shape diffed against a real `.aup4` in CI |
+| **03** | `audio/devices`: enumeration, capability probing, independent in/out selection, persistence, hot-unplug handling | §7, §8 | S1 | 4 | Device matrix reported on 3 OS; unplug during idle/record is non-corrupting |
+| **04** | `audio/capture`: CPAL stream, `CaptureMode` negotiation, bounded lock-free ring, RT-safe callback, diagnostics counters | §9, §10, §38 | 03 | 8 | Callback provably allocation-free and lock-free; requested vs negotiated reported; counters persisted |
+| **05** | `project/persistence`: capture writer thread, batched transactions, checkpoint policy from S2 | §13, §14 | 02, 04 | 6 | 90-min 24/192 soak, zero loss, bounded WAL |
+| **06** | `project/recovery`: unfinished-session detection, reconstruction, diagnostics, WAL/SHM lifecycle | §15 | 05 | 6 | Kill-at-random-point test suite recovers every time |
+| **07** | `core/engine`: recording state machine, command/event bus, worker supervision, **`vripr-cli`** | §11, §35, §36, §4.5 | 05 | 8 | Invalid transitions unrepresentable (type-level); full capture session driven from CLI |
+| **08** | `signal/meter`: peak, RMS, peak-hold, clip latch, snapshot generation | §17, §18 | 04 | 3 | Verified against known-level test signals |
+| **09** | `signal/waveform`: multi-resolution pyramid, progressive build during capture, persisted summaries, regeneration from PCM | §19 | 05 | 7 | Sub-second latency; render cost independent of total length (§37) |
+| **10** | `audio/playback`: engine, transport, seek, region/track/boundary audition, native playback where supported | §21 | 04, 05 | 7 | Gapless seek; bit-perfect path reported honestly |
+| **11** | `signal` detection port: decode/analyse split, RMS + flatness + HMM on feature streams, live provisional markers, post-capture refine, observation emission | §22, §23, §24 | 09 | 10 | A/B harness shows parity with VRipr on the `vripr_training` corpus; boundaries carry provenance + confidence |
+| **12** | `metadata`: provider trait, Discogs, MusicBrainz, genre normalization, artwork, caching, rate limits, timeouts, cancellation | §28, §32, §40 | 07 | 9 | Fixture-backed offline tests; app fully usable with networking disabled |
+| **13** | Vinyl data model + editing: release/disc/side/track topology, alpha numbering, add/move/delete/split/merge/lock, all non-destructive | §29, §31 | 02, 11 | 6 | Edits never touch committed blocks (asserted by test); locked boundaries immune to re-analysis |
+| **14** | `export`: splitter from blocks + edit instructions, WAV + FLAC encoders, tagging, artwork, naming templates (ported) | §33 | 13 | 9 | Bit-exact WAV extraction verified against source blocks; tags validated by third-party readers |
+| **15** | Tauri 2 shell: command/event surface, generated TS types, drift check in CI | §5, §35, D9 | 07 | 6 | Core crates have zero Tauri dependency (enforced in CI) |
+| **16** | React UI: project browser, capture workspace, transport, meters, waveform display, track editor, metadata browser, export UI, settings, full keyboard map | §34, §43 | 15, S3 | 18 | Every §44 workflow completable by keyboard alone; no business logic in TS (review gate) |
+| **17** | Test corpus + soak harness: file-backed capture simulation, multi-hour runs, memory growth, contention, WAL stress, dropped-frame injection | §41 | 05 | 7 | Nightly CI job; regressions fail the build |
+| **18** | Docs: open project-format specification, recovery/validation API, user guide, diagnostic bundles | §42, §49 | 02, 06 | 5 | A third-party tool can read a project using the spec alone |
+| **19** | Packaging: AppImage/deb (x86_64 + aarch64), MSI, macOS bundle via CI, signing, release notes, checksum verification tool | — | 16 | 7 | Clean install and first-run capture on every Tier 1 platform; macOS bundle builds and passes non-device tests |
+| **20** | **Audacity import (tier A):** open `.aup3` and `.aup4`, read `sampleblocks`, decode the document to recover clips and labels, land it as a project for metadata assignment, splitting and tagged export | §12 | S5, 13 | 10 | Round-trips a real Audacity project of each version into a tagged export; refuses cleanly and informatively on anything it cannot parse |
+
+**Total Phase 1: 149 sessions.** WP-12 (metadata) and WP-17/18 are the deliberately
+detachable ones — network-bound or documentation work that can absorb a session when the
+capture path needs a longer uninterrupted run at it.
+
+### 5.2 Critical path
+
+S2 leads, ahead of S1: with CPAL's cross-platform bit-perfect capability taken as read,
+the SQLite write path is now the only spike that can still change the architecture, and
+it is worth knowing first.
+
+```
+S2 → S1 → S5 → 02 → 04/05 → 06 → 07 → 09 → 11 → 13 → 14 → 15 → 16 → 19 → 20
+                                          (08, 10, 12 parallel off 07)
+```
+
+WP-08, WP-10 and WP-12 branch off WP-07 and can be interleaved freely. WP-17 and WP-18
+must be built *incrementally alongside* their subjects rather than saved up — a soak
+harness written after the fact tests the code you already believe in.
+
+---
+
+## 6. Phase 2 (§45) — Gate G3
+
+| WP | Scope | Sess |
+|----|-------|------|
+| 21 | `fingerprint/chromaprint-next` integration: progressive region fingerprinting fed from capture tap | 6 |
+| 22 | `fingerprint/acoustid` + MusicBrainz recording resolution | 5 |
+| 23 | `identify`: evidence/candidate/confidence/resolver — combining fingerprint, timing, metadata and signal evidence (§26, §27) | 12 |
+| 24 | Metadata-assisted boundaries; release/side topology inference constraining detection | 7 |
+| 25 | MP3 + Ogg export (D5 licensing consequences) | 5 |
+| 26 | Advanced capture diagnostics + diagnostic bundle export | 4 |
+| 27 | UI: identification review, candidate comparison, confidence surfacing | 8 |
+
+**Total ≈ 47 sessions.** The resolver (WP-23) is the intellectually hardest
+piece in the whole project and deserves a design document before code.
+
+## 7. Phase 3 (§46) — Gate G4
+
+Non-destructive processing chain · click/pop detection and removal · optional
+normalization · ONNX detector revival · advanced archival metadata · improved multi-disc
+workflow · plugin/provider architecture · Android (AAudio, the largest single unknown —
+needs its own feasibility spike). Not estimated; re-plan at G3.
+
+---
+
+## 8. Quality strategy
+
+**Test pyramid** (§41)
+- *Unit:* detection maths against synthetic signals with known answers; template/tag/genre logic; state-machine transition exhaustiveness.
+- *Property:* schema migrations (any vN project opens as vN+1 losslessly); block round-trip; marker edits never alter PCM.
+- *Fixture:* `vripr_training` corpus for boundaries; recorded HTTP fixtures for Discogs/MusicBrainz/AcoustID.
+- *Loopback:* `snd-aloop` bit-exactness runs at every rate and format, in CI on Linux — the cheapest continuous guard against a conversion sneaking into the capture path.
+- *Simulation:* file-backed capture source implementing the same trait as CPAL — gives deterministic, device-free capture tests in CI, and is the single highest-leverage testing decision in the plan. Build it in WP-04, not later.
+- *Fault injection:* kill-at-offset, disk-full, fsync stall, device unplug, network timeout.
+- *Soak:* nightly multi-hour capture with memory and WAL tracking.
+- *Manual, device-backed:* real-interface capture on three platforms each gate — cannot be automated on hosted CI.
+
+**CI matrix:** Linux x86_64, Linux aarch64, Windows, macOS × stable Rust; clippy `-D warnings`; `cargo deny`;
+TS type-drift check; nightly soak. Real-device tests run locally on the Tier 1 rigs against a checklist; macOS has no device leg (R14). Audacity fixture projects, one per format version, are checked into the repo and parsed on every CI run so upstream format drift surfaces as a test failure rather than a support ticket.
+`cargo mutants` (already anticipated in `.gitignore`) on the `signal` and `project`
+crates, where silent wrongness is most dangerous.
+
+**Review gate for §2:** every PR touching `app/ui` is checked for logic that belongs in
+Rust. Cheap, and the architectural rule dies without it.
+
+---
+
+## 9. Risk register
+
+| # | Risk | L | I | Mitigation / early signal | Fallback |
+|---|------|---|---|---------------------------|----------|
+| **R1** | SQLite cannot sustain 24/192 with concurrent reads | M | **Critical** | S2 before anything else | Sidecar block file + SQLite index; project becomes a container (costs §12's single-file property) |
+| **R2** | Bit-perfect/exclusive unreachable via CPAL on some hosts | L | M | Assessed as low — CPAL is held to be capable of bit-perfect capture and playback on all three hosts. S1 therefore *documents the per-device matrix* rather than gating on it | Report negotiated path honestly (§9 demands this regardless); per-platform backend shims post-MVP |
+| **R3** | Tauri IPC can't carry 60 Hz meters + waveform | M | M | S3 | Rust-side coalescing, binary channels, OffscreenCanvas worker |
+| **R4** | Encoder licensing/quality (MP3/Ogg LGPL) | M | L | D5 at WP-14; `cargo deny` | Optional cargo features; ship FLAC/WAV only in MVP |
+| **R5** | **Scope** — very large surface, single developer | M | **H** | Gates; headless-first; scope levers (§10.2) | Ship a CLI-only 0.1 if the GUI slips; it is genuinely useful alone |
+| **R6** | `chromaprint-next` is 0.1.0, single-maintainer | M | M | Vendor the local checkout, pin exactly, run its test suite in our CI | `rusty-chromaprint` (known gaps) or upstream C via FFI — the latter violates §25, so this is a real loss |
+| **R7** | Detector port regresses vs VRipr | M | M | A/B harness on the labelled corpus from day one of WP-11 | Keep VRipr binary available for comparison |
+| **R8** | Memory growth over multi-hour captures | M | **H** | Nightly soak from WP-05 onward | Bounded caches; mmap'd summaries |
+| **R9** | Device removal mid-capture corrupts project | M | **H** | Fault-injection tests in WP-03/04 | Treat as stream error, finalise capture, keep committed blocks |
+| **R10** | API keys/rate limits in an OSS app | M | L | User-supplied credentials, OS keychain, never in project files (§39) | Documented degraded/offline mode (§4.3 already requires it) |
+| **R12** | AUP4's document blob is undocumented, version-coupled and changes under us | **H** | L | Contained by D1: it now affects only the import parser, never our own persistence. S5 decodes it against generated ground truth; fixture projects per Audacity version parsed in CI so upstream drift fails a build | Import degrades to "audio plus clip boundaries only, metadata by hand" — still useful |
+| **R13** | GPL contamination while implementing an Audacity-compatible format | L | **H** | Clean-room: generated files and published descriptions only; our own written spec; no Audacity source in the tree; documented in CONTRIBUTING | Reimplement from scratch if provenance is ever doubted |
+| **R14** | macOS ships without device-level verification | **H** | M | Stated plainly in README and release notes; CI builds and runs all non-device tests; file-backed capture source covers the logic | Recruit a macOS tester from the OSS community before 0.1, or mark macOS experimental |
+| **R11** | Continuity across a long unbroken run at capture/storage internals (M1→M4) with no visible output | M | M | M1/M2/M3 each end in a demonstrable capability; keep the CLI genuinely pleasant to use | Re-cut scope at any gate |
+
+---
+
+## 10. Sequencing and scope levers
+
+### 10.1 Order of attack
+
+Progress is gauged by the five milestones, each of which produces something usable in
+its own right:
+
+| # | Milestone | Proven when | After | Weight | Cum. |
+|---|-----------|-------------|-------|--------|------|
+| **G0** | Foundation proven | 24/192 sustained into SQLite under abuse with concurrent analysis reads and clean crash recovery; bit-perfect loopback measured; capture-mode matrix published; AUP3/AUP4 schemas documented | S1–S5 | 17 | 17 |
+| **M1** | *It records* | CLI captures to a project, survives `SIGKILL` at any point, recovers to the last committed block with checksums intact | WP-06 | 37 | 54 |
+| **M2** | *It plays back* | Capture → progressive waveform → playback → seek, all headless | WP-10 | 25 | 79 |
+| **M3** | *It finds tracks* | Detector parity with VRipr on the labelled corpus; markers carry provenance and confidence | WP-11 | 10 | 89 |
+| **M4** | *It delivers* (**G1**) | Whole §50 workflow end to end from the CLI, including tagged FLAC/WAV export | WP-14 | 24 | 113 |
+| **M5** | *It has a face* (**G2**) | §44 MVP plus Audacity import, keyboard-complete, packaged for every Tier 1 platform | WP-20 | 53 | 166 |
+| **G3** | Identification | §45 scope | WP-27 | 47 | 213 |
+
+At a full-time cadence the interesting consequence is that **M1 through M4 are a
+continuous run at the hardest part of the product** — capture integrity and project
+robustness — with no UI work to break it up. That is the right shape for this codebase
+but it is also the stretch most likely to drift, so M1/M2/M3 exist specifically to force
+demonstrable output along the way. If a milestone's weight overruns by more than about
+half, that is the signal to re-plan rather than push on.
+
+### 10.2 Scope levers (agreed in advance, applied only if G2 overruns badly)
+
+Drop from 0.1 and defer to 0.2, in this order: multi-disc UI (keep the data model) ·
+project browser (open-file dialog only) · settings UI (TOML file + CLI) · guided
+detection (keep basic RMS/HMM) · Discogs (MusicBrainz only) · region playback (whole
+capture + track only). Worth ~25 sessions.
+
+Never cut: recovery, diagnostics honesty, the non-destructive guarantee, the open format
+spec. Those are the product's integrity, and a 0.1 that compromises them is worse than a
+later 0.1.
+
+## 11. Definition of done
+
+**Per work package:** tests written and green on 3 platforms · public API documented ·
+requirement §s referenced in the PR · no clippy warnings · CHANGELOG entry ·
+demonstrable from CLI or UI.
+
+**Per gate:**
+- **G0:** spike reports published; D1/D3/D6 locked; fallbacks costed.
+- **G1:** full §50 workflow from CLI; recovery suite green; format spec published; detector parity demonstrated.
+- **G2:** every §44 item present; §37 performance targets measured and met; keyboard-complete (§43); installers for 3 platforms; no known data-loss defect.
+- **G3:** §45 items present; identification never silently overrides user-confirmed metadata (§26), covered by test.
+
+---
+
+## 12. Immediate next actions
+
+1. **First** — Repo groundwork: cargo workspace skeleton per §6, `rust-toolchain.toml`, CI matrix, `cargo-deny`, port `THIRD-PARTY-NOTICES.md` + `LICENSE-LGPL-2.1`, create `docs/adr/` and write ADR-0001 (D1: project extension) and ADR-0002 (D2: rusqlite).
+2. **Then** — Build S1 `vinyl-audio-test`. Run it on Linux first, then confirm the negotiated-format reporting on Windows (WASAPI exclusive) and macOS (CoreAudio hog mode) — the aim is an accurate published matrix, not a feasibility verdict.
+3. **Then** — Build S2, the capture/SQLite benchmark harness. This is the one you most want proven, and its result can still reshape the architecture cheaply.
+
+One decision wants making before the first commit: the **project file extension** (D1,
+recommendation `.vripr`). The other open question is simply whether Windows and macOS
+machines are to hand for S1 — not as a feasibility gate, but because the published
+capture-mode matrix is only worth having if it is measured rather than assumed.
