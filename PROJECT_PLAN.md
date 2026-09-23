@@ -5,7 +5,7 @@
 **Basis:** [REQUIREMENTS.md](REQUIREMENTS.md) (§ references throughout point at it)
 **Delivery model:** solo developer + AI pairing, full-time (40+ h/week)
 **Progress measure:** milestones, not calendar — estimates below are relative weights only
-**Repository:** `aio-vripr` (currently a stub: LICENSE, README, REQUIREMENTS.md)
+**Repository:** `vcw` — The Vinyl Capture Workstation (renamed from `aio-vripr` 2026-09-22)
 
 ---
 
@@ -24,7 +24,7 @@ by. So the plan is deliberately inverted against the temptation to build screens
 2. **Build the engine headless.** §4.5 already requires the core to be testable and
    usable without the GUI. Treating that as a *delivery sequence*, not just a design
    property, is the single strongest defence of §2 (no logic in the frontend): a
-   `vripr-cli` that can record, detect, identify, edit markers and export means logic
+   `vcw-cli` that can record, detect, identify, edit markers and export means logic
    physically cannot leak into React, because React does not exist yet.
 3. **Add the shell last, and thin.** Tauri 2 + React arrives once the command/event
    contract is stable and exercised by the CLI. The UI then binds to a proven API
@@ -136,7 +136,7 @@ Each has a recommendation and a deadline. Recording them as ADRs in `docs/adr/` 
 |---|----------|----------------|---------|
 | **D1** | Native project format and extension, and the degree of Audacity compatibility (§12) | **Locked 2026-09-22.** Native `.vripr`, schema a deliberate superset of AUP4's (identical `sampleblocks` shape and summary columns) plus our own tables; SQLite `application_id` + `user_version` so the file self-identifies. Audacity interop is **import-only** (`.aup3` and `.aup4`, tier A). Export to Audacity is declined. | Locked |
 | **D2** | SQLite binding | `rusqlite` with `bundled` feature — synchronous, predictable, no async runtime on the writer thread; bundled build removes platform SQLite variance. `sqlx` is async-first and wrong here. | WP-02 |
-| **D3** | Block layout & size | Decide from S2 evidence. Starting hypothesis: interleaved stereo, native format, 1–4 s per block, one row per block. | G0 |
+| **D3** | Block layout & size | **Provisional from S2 (2026-09-22):** per-channel (AUP4-compatible) blocks of **250 ms**, **batch 1**, WAL, `synchronous=FULL`, ring ≥ 500 ms. Rationale inverted the starting hypothesis — throughput proved a non-issue, so the budget buys *recovery granularity* instead. Confirm on Pi 5 before locking. See `docs/spikes/S2-sqlite-capture.md` | G0 (pending Pi 5) |
 | **D4** | Sample representation at rest | Store the device's bytes **verbatim** plus a format tag. §9 forbids conversion; converting to f32 at rest would silently break the bit-perfect claim. | WP-02 |
 | **D5** | Encoder stack | WAV: own writer (trivial, avoids `hound`'s format limits). FLAC: `flacenc` (pure Rust, Apache-2.0). MP3: `mp3lame-encoder` (LGPL, links libmp3lame) — Phase 2. Ogg Vorbis: `vorbis_rs` (LGPL) — Phase 2. Licensing consequence: MP3/OGG extend the LGPL relink obligation already established for chromaprint-next; alternatively make them optional features. | WP-14 (FLAC/WAV), G3 (MP3/OGG) |
 | **D6** | High-rate IPC transport | Tauri 2 **channels** (not the event bus) for meter and waveform deltas; pre-serialised compact payloads; coalesce to ≤60 Hz in Rust. Validate in S3. | G0 |
@@ -259,7 +259,30 @@ rather than leaving users to discover them:
 Five spikes, ~17 sessions. Throwaway-by-default: the value is the evidence, though S1
 becomes a permanently useful diagnostic tool.
 
-### S1 — `vinyl-audio-test` (§47) — 6 sessions
+### S1 — `vinyl-audio-test` (§47) — 6 sessions — **LINUX COMPLETE**
+
+> **Result (2026-09-22):** all twelve §47 behaviours implemented and demonstrated on
+> Linux/x86_64. Bit-perfect 24/192 capture into SQLite, kernel-confirmed, zero dropped
+> frames — measured *while the S2 soak was saturating the same disk*. Playback returns
+> every frame in the stored format with no conversion. `SIGKILL` recovery is exact to
+> the block, 3/3, matching S2's synthetic figure with real audio.
+> Write-up: [`docs/spikes/S1-cpal-capture.md`](docs/spikes/S1-cpal-capture.md).
+>
+> **Two findings that change work downstream:**
+> - **CPAL's ALSA device list describes the plug layer, not the hardware.** It hardcodes
+>   `plughw:`, so advertised configs are fiction, some advertised rates fail at stream
+>   build, and — the serious one — conversion is invisible. Capturing from the default
+>   device, CPAL reported "48 kHz / 2 ch / I32, request honoured exactly" while the
+>   hardware ran **8 kHz mono S16**. A per-platform verifier against the OS is therefore
+>   **mandatory, not optional**, and must land in WP-04. Device selection is *not*
+>   simply picking from CPAL's list.
+> - **A CPAL bug delivered zero frames on every ALSA capture** (timestamp capability
+>   probed before the stream starts). A one-line fix in a vendored copy is the
+>   difference between 0 and 960,152 frames. Should go upstream, not be carried.
+>
+> Outstanding: Windows/WASAPI exclusive, Android, macOS (no hardware), the HiFiBerry and
+> Tascam converters, `snd-aloop` bit-exactness, and the capture-mode matrix G0 asks for.
+
 Implements all twelve listed behaviours: enumerate devices and formats, open a stream,
 create a SQLite project, capture into blocks, live peak/RMS, diagnostics, playback from
 SQLite, checksum verification, simulated interruption and recovery, requested-vs-
@@ -300,7 +323,31 @@ capture modes are reachable, what CPAL actually negotiates, and where conversion
 known to occur. **Explicitly acceptable outcome:** "exclusive mode is not reachable on
 host X" — that is a finding, not a failure, and it feeds §9's honesty requirement.
 
-### S2 — SQLite capture benchmark (§48) — 6 sessions
+### S2 — SQLite capture benchmark (§48) — 6 sessions — **ACCEPTANCE MET ON x86_64/SSD**
+
+> **First results (2026-09-22):** zero dropped frames at 24/192 on SSD, 4× real-time
+> abuse absorbed, write amplification 1.01×, WAL bounded at 4 MiB, crash recovery exact
+> to the block (kill at 7.00 s → recover 6.75 s, integrity clean, pattern verified).
+> Throughput is not the constraint; recovery granularity is the real design variable.
+> Full write-up: [`docs/spikes/S2-sqlite-capture.md`](docs/spikes/S2-sqlite-capture.md).
+>
+> **90-minute soak (2026-09-22):** `PASS`. 5400.196 s, real-time factor 0.99996,
+> 1,036,800,512 frames, **0 dropped** / 0 overruns, 21,601 blocks, 8.29 GB audio into an
+> 8.41 GB database. Commit p99 63.2 ms and worst-ever commit 102.3 ms against a 250 ms
+> budget · peak WAL 4.57 MiB · RSS flat at 8.1 MiB · 207,707 reader queries over
+> 4,236,810 blocks with **0 checksum failures** and both readers' p99 under 9.5 ms. The
+> commit distribution is stationary: p50/p99 were no worse than the 20-second run, only
+> the extreme grew, as it should with 270× the samples.
+>
+> Every §48 acceptance clause is therefore met on x86_64/SSD, recovery via the separate
+> `SIGKILL` test. Two qualifications: the soak ran the harness defaults
+> (`synchronous=NORMAL`, interleaved) rather than the D3-firmed `FULL`+per-channel, so
+> **D3 should not close until the firmed config is soaked**; and this is still one
+> platform on the fastest storage in the fleet.
+>
+> Outstanding: soak in the firmed config, Pi 5 (aarch64, the honest worst case) and
+> Windows runs, disk-full and fsync-stall injection, `VACUUM`/live-copy, page-size sweep,
+> WAL2, full parameter sweep.
 The one you flagged: **24/192 stereo → bounded buffer → batched BLOB writes →
 simultaneous analysis reads**, under deliberate abuse.
 
@@ -336,7 +383,25 @@ Feed live-shaped PCM chunks (96 kHz → i16 downmix) through `Fingerprinter::fee
 assert the fingerprint equals the offline fingerprint of the same region. Confirms §25's
 progressive-region approach before Phase 2 commits to it.
 
-### S5 — Audacity AUP3/AUP4 format probe — 2 sessions
+### S5 — Audacity AUP3/AUP4 format probe — 2 sessions — **AUP3 COMPLETE, AUP4 OPEN**
+
+> **Result (2026-09-22):** the document blob is decoded. A ten-tag grammar parses all
+> 25 real vinyl rips in `/data2/vinyl_rips` to the last byte, zero dangling block
+> references, zero orphan blocks, reconstructing readable XML. **The import is
+> tractable and D1 stands.** Write-up: [`docs/spikes/S5-audacity-format.md`](docs/spikes/S5-audacity-format.md),
+> decoder: `spikes/aup-format-probe/probe.py` (clean-room, from file bytes only).
+>
+> Three findings change downstream work:
+> - Audacity blocks are **mono**, 262144 samples / 1 MiB — the per-channel layout S2
+>   measured and AUP4 compatibility now agree rather than trade off.
+> - Audacity has **no 32-bit integer sample format** (int16 / int24 / float32 only),
+>   confirming the §8 conflict that justified the superset in D1.
+> - **`wavetrack/@rate` is wrong in 22 of 25 files** (says 48000 for 192 kHz audio).
+>   Trusting it plays rips at quarter speed, silently. WP-20 must take `project/@rate`.
+>
+> Still open: everything above is AUP3 from Audacity 3.7.7. **Audacity 4.x is not
+> installed here**, so the AUP4 delta is unmeasured — S5 is not closed.
+
 Groundwork for the import parser (WP-20), and it fixes the `sampleblocks` shape our own
 schema mirrors. Generate reference projects with Audacity 3.x and 4.0 locally
 (mono/stereo, each sample format, multi-clip, with labels and metadata), then: dump both
@@ -376,10 +441,10 @@ sequencing, not as a forecast. Dependencies are hard unless noted.
 | **01** | Workspace scaffold: cargo workspace per §6, CI matrix (Linux x86_64/aarch64, Windows, macOS), cross-compilation targets, clippy/fmt/deny gates, MSRV pin, licence + notices ported | §6, D7, D10 | — | 5 | Green CI on four targets; `cargo deny` clean |
 | **02** | `project`: schema v1 as an **AUP4 superset** (`sampleblocks` column-for-column, same summary pyramids, never-update-a-block), `application_id`/`user_version`, transactional migrations, create/open/validate, integrity check | §12, §16, §49 | S2, S5 | 8 | Round-trip + migration property tests; schema doc generated from source; `sampleblocks` shape diffed against a real `.aup4` in CI |
 | **03** | `audio/devices`: enumeration, capability probing, independent in/out selection, persistence, hot-unplug handling | §7, §8 | S1 | 4 | Device matrix reported on 3 OS; unplug during idle/record is non-corrupting |
-| **04** | `audio/capture`: CPAL stream, `CaptureMode` negotiation, bounded lock-free ring, RT-safe callback, diagnostics counters | §9, §10, §38 | 03 | 8 | Callback provably allocation-free and lock-free; requested vs negotiated reported; counters persisted |
+| **04** | `audio/capture`: CPAL stream, `CaptureMode` negotiation, bounded lock-free ring, RT-safe callback, diagnostics counters, **and a per-platform format verifier** (S1 finding 1 — CPAL alone cannot detect a silent resample) | §9, §10, §38 | 03 | 9 | Callback provably allocation-free and lock-free; requested vs negotiated reported; **negotiated format cross-checked against the OS and bit-perfect never claimed without that confirmation**; counters persisted |
 | **05** | `project/persistence`: capture writer thread, batched transactions, checkpoint policy from S2 | §13, §14 | 02, 04 | 6 | 90-min 24/192 soak, zero loss, bounded WAL |
 | **06** | `project/recovery`: unfinished-session detection, reconstruction, diagnostics, WAL/SHM lifecycle | §15 | 05 | 6 | Kill-at-random-point test suite recovers every time |
-| **07** | `core/engine`: recording state machine, command/event bus, worker supervision, **`vripr-cli`** | §11, §35, §36, §4.5 | 05 | 8 | Invalid transitions unrepresentable (type-level); full capture session driven from CLI |
+| **07** | `core/engine`: recording state machine, command/event bus, worker supervision, **`vcw-cli`** | §11, §35, §36, §4.5 | 05 | 8 | Invalid transitions unrepresentable (type-level); full capture session driven from CLI |
 | **08** | `signal/meter`: peak, RMS, peak-hold, clip latch, snapshot generation | §17, §18 | 04 | 3 | Verified against known-level test signals |
 | **09** | `signal/waveform`: multi-resolution pyramid, progressive build during capture, persisted summaries, regeneration from PCM | §19 | 05 | 7 | Sub-second latency; render cost independent of total length (§37) |
 | **10** | `audio/playback`: engine, transport, seek, region/track/boundary audition, native playback where supported | §21 | 04, 05 | 7 | Gapless seek; bit-perfect path reported honestly |
@@ -392,7 +457,7 @@ sequencing, not as a forecast. Dependencies are hard unless noted.
 | **17** | Test corpus + soak harness: file-backed capture simulation, multi-hour runs, memory growth, contention, WAL stress, dropped-frame injection | §41 | 05 | 7 | Nightly CI job; regressions fail the build |
 | **18** | Docs: open project-format specification, recovery/validation API, user guide, diagnostic bundles | §42, §49 | 02, 06 | 5 | A third-party tool can read a project using the spec alone |
 | **19** | Packaging: AppImage/deb (x86_64 + aarch64), MSI, macOS bundle via CI, signing, release notes, checksum verification tool | — | 16 | 7 | Clean install and first-run capture on every Tier 1 platform; macOS bundle builds and passes non-device tests |
-| **20** | **Audacity import (tier A):** open `.aup3` and `.aup4`, read `sampleblocks`, decode the document to recover clips and labels, land it as a project for metadata assignment, splitting and tagged export | §12 | S5, 13 | 10 | Round-trips a real Audacity project of each version into a tagged export; refuses cleanly and informatively on anything it cannot parse |
+| **20** | **Audacity import (tier A):** open `.aup3` and `.aup4`, read `sampleblocks`, decode the document to recover clips and labels, land it as a project for metadata assignment, splitting and tagged export | §12 | S5, 13 | 10 | Parses all 25 corpus projects with full byte consumption and zero dangling block refs, diffed against the Python oracle; round-trips one of each version into a tagged export; takes `project/@rate` over `wavetrack/@rate` and warns on disagreement; refuses cleanly and informatively on anything it cannot parse |
 
 **Total Phase 1: 149 sessions.** WP-12 (metadata) and WP-17/18 are the deliberately
 detachable ones — network-bound or documentation work that can absorb a session when the
@@ -465,8 +530,8 @@ Rust. Cheap, and the architectural rule dies without it.
 
 | # | Risk | L | I | Mitigation / early signal | Fallback |
 |---|------|---|---|---------------------------|----------|
-| **R1** | SQLite cannot sustain 24/192 with concurrent reads | M | **Critical** | S2 before anything else | Sidecar block file + SQLite index; project becomes a container (costs §12's single-file property) |
-| **R2** | Bit-perfect/exclusive unreachable via CPAL on some hosts | L | M | Assessed as low — CPAL is held to be capable of bit-perfect capture and playback on all three hosts. S1 therefore *documents the per-device matrix* rather than gating on it | Report negotiated path honestly (§9 demands this regardless); per-platform backend shims post-MVP |
+| **R1** | SQLite cannot sustain 24/192 with concurrent reads | **L** (was M) | **Critical** | Largely retired by S2 on x86_64/SSD: 4× real-time headroom, zero drops, bounded WAL. Residual risk is the Pi 5 on SD/NVMe — re-measure there before closing | Sidecar block file + SQLite index; project becomes a container (costs §12's single-file property) |
+| **R2** | CPAL's device abstraction hides the hardware's real capabilities, so bit-perfection cannot be assumed from the API | **M** (was L) | M | **Re-assessed 2026-09-22 from S1 evidence.** The *audio path* is fine — raw bytes arrive unconverted. *Device discovery* is not: CPAL's ALSA list is the plug layer's, and a silent 8 kHz→48 kHz upsample was reported as an honoured request. Mitigation is now concrete: verify every negotiated format against the OS (`/proc/asound` on Linux, the WASAPI exclusive format on Windows) and refuse to claim bit-perfect without it. Built and working in S1; must land in WP-04 | Report negotiated path honestly (§9 demands this regardless); open devices by PCM id via an upstreamed CPAL API, or a direct ALSA backend for Linux capture |
 | **R3** | Tauri IPC can't carry 60 Hz meters + waveform | M | M | S3 | Rust-side coalescing, binary channels, OffscreenCanvas worker |
 | **R4** | Encoder licensing/quality (MP3/Ogg LGPL) | M | L | D5 at WP-14; `cargo deny` | Optional cargo features; ship FLAC/WAV only in MVP |
 | **R5** | **Scope** — very large surface, single developer | M | **H** | Gates; headless-first; scope levers (§10.2) | Ship a CLI-only 0.1 if the GUI slips; it is genuinely useful alone |
@@ -475,7 +540,7 @@ Rust. Cheap, and the architectural rule dies without it.
 | **R8** | Memory growth over multi-hour captures | M | **H** | Nightly soak from WP-05 onward | Bounded caches; mmap'd summaries |
 | **R9** | Device removal mid-capture corrupts project | M | **H** | Fault-injection tests in WP-03/04 | Treat as stream error, finalise capture, keep committed blocks |
 | **R10** | API keys/rate limits in an OSS app | M | L | User-supplied credentials, OS keychain, never in project files (§39) | Documented degraded/offline mode (§4.3 already requires it) |
-| **R12** | AUP4's document blob is undocumented, version-coupled and changes under us | **H** | L | Contained by D1: it now affects only the import parser, never our own persistence. S5 decodes it against generated ground truth; fixture projects per Audacity version parsed in CI so upstream drift fails a build | Import degrades to "audio plus clip boundaries only, metadata by hand" — still useful |
+| **R12** | AUP4's document blob is undocumented, version-coupled and changes under us | **M** (AUP3 decoded 2026-09-22, 25/25 corpus; AUP4 still unmeasured) | L | Contained by D1: it now affects only the import parser, never our own persistence. S5 decodes it against generated ground truth; fixture projects per Audacity version parsed in CI so upstream drift fails a build | Import degrades to "audio plus clip boundaries only, metadata by hand" — still useful |
 | **R13** | GPL contamination while implementing an Audacity-compatible format | L | **H** | Clean-room: generated files and published descriptions only; our own written spec; no Audacity source in the tree; documented in CONTRIBUTING | Reimplement from scratch if provenance is ever doubted |
 | **R14** | macOS ships without device-level verification | **H** | M | Stated plainly in README and release notes; CI builds and runs all non-device tests; file-backed capture source covers the logic | Recruit a macOS tester from the OSS community before 0.1, or mark macOS experimental |
 | **R11** | Continuity across a long unbroken run at capture/storage internals (M1→M4) with no visible output | M | M | M1/M2/M3 each end in a demonstrable capability; keep the CLI genuinely pleasant to use | Re-cut scope at any gate |
@@ -492,6 +557,7 @@ its own right:
 | # | Milestone | Proven when | After | Weight | Cum. |
 |---|-----------|-------------|-------|--------|------|
 | **G0** | Foundation proven | 24/192 sustained into SQLite under abuse with concurrent analysis reads and clean crash recovery; bit-perfect loopback measured; capture-mode matrix published; AUP3/AUP4 schemas documented | S1–S5 | 17 | 17 |
+| | *status 2026-09-22* | S1 met on Linux/x86_64 (Windows, Android, macOS, real converters outstanding) · S2 acceptance met on x86_64/SSD incl. the 90-min soak (firmed-config soak, Pi 5 + Windows outstanding) · S5 met for AUP3, AUP4 blocked on obtaining Audacity 4.x · S3, S4 not started | | | |
 | **M1** | *It records* | CLI captures to a project, survives `SIGKILL` at any point, recovers to the last committed block with checksums intact | WP-06 | 37 | 54 |
 | **M2** | *It plays back* | Capture → progressive waveform → playback → seek, all headless | WP-10 | 25 | 79 |
 | **M3** | *It finds tracks* | Detector parity with VRipr on the labelled corpus; markers carry provenance and confidence | WP-11 | 10 | 89 |

@@ -1,0 +1,36 @@
+# Virtual workspace root: the project is a set of crates (PROJECT_PLAN §6), so the
+# root carries shared metadata rather than a crate of its own.
+[workspace]
+resolver = "3"
+members = ["spikes/capture-core", "spikes/sqlite-capture-bench", "spikes/vinyl-audio-test"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+description = "VCW — The Vinyl Capture Workstation"
+# MIT today. Becomes "MIT AND LGPL-2.1-or-later" when chromaprint-next lands in
+# Phase 2 — see THIRD-PARTY-NOTICES.md and the relink obligation it documents.
+license = "MIT"
+repository = "https://github.com/shunte88/vcw"
+authors = ["Stue Hunter"]
+
+[workspace.dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+crc32fast = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+debug = 1
+
+# Spike S1 found a CPAL bug that makes ALSA capture deliver zero frames on this
+# hardware: the timestamp-capability probe runs before the stream starts, picks
+# the htstamp path, and then every callback fails. The vendored copy moves the
+# probe after start(). See docs/spikes/S1-cpal-capture.md — this patch is
+# evidence for an upstream report, not a fork we intend to keep.
+[patch.crates-io]
+cpal = { path = "spikes/vendor/cpal" }

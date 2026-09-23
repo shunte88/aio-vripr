@@ -1,0 +1,17 @@
+[package]
+name = "capture-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Shared capture/storage machinery for the Phase 0 spikes (S1, S2)"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+crc32fast.workspace = true
+serde.workspace = true
+rtrb = "0.4"
+rusqlite = { version = "0.40", features = ["bundled"] }

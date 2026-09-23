@@ -1,0 +1,19 @@
+[package]
+name = "sqlite-capture-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "S2 spike: bounded buffer -> batched SQLite BLOB writes -> simultaneous analysis reads"
+
+[dependencies]
+capture-core = { path = "../capture-core" }
+anyhow.workspace = true
+clap.workspace = true
+crc32fast.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rtrb = "0.4"
+rusqlite = { version = "0.40", features = ["bundled"] }

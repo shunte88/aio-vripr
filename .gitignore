@@ -1,10 +1,16 @@
 # Build output
 /target
 
+# Benchmark scratch databases (S2 spike output)
+/.bench/
+*.vripr
+*.vripr-wal
+*.vripr-shm
+
 # training - break out as standalone project
 /tools
 
-nextsess
+resume
 bump.sh
 # Cargo lock (keep for binaries, discard for libraries — this is a binary)
 # Cargo.lock
