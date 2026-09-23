@@ -134,7 +134,7 @@ Each has a recommendation and a deadline. Recording them as ADRs in `docs/adr/` 
 
 | # | Decision | Recommendation | Lock by |
 |---|----------|----------------|---------|
-| **D1** | Native project format and extension, and the degree of Audacity compatibility (§12) | **Locked 2026-09-22.** Native `.vripr`, schema a deliberate superset of AUP4's (identical `sampleblocks` shape and summary columns) plus our own tables; SQLite `application_id` + `user_version` so the file self-identifies. Audacity interop is **import-only** (`.aup3` and `.aup4`, tier A). Export to Audacity is declined. | Locked |
+| **D1** | Native project format and extension, and the degree of Audacity compatibility (§12) | **Locked 2026-09-22.** Native `.vcw`, schema a deliberate superset of AUP4's (identical `sampleblocks` shape and summary columns) plus our own tables; SQLite `application_id` + `user_version` so the file self-identifies. Audacity interop is **import-only** (`.aup3` and `.aup4`, tier A). Export to Audacity is declined. | Locked |
 | **D2** | SQLite binding | `rusqlite` with `bundled` feature — synchronous, predictable, no async runtime on the writer thread; bundled build removes platform SQLite variance. `sqlx` is async-first and wrong here. | WP-02 |
 | **D3** | Block layout & size | **Provisional from S2 (2026-09-22):** per-channel (AUP4-compatible) blocks of **250 ms**, **batch 1**, WAL, `synchronous=FULL`, ring ≥ 500 ms. Rationale inverted the starting hypothesis — throughput proved a non-issue, so the budget buys *recovery granularity* instead. Confirm on Pi 5 before locking. See `docs/spikes/S2-sqlite-capture.md` | G0 (pending Pi 5) |
 | **D4** | Sample representation at rest | Store the device's bytes **verbatim** plus a format tag. §9 forbids conversion; converting to f32 at rest would silently break the bit-perfect claim. | WP-02 |
@@ -213,7 +213,7 @@ no place for the 32-bit integer captures §8 requires, so tier C would quietly c
 format support; and Audacity is GPL, so the format must be reimplemented from
 observation rather than by lifting code into an MIT project.
 
-**The recommended shape** keeps almost all of the benefit: a native `.vripr` project whose
+**The recommended shape** keeps almost all of the benefit: a native `.vcw` project whose
 schema is a **deliberate superset of AUP4's** — same `sampleblocks` table, same summary
 columns, same never-update-a-block discipline — plus our own tables for everything
 Audacity cannot hold. Conversion in both directions is then mechanical rather than
@@ -221,7 +221,7 @@ lossy, we keep control of versioning and recovery, and "Open in Audacity" become
 export action with an honest, testable contract. Architectural compatibility is what
 §12 actually asks for; this delivers it without handing over the foundations.
 
-**Decision (2026-09-22): tier A only, on a native `.vripr` AUP4-superset schema.** S5
+**Decision (2026-09-22): tier A only, on a native `.vcw` AUP4-superset schema.** S5
 still runs — it is what makes the import parser possible — but its job narrows to
 understanding the two formats well enough to read them, and to fixing the exact
 `sampleblocks` shape our own schema will mirror.
@@ -259,7 +259,7 @@ rather than leaving users to discover them:
 Five spikes, ~17 sessions. Throwaway-by-default: the value is the evidence, though S1
 becomes a permanently useful diagnostic tool.
 
-### S1 — `vinyl-audio-test` (§47) — 6 sessions — **LINUX COMPLETE**
+### S1 — `vinyl-audio-test` (§47) — 6 sessions — **LINUX COMPLETE** (re-verified on CPAL 0.18.2)
 
 > **Result (2026-09-22):** all twelve §47 behaviours implemented and demonstrated on
 > Linux/x86_64. Bit-perfect 24/192 capture into SQLite, kernel-confirmed, zero dropped
@@ -269,16 +269,29 @@ becomes a permanently useful diagnostic tool.
 > Write-up: [`docs/spikes/S1-cpal-capture.md`](docs/spikes/S1-cpal-capture.md).
 >
 > **Two findings that change work downstream:**
-> - **CPAL's ALSA device list describes the plug layer, not the hardware.** It hardcodes
->   `plughw:`, so advertised configs are fiction, some advertised rates fail at stream
->   build, and — the serious one — conversion is invisible. Capturing from the default
+> - **CPAL's ALSA device list described the plug layer, not the hardware.** 0.16 hardcoded
+>   `plughw:`, so advertised configs were fiction, some advertised rates failed at stream
+>   build, and — the serious one — conversion was invisible. Capturing from the default
 >   device, CPAL reported "48 kHz / 2 ch / I32, request honoured exactly" while the
 >   hardware ran **8 kHz mono S16**. A per-platform verifier against the OS is therefore
->   **mandatory, not optional**, and must land in WP-04. Device selection is *not*
->   simply picking from CPAL's list.
+>   **mandatory, not optional**, and must land in WP-04.
 > - **A CPAL bug delivered zero frames on every ALSA capture** (timestamp capability
->   probed before the stream starts). A one-line fix in a vendored copy is the
->   difference between 0 and 960,152 frames. Should go upstream, not be carried.
+>   probed before the stream starts) — the difference between 0 and 960,152 frames.
+>
+> **Re-verified 2026-09-23 on CPAL 0.18.2, stock from crates.io.** Both defects are fixed
+> upstream, and 0.18 adds `HostTrait::device_by_id` plus `hw:` enumeration — the exact API
+> this spike had recommended upstreaming. The vendored copy and `[patch.crates-io]` entry
+> are **deleted**; bit-perfect 24/192 capture (2,883,584 frames, 0 dropped,
+> kernel-confirmed), clean playback and 3/3 crash recovery all re-measured on the stock
+> crate. The verifier stays mandatory regardless: a better device list makes a silent
+> conversion less likely, not detectable.
+>
+> **New finding — recovery loss has a floor the config cannot cross.** Loss is
+> `commit granularity + driver buffer`, rounded to a block boundary, not
+> `block_ms × batch_blocks` alone. Ring capacity was swept 100–1000 ms and makes **no
+> difference**; the ALSA buffer (32768 frames = 170 ms at 192 kHz) is what sets the floor.
+> This refines D3: 250 ms blocks sit *at* that floor, not inside it, and below roughly the
+> driver buffer duration smaller commits stop buying durability.
 >
 > Outstanding: Windows/WASAPI exclusive, Android, macOS (no hardware), the HiFiBerry and
 > Tascam converters, `snd-aloop` bit-exactness, and the capture-mode matrix G0 asks for.
@@ -531,7 +544,7 @@ Rust. Cheap, and the architectural rule dies without it.
 | # | Risk | L | I | Mitigation / early signal | Fallback |
 |---|------|---|---|---------------------------|----------|
 | **R1** | SQLite cannot sustain 24/192 with concurrent reads | **L** (was M) | **Critical** | Largely retired by S2 on x86_64/SSD: 4× real-time headroom, zero drops, bounded WAL. Residual risk is the Pi 5 on SD/NVMe — re-measure there before closing | Sidecar block file + SQLite index; project becomes a container (costs §12's single-file property) |
-| **R2** | CPAL's device abstraction hides the hardware's real capabilities, so bit-perfection cannot be assumed from the API | **M** (was L) | M | **Re-assessed 2026-09-22 from S1 evidence.** The *audio path* is fine — raw bytes arrive unconverted. *Device discovery* is not: CPAL's ALSA list is the plug layer's, and a silent 8 kHz→48 kHz upsample was reported as an honoured request. Mitigation is now concrete: verify every negotiated format against the OS (`/proc/asound` on Linux, the WASAPI exclusive format on Windows) and refuse to claim bit-perfect without it. Built and working in S1; must land in WP-04 | Report negotiated path honestly (§9 demands this regardless); open devices by PCM id via an upstreamed CPAL API, or a direct ALSA backend for Linux capture |
+| **R2** | CPAL's device abstraction can hide the hardware's real capabilities, so bit-perfection cannot be assumed from the API | **L** (was M, was L) | M | **Re-assessed 2026-09-22 from S1 evidence.** The *audio path* is fine — raw bytes arrive unconverted. *Device discovery* is not: CPAL's ALSA list is the plug layer's, and a silent 8 kHz→48 kHz upsample was reported as an honoured request. Mitigation is now concrete: verify every negotiated format against the OS (`/proc/asound` on Linux, the WASAPI exclusive format on Windows) and refuse to claim bit-perfect without it. Built and working in S1; must land in WP-04. **Revised 2026-09-23:** CPAL 0.18.2 enumerates `hw:` PCMs and adds `HostTrait::device_by_id`, so the device list is no longer the plug layer's fiction and devices are selectable by PCM id — likelihood drops back to **L**. Impact stays M and the verifier stays mandatory: a better list makes the lie less likely, not detectable | Report negotiated path honestly (§9 demands this regardless); select devices by PCM id (now a stock CPAL API); stay current on CPAL rather than pinning |
 | **R3** | Tauri IPC can't carry 60 Hz meters + waveform | M | M | S3 | Rust-side coalescing, binary channels, OffscreenCanvas worker |
 | **R4** | Encoder licensing/quality (MP3/Ogg LGPL) | M | L | D5 at WP-14; `cargo deny` | Optional cargo features; ship FLAC/WAV only in MVP |
 | **R5** | **Scope** — very large surface, single developer | M | **H** | Gates; headless-first; scope levers (§10.2) | Ship a CLI-only 0.1 if the GUI slips; it is genuinely useful alone |
@@ -557,7 +570,7 @@ its own right:
 | # | Milestone | Proven when | After | Weight | Cum. |
 |---|-----------|-------------|-------|--------|------|
 | **G0** | Foundation proven | 24/192 sustained into SQLite under abuse with concurrent analysis reads and clean crash recovery; bit-perfect loopback measured; capture-mode matrix published; AUP3/AUP4 schemas documented | S1–S5 | 17 | 17 |
-| | *status 2026-09-22* | S1 met on Linux/x86_64 (Windows, Android, macOS, real converters outstanding) · S2 acceptance met on x86_64/SSD incl. the 90-min soak (firmed-config soak, Pi 5 + Windows outstanding) · S5 met for AUP3, AUP4 blocked on obtaining Audacity 4.x · S3, S4 not started | | | |
+| | *status 2026-09-23* | S1 met on Linux/x86_64 on stock CPAL 0.18.2, no patches (Windows, Android, macOS, real converters outstanding) · S2 acceptance met on x86_64/SSD incl. the 90-min soak (firmed-config soak, Pi 5 + Windows outstanding) · S5 met for AUP3, AUP4 blocked on obtaining Audacity 4.x · S3, S4 not started | | | |
 | **M1** | *It records* | CLI captures to a project, survives `SIGKILL` at any point, recovers to the last committed block with checksums intact | WP-06 | 37 | 54 |
 | **M2** | *It plays back* | Capture → progressive waveform → playback → seek, all headless | WP-10 | 25 | 79 |
 | **M3** | *It finds tracks* | Detector parity with VRipr on the labelled corpus; markers carry provenance and confidence | WP-11 | 10 | 89 |
@@ -604,6 +617,6 @@ demonstrable from CLI or UI.
 3. **Then** — Build S2, the capture/SQLite benchmark harness. This is the one you most want proven, and its result can still reshape the architecture cheaply.
 
 One decision wants making before the first commit: the **project file extension** (D1,
-recommendation `.vripr`). The other open question is simply whether Windows and macOS
+recommendation `.vcw`). The other open question is simply whether Windows and macOS
 machines are to hand for S1 — not as a feasibility gate, but because the published
 capture-mode matrix is only worth having if it is measured rather than assumed.

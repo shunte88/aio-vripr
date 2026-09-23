@@ -18,7 +18,7 @@ Pre-0.1. Phase 0 — proving the foundations before building on them.
 
 | Spike | Question | State |
 |---|---|---|
-| S1 | Does CPAL give us bit-perfect capture and playback per platform? | [Linux yes, with caveats](docs/spikes/S1-cpal-capture.md); other platforms outstanding |
+| S1 | Does CPAL give us bit-perfect capture and playback per platform? | [Linux yes](docs/spikes/S1-cpal-capture.md), on stock CPAL 0.18; other platforms outstanding |
 | S2 | Can SQLite absorb sustained 24/192 capture, and survive a kill? | [yes on x86_64/SSD](docs/spikes/S2-sqlite-capture.md), incl. a 90-min soak; other platforms outstanding |
 | S3 | Will Tauri IPC carry the meter and waveform rates? | not started |
 | S4 | Does `chromaprint-next` fingerprint from a stream? | not started |

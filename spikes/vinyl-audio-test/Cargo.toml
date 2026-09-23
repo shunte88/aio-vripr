@@ -16,4 +16,4 @@ serde.workspace = true
 serde_json.workspace = true
 rtrb = "0.4"
 rusqlite = { version = "0.40", features = ["bundled"] }
-cpal = "0.16"
+cpal = "0.18"

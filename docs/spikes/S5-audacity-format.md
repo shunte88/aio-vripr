@@ -6,7 +6,7 @@
 
 ## Question
 
-D1 commits us to a native `.vripr` that is an AUP4 *superset*, with Audacity
+D1 commits us to a native `.vcw` that is an AUP4 *superset*, with Audacity
 **import only** — we never write a file Audacity has to read. The spike had to
 establish whether that import is actually buildable, because the project
 document is an undocumented binary blob, not XML on disk.

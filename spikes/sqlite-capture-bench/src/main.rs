@@ -35,7 +35,7 @@ struct Cli {
 enum Cmd {
     /// Run a single capture and report.
     Run {
-        #[arg(long, default_value = "/tmp/vripr-bench.vripr")]
+        #[arg(long, default_value = "/tmp/vcw-bench.vcw")]
         db: String,
         #[arg(long)]
         json: bool,
@@ -46,7 +46,7 @@ enum Cmd {
     },
     /// Sweep the §48 parameter matrix and emit one JSON object per run.
     Sweep {
-        #[arg(long, default_value = "/tmp/vripr-sweep")]
+        #[arg(long, default_value = "/tmp/vcw-sweep")]
         dir: String,
         /// Seconds per combination.
         #[arg(long, default_value_t = 20)]
@@ -70,7 +70,7 @@ enum Cmd {
     },
     /// Run a capture and SIGKILL it mid-flight, then verify what survived.
     CrashTest {
-        #[arg(long, default_value = "/tmp/vripr-crash.vripr")]
+        #[arg(long, default_value = "/tmp/vcw-crash.vcw")]
         db: String,
         /// Seconds to run before the kill.
         #[arg(long, default_value_t = 15)]
@@ -178,7 +178,7 @@ fn main() -> Result<()> {
                             p.batch_blocks = ba;
                             p.page_size = ps;
                             p.layout = ly;
-                            let path = format!("{dir}/run-{n:03}.vripr");
+                            let path = format!("{dir}/run-{n:03}.vcw");
                             cleanup(&path);
                             eprintln!(
                                 "[{n}/{total}] block={bm}ms batch={ba} page={ps} layout={ly:?}"

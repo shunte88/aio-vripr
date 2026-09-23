@@ -27,10 +27,3 @@ opt-level = 3
 lto = true
 debug = 1
 
-# Spike S1 found a CPAL bug that makes ALSA capture deliver zero frames on this
-# hardware: the timestamp-capability probe runs before the stream starts, picks
-# the htstamp path, and then every callback fails. The vendored copy moves the
-# probe after start(). See docs/spikes/S1-cpal-capture.md — this patch is
-# evidence for an upstream report, not a fork we intend to keep.
-[patch.crates-io]
-cpal = { path = "spikes/vendor/cpal" }

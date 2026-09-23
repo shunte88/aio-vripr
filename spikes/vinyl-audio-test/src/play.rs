@@ -112,14 +112,14 @@ pub fn run(db_path: &str, device_query: Option<&str>, max_secs: Option<u64>) -> 
     let exact = supported.iter().any(|r| {
         r.channels() == meta.channels
             && r.sample_format() == stored_format
-            && r.min_sample_rate().0 <= meta.rate
-            && r.max_sample_rate().0 >= meta.rate
+            && r.min_sample_rate() <= meta.rate
+            && r.max_sample_rate() >= meta.rate
     });
     let fallback = supported.iter().find(|r| {
         r.channels() == meta.channels
             && r.sample_format() == SampleFormat::F32
-            && r.min_sample_rate().0 <= meta.rate
-            && r.max_sample_rate().0 >= meta.rate
+            && r.min_sample_rate() <= meta.rate
+            && r.max_sample_rate() >= meta.rate
     });
 
     let (out_format, converted, note) = if exact {
@@ -182,7 +182,7 @@ pub fn run(db_path: &str, device_query: Option<&str>, max_secs: Option<u64>) -> 
 
     let config = StreamConfig {
         channels: meta.channels,
-        sample_rate: cpal::SampleRate(meta.rate),
+        sample_rate: meta.rate,
         buffer_size: cpal::BufferSize::Default,
     };
 
@@ -200,7 +200,7 @@ pub fn run(db_path: &str, device_query: Option<&str>, max_secs: Option<u64>) -> 
         let bps = meta.bps;
         let mut cursor = 0usize;
         device.build_output_stream_raw(
-            &config,
+            config,
             out_format,
             move |data, _info| {
                 let out = data.bytes_mut();

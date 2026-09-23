@@ -1,8 +1,8 @@
 # VCW — project status
 
-**As of:** 2026-09-22
+**As of:** 2026-09-23
 **Phase:** 0 (de-risking spikes), gate G0 not yet passed
-**Branch:** `main`, nothing committed yet
+**Branch:** `main`, Phase 0 spikes committed (`f4a408c`)
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -11,52 +11,52 @@ record is [`PROJECT_PLAN.md`](../PROJECT_PLAN.md); the spec is
 
 ---
 
-## The rename
+## The rename — complete
 
-`aio-vripr` → **VCW, The Vinyl Capture Workstation**. Done inside the deliverables:
-`README.md`, `PROJECT_PLAN.md`, `Cargo.toml` (`description`, and `repository` pointing
-forward at `github.com/shunte88/vcw`). The only surviving mention of the old name is the
-deliberate provenance note in the plan.
+`aio-vripr` → **VCW, The Vinyl Capture Workstation**. Fully landed: GitHub repo renamed,
+`origin` on `github.com/shunte88/vcw`, working directory `/data2/vcw`, Phase 0 spikes
+committed, and the naming convention adopted across the deliverables including the `.vcw`
+project extension. The only surviving mention of the old name is the deliberate
+provenance note in the plan.
 
-**Deliberately deferred** — the user's call, so the build wasn't blocked on it:
-
-- GitHub repo still named `aio-vripr`; `origin` still points there.
-- Working directory still `/data2/aio-vripr`.
-- The keyed memory directory `~/.claude/projects/-data2-aio-vripr/` moves with it.
-
-The `Cargo.toml` `repository` URL is a **forward reference to a repo that does not exist
-yet** — it will 404 until the GitHub rename happens.
+Predecessor **VRipr** keeps its own name — VCW is its successor, not a rebrand — and
+`/data2/vripr` remains the source of the ~30 % of ported functionality.
 
 ## Phase 0 spikes
 
 | Spike | Question | Verdict |
 |---|---|---|
-| **S1** | Bit-perfect capture and playback through CPAL? | **Yes on Linux/x86_64, with caveats.** Other platforms open. |
+| **S1** | Bit-perfect capture and playback through CPAL? | **Yes on Linux/x86_64**, on stock CPAL 0.18.2. Other platforms open. |
 | **S2** | Can SQLite absorb sustained 24/192 and survive a kill? | **Yes on x86_64/SSD**, 90-minute soak passed. Other platforms open. |
 | **S3** | Will Tauri IPC carry meter and waveform rates? | Not started. |
 | **S4** | Does `chromaprint-next` fingerprint from a stream? | Not started. |
 | **S5** | Is the Audacity project format readable? | **AUP3 yes, decisively.** AUP4 unmeasured. |
 
-~3,520 lines of Rust across three spike crates, plus a 243-line Python format probe.
+~3,640 lines of Rust across three spike crates, plus a 243-line Python format probe.
 Write-ups in [`docs/spikes/`](spikes/).
 
-### S1 — what it actually proved, and what it disproved
+### S1 — what it proved, and what upstream then fixed
 
-Proven: CPAL's *audio path* is genuinely conversion-free. A verified 24/192 stereo
-capture ran 960,152 frames with zero drops, the kernel confirming the negotiated format;
-playback was clean; crash recovery was exact to the block, 3 for 3.
+Proven: CPAL's *audio path* is genuinely conversion-free. Re-measured 2026-09-23 on
+**stock CPAL 0.18.2, no patches**: 2,883,584 frames at 24/192, zero drops, kernel
+confirming the negotiated format; clean playback; 3/3 crash recovery.
 
-Disproved, and this matters: **CPAL's ALSA device list is the plug layer's fiction.** A
-request for 48 kHz / 2 ch / I32 was reported as honoured while the hardware was actually
-running 8 kHz mono S16 — a silent upsample that no CPAL API surfaces. The cross-check
-against `/proc/asound/.../hw_params` is what caught it, and that check is now a mandatory
-WP-04 obligation: *bit-perfection is never claimed without kernel confirmation.* Risk R2
-was re-scored L → **M** on this evidence.
+The spike's durable output is the **kernel cross-check**. On 0.16 CPAL's ALSA device list
+was the plug layer's fiction: a request for 48 kHz / 2 ch / I32 was reported as honoured
+while the hardware ran 8 kHz mono S16 — a silent upsample no CPAL API surfaced. The check
+against `/proc/asound/.../hw_params` caught it, and it is a mandatory WP-04 obligation:
+*bit-perfection is never claimed without OS confirmation.*
 
-Also found: a CPAL 0.16.0 bug that made ALSA capture deliver **zero frames** on this
-hardware (the timestamp-capability probe runs before `start()`, so every callback then
-fails). Root-caused and fixed in 32 lines by moving the probe after `start()`; carried as
-a vendored `[patch.crates-io]` copy under `spikes/vendor/cpal`. 0 frames → 960,152.
+**Both 0.16 defects are fixed in the released 0.18.2**, which also ships
+`HostTrait::device_by_id` and enumerates `hw:` PCMs — the exact API S1 had recommended
+upstreaming. The vendored fork is deleted. R2 went L → M on the 0.16 evidence and back to
+**L** on 0.18, with the verifier keeping it there.
+
+**New finding: recovery loss has a floor the config cannot cross.** Loss is
+`commit granularity + driver buffer`, rounded to a block boundary — not
+`block_ms × batch_blocks` alone. Ring capacity swept 100–1000 ms changed nothing; the
+170 ms ALSA buffer sets the floor. 250 ms blocks sit *at* that floor, which refines D3 and
+corrected a crash-test budget that had been failing correct runs.
 
 ### S2 — acceptance met on one platform
 
@@ -69,8 +69,11 @@ failures. The commit distribution is stationary over 90 minutes.
 The load-bearing conclusion: **throughput is not the constraint and is not near being
 one.** The real design variable is recovery granularity, so the budget goes to smaller,
 more frequent commits rather than bigger batches — which inverts the usual instinct.
-Worst-case loss on a power cut is exactly `block_ms × batch_blocks`, demonstrated to the
-block. R1's sidecar-file fallback looks unnecessary; §12's single-file project survives.
+R1's sidecar-file fallback looks unnecessary; §12's single-file project survives.
+
+S2 measured worst-case loss as exactly `block_ms × batch_blocks`, which is true *of this
+harness* — it has no audio device. S1 Finding 4 above shows the rest of the picture on
+real hardware, and puts a floor under it that smaller commits cannot cross.
 
 One honest gap: the soak ran the harness defaults (`synchronous=NORMAL`, interleaved),
 not the D3-firmed `FULL` + per-channel. The short matrix says the firmed config should be
@@ -112,28 +115,38 @@ defect to fix.
 - **AUP4.** Blocked on obtaining Audacity 4.x. Also unexercised: a project with a
   non-empty `envelope`, and one with a populated `autosave`.
 
-## Open decisions — waiting on the user
+## Decisions resolved 2026-09-23
 
-1. **Does the native project extension change `.vripr` → `.vcw`?** 18 references; the
-   cost is near zero now and grows steadily from here.
-2. **Where does the CPAL fork live?** The vendored `[patch.crates-io]` copy is the wrong
-   long-term shape. The replacement is a git dependency on a fork we own, plus an
-   upstream report — but the fork's location and owner is a call to make, not assume.
-3. **Corpus fixture strategy.** The 25 real rips are the import regression set; they need
-   a shrinker (WP-20) so fixtures are committable.
+1. **The project extension is `.vcw`** (was `.vripr`). Applied to the spike CLIs,
+   `.gitignore` patterns, D1 in the plan, the local-dev config path (`~/.config/vcw/`,
+   `vcw.toml`) and every doc.
+2. **CPAL: track the released crate.** `shunte88/cpal` is the fork of record for any
+   defect we find that is not already fixed upstream — fixes go there first, then
+   upstream. It is currently **unused**, because 0.18.2 fixed both defects we had found,
+   which is the better outcome. Standing policy: prefer the released crate; fork only
+   with a reproduction we cannot get upstream in time; never carry a `[patch.crates-io]`
+   path copy again — that is what we had, and it quietly hid how stale our pin was.
+
+## Still open
+
+- **Corpus fixture strategy.** The 25 real rips are the import regression set; they need
+  a shrinker (WP-20) so fixtures are committable.
+- **Crate naming** — `vcw-audio`, `vcw-signal`, … — settled at WP-01.
 
 ## Next up
 
 `WP-01` proper: the full crate layout per §6, CI matrix, `cargo-deny`, ported
-`THIRD-PARTY-NOTICES.md` and `LICENSE-LGPL-2.1` (plus a new cpal/Apache-2.0 entry for the
-vendored copy), and ADR-0001 (D1) / ADR-0002 (D2). Crate naming — `vcw-audio`,
-`vcw-signal`, … — gets settled there.
+`THIRD-PARTY-NOTICES.md` and `LICENSE-LGPL-2.1`, and ADR-0001 (D1) / ADR-0002 (D2). No
+vendored-cpal notice is needed any more — cpal is a plain Apache-2.0 dependency again.
 
 ## Housekeeping
 
-- **Nothing is committed.** Modified: `.gitignore`, `PROJECT_PLAN.md`, `README.md`.
-  Untracked: `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `docs/`, `spikes/`.
-- `.bench/` holds **7.9 GB** of scratch databases, mostly the 8.4 GB soak artefact. It is
-  gitignored and safe to delete once the S2 numbers above are considered recorded.
-- Licensing today: MIT core, cpal Apache-2.0. `chromaprint-next` adds an
-  LGPL-2.1-or-later relink obligation at Phase 2.
+- Phase 0 spikes are committed at `f4a408c`. The CPAL 0.18 upgrade, the `.vcw` rename and
+  this revision are working-tree changes on top of it.
+- `.bench/` holds **~8 GB** of scratch databases — the 8.4 GB soak artefact plus older
+  `.vripr`-suffixed files from before the rename. All gitignored and safe to delete; the
+  S1 and S2 numbers are recorded here and in the spike write-ups.
+- Licensing today: MIT core, cpal Apache-2.0 as an ordinary dependency.
+  `chromaprint-next` adds an LGPL-2.1-or-later relink obligation at Phase 2.
+- **Stay current on CPAL.** Two blocking defects and the device-id API all landed within
+  two minor releases; pinning 0.16 had already cost us a fork.

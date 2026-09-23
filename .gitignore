@@ -3,9 +3,9 @@
 
 # Benchmark scratch databases (S2 spike output)
 /.bench/
-*.vripr
-*.vripr-wal
-*.vripr-shm
+*.vcw
+*.vcw-wal
+*.vcw-shm
 
 # training - break out as standalone project
 /tools
@@ -54,7 +54,7 @@ bump.sh
 !**/tests/fixtures/**/*.aup4
 
 # Temporary analysis WAV (written to /tmp but just in case)
-/tmp/vripr_analysis_*.wav
+/tmp/vcw_analysis_*.wav
 
 # Claude Code local config
 .claude/
@@ -63,5 +63,5 @@ bump.sh
 .env
 *.env.local
 
-# Config override for local dev (real config lives in ~/.config/vripr/)
-vripr.toml
+# Config override for local dev (real config lives in ~/.config/vcw/)
+vcw.toml

@@ -119,12 +119,12 @@ fn choose(
         }
         let rate = match req.rate {
             Some(r) => {
-                if r < range.min_sample_rate().0 || r > range.max_sample_rate().0 {
+                if r < range.min_sample_rate() || r > range.max_sample_rate() {
                     continue;
                 }
                 r
             }
-            None => range.max_sample_rate().0,
+            None => range.max_sample_rate(),
         };
         let score = rank(range.sample_format());
         if best
@@ -151,7 +151,7 @@ fn choose(
     let format = range.sample_format();
     let config = StreamConfig {
         channels: range.channels(),
-        sample_rate: cpal::SampleRate(rate),
+        sample_rate: rate,
         buffer_size,
     };
     Ok((config, format))
@@ -171,9 +171,9 @@ pub fn run(req: Request) -> Result<Report> {
 
     let mut divergences = Vec::new();
     if let Some(r) = req.rate
-        && r != config.sample_rate.0
+        && r != config.sample_rate
     {
-        divergences.push(format!("rate {r} -> {}", config.sample_rate.0));
+        divergences.push(format!("rate {r} -> {}", config.sample_rate));
     }
     if let Some(c) = req.channels
         && c != config.channels
@@ -187,7 +187,7 @@ pub fn run(req: Request) -> Result<Report> {
     }
 
     let bytes_per_sample = format.sample_size();
-    let mut params = Params::default_for(config.sample_rate.0, config.channels, bytes_per_sample);
+    let mut params = Params::default_for(config.sample_rate, config.channels, bytes_per_sample);
     params.block_ms = req.block_ms;
     params.batch_blocks = req.batch_blocks;
     params.ring_ms = req.ring_ms;
@@ -236,7 +236,7 @@ pub fn run(req: Request) -> Result<Report> {
 
         device
             .build_input_stream_raw(
-                &config,
+                config,
                 format,
                 move |data, _info| {
                     let bytes = data.bytes();
@@ -324,7 +324,7 @@ pub fn run(req: Request) -> Result<Report> {
             requested_rate: req.rate,
             requested_channels: req.channels,
             requested_format: req.format.map(|f| format!("{f:?}")),
-            negotiated_rate: config.sample_rate.0,
+            negotiated_rate: config.sample_rate,
             negotiated_channels: config.channels,
             negotiated_format: format!("{format:?}"),
             bytes_per_sample,
@@ -360,7 +360,7 @@ fn kernel_agreement(
     // Exactly one open capture stream is the unambiguous case. With none we
     // learned nothing; with several we cannot say which is ours.
     let [only] = params else { return None };
-    let rate_ok = only.rate == Some(config.sample_rate.0);
+    let rate_ok = only.rate == Some(config.sample_rate);
     let ch_ok = only.channels == Some(config.channels);
     let fmt_ok = only
         .format

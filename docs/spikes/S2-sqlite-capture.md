@@ -119,10 +119,19 @@ worst case the commit tail sits at 5–30 % of the available budget, and the pat
 index) looks unnecessary. §12's single-file project survives.
 
 **2. The real design variable is recovery granularity, not speed.** Worst-case audio loss
-on a power cut is exactly `block_ms × batch_blocks`, and the crash test demonstrates it
-to the block: kill at 7.00 s, recover 6.75 s. Since throughput is a solved problem, that
-budget should be spent on *smaller, more frequent commits*, not on bigger batches. This
-inverts the usual instinct to batch for throughput.
+on a power cut is driven by commit granularity, not throughput, and the crash test
+demonstrates recovery landing exactly on a block boundary every time. Since throughput is
+a solved problem, that budget should be spent on *smaller, more frequent commits*, not on
+bigger batches. This inverts the usual instinct to batch for throughput.
+
+> **Qualified by S1 Finding 4 (2026-09-23).** This synthetic harness has no audio device,
+> so `block_ms × batch_blocks` is the *whole* story here. Against a real converter it is
+> not: the driver holds audio that never reached a callback, and that is lost too. On the
+> `hw:` device measured in S1 the ALSA buffer is 32768 frames = 170 ms at 192 kHz, which
+> puts a **floor** under recovery loss that shrinking `block_ms` cannot cross. Below
+> roughly the driver buffer duration, smaller commits stop buying durability. 250 ms is
+> still the right default, but it sits *at* that floor rather than inside it. See
+> [`S1-cpal-capture.md`](S1-cpal-capture.md) Finding 4 for the measurements.
 
 **3. Recommended default: 250 ms blocks, batch 1.** Worst-case loss a quarter second,
 commit tail ~29 % of budget, WAL steady at 4 MiB. 50 ms blocks go too far — the maximum
@@ -170,18 +179,18 @@ the waveform worker rather than sit in the commit path.
 | Journal | **WAL** | High |
 | `synchronous` | **FULL** | High — but soaked only at NORMAL |
 | Layout | **Per-channel** (AUP4-compatible) | Medium — both work; per-channel is kinder to the WAL and keeps D1 mechanical, and S5 confirms AUP3/AUP4 store mono blocks natively. Soaked only at interleaved |
-| Ring capacity | **≥ 500 ms** | Medium — it is what absorbs commit tails; size it at ≥ 5× measured commit max (102 ms over 90 min → ≥ 510 ms) |
+| Ring capacity | **≥ 500 ms** | Medium — it absorbs commit tails; size it at ≥ 5× measured commit max (102 ms over 90 min → ≥ 510 ms). S1 measured that ring size does **not** affect crash loss, so this is a throughput cushion only |
 | Page size | 4 KiB default | Low — not yet swept |
 
 ## Reproducing
 
 ```sh
 cargo build --release
-./target/release/sqlite-capture-bench run --db ./bench.vripr --rate 192000 \
+./target/release/sqlite-capture-bench run --db ./bench.vcw --rate 192000 \
     --block-ms 250 --batch-blocks 1 --sync full --duration 20
-./target/release/sqlite-capture-bench crash-test --db ./crash.vripr --kill-after 7 --cycles 3
+./target/release/sqlite-capture-bench crash-test --db ./crash.vcw --kill-after 7 --cycles 3
 ./target/release/sqlite-capture-bench sweep --dir ./sweep --duration 20 > sweep.jsonl
-./target/release/sqlite-capture-bench verify ./bench.vripr
+./target/release/sqlite-capture-bench verify ./bench.vcw
 ```
 
 **Do not benchmark against `/tmp` if it is tmpfs.** Use a path on the storage the real

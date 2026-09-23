@@ -97,7 +97,7 @@ enum Command {
         /// Ask the device for a specific callback size, in frames.
         #[arg(long)]
         buffer_frames: Option<u32>,
-        #[arg(long, default_value = "./capture.vripr")]
+        #[arg(long, default_value = "./capture.vcw")]
         db: String,
         #[arg(long, default_value_t = 30)]
         duration: u64,
@@ -116,7 +116,7 @@ enum Command {
     },
     /// §47.8, §47.12 — play a capture back out of SQLite.
     Play {
-        #[arg(long, default_value = "./capture.vripr")]
+        #[arg(long, default_value = "./capture.vcw")]
         db: String,
         #[arg(long)]
         device: Option<String>,
@@ -126,7 +126,7 @@ enum Command {
     },
     /// §47.9 — integrity, checksums and sequencing over a stored capture.
     Verify {
-        #[arg(default_value = "./capture.vripr")]
+        #[arg(default_value = "./capture.vcw")]
         db: String,
     },
     /// §47.10 — kill a live capture mid-flight and verify what survived.
@@ -139,7 +139,7 @@ enum Command {
         channels: Option<u16>,
         #[arg(long, value_enum)]
         format: Option<Fmt>,
-        #[arg(long, default_value = "./crash.vripr")]
+        #[arg(long, default_value = "./crash.vcw")]
         db: String,
         /// Seconds of capture before the process is killed.
         #[arg(long, default_value_t = 7)]
@@ -150,6 +150,17 @@ enum Command {
         block_ms: u32,
         #[arg(long, default_value_t = 1)]
         batch_blocks: usize,
+        /// Ring capacity. Measured finding: varying this 100..1000 ms does not
+        /// change recovery loss at all — the writer keeps the ring near-empty,
+        /// so it is a throughput cushion, not a durability exposure.
+        #[arg(long, default_value_t = 500)]
+        ring_ms: u32,
+        /// Allowance for audio the driver has buffered but not yet handed to a
+        /// callback. This is real, unrecoverable exposure on SIGKILL and it is
+        /// *not* covered by commit granularity. At 192 kHz on `hw:` here ALSA
+        /// reports buffer=32768 frames = 170 ms; 250 ms leaves margin.
+        #[arg(long, default_value_t = 250)]
+        inflight_ms: u32,
         /// Internal: the child process entry point.
         #[arg(long, hide = true)]
         child: bool,
@@ -242,6 +253,8 @@ fn main() -> Result<()> {
             cycles,
             block_ms,
             batch_blocks,
+            ring_ms,
+            inflight_ms,
             child,
         } => cmd_crash_test(CrashArgs {
             json: cli.json,
@@ -254,6 +267,8 @@ fn main() -> Result<()> {
             cycles,
             block_ms,
             batch_blocks,
+            ring_ms,
+            inflight_ms,
             child,
         }),
     }
@@ -282,7 +297,10 @@ fn cmd_devices(json: bool, verbose: bool, input_only: bool) -> Result<()> {
             flags.push("default output");
         }
         if d.direct_hardware {
-            flags.push("direct hardware");
+            flags.push("DIRECT HARDWARE - bit-perfect capable");
+        }
+        if d.converting {
+            flags.push("plug layer - silently converts, never bit-perfect");
         }
         let flags = if flags.is_empty() {
             String::new()
@@ -290,6 +308,10 @@ fn cmd_devices(json: bool, verbose: bool, input_only: bool) -> Result<()> {
             format!("  [{}]", flags.join(", "))
         };
         println!("\n{}{flags}", d.name);
+        // The id is what `--device` should be given: names collide, ids do not.
+        if let Some(id) = &d.id {
+            println!("  id: {id}");
+        }
         if let Some(c) = &d.default_input {
             println!(
                 "  default in : {} ch  {} Hz  {}",
@@ -332,7 +354,20 @@ fn cmd_devices(json: bool, verbose: bool, input_only: bool) -> Result<()> {
 fn cmd_formats(json: bool, device: Option<&str>) -> Result<()> {
     let all = devices::enumerate()?;
     let hits: Vec<_> = match device {
-        Some(q) => all.iter().filter(|d| d.name.contains(q)).collect(),
+        // Match the id first and exactly: `hw:CARD=0,DEV=0` should select that
+        // PCM, not every device whose name happens to contain the substring.
+        Some(q) => {
+            let by_id: Vec<_> = all.iter().filter(|d| d.id.as_deref() == Some(q)).collect();
+            if by_id.is_empty() {
+                all.iter()
+                    .filter(|d| {
+                        d.name.contains(q) || d.id.as_deref().is_some_and(|i| i.contains(q))
+                    })
+                    .collect()
+            } else {
+                by_id
+            }
+        }
         None => all.iter().filter(|d| d.is_default_input).collect(),
     };
     if hits.is_empty() {
@@ -343,7 +378,12 @@ fn cmd_formats(json: bool, device: Option<&str>) -> Result<()> {
         return Ok(());
     }
     for d in hits {
-        println!("\n{} ({})", d.name, d.host);
+        println!(
+            "\n{} ({})  id: {}",
+            d.name,
+            d.host,
+            d.id.as_deref().unwrap_or("<none>")
+        );
         println!("  input:");
         for c in &d.input_configs {
             println!(
@@ -383,6 +423,8 @@ struct CrashArgs {
     cycles: u32,
     block_ms: u32,
     batch_blocks: usize,
+    ring_ms: u32,
+    inflight_ms: u32,
     child: bool,
 }
 
@@ -398,6 +440,8 @@ fn cmd_crash_test(a: CrashArgs) -> Result<()> {
         cycles,
         block_ms,
         batch_blocks,
+        ring_ms,
+        inflight_ms,
         child,
     } = a;
     if child {
@@ -412,7 +456,7 @@ fn cmd_crash_test(a: CrashArgs) -> Result<()> {
             duration: 86_400,
             block_ms,
             batch_blocks,
-            ring_ms: 500,
+            ring_ms,
             layout: Layout::PerChannel,
             meter_interval_ms: 1000,
             quiet: true,
@@ -437,6 +481,8 @@ fn cmd_crash_test(a: CrashArgs) -> Result<()> {
             .arg(block_ms.to_string())
             .arg("--batch-blocks")
             .arg(batch_blocks.to_string())
+            .arg("--ring-ms")
+            .arg(ring_ms.to_string())
             .args(device.iter().flat_map(|d| ["--device", d.as_str()]))
             .args(
                 rate.iter()
@@ -462,7 +508,17 @@ fn cmd_crash_test(a: CrashArgs) -> Result<()> {
 
         let report = verify::verify_live(&db)?;
         // Worst-case loss is one un-committed batch, by construction.
-        let budget = (block_ms as f64 / 1000.0) * batch_blocks as f64;
+        // A SIGKILL loses the uncommitted batch *plus* whatever the driver has
+        // buffered but never delivered. Budgeting only the batch (as this test
+        // first did) understates the floor and fails correct runs. Recovery is
+        // also quantised to a block boundary, so the effective loss rounds up.
+        // Ring capacity is deliberately absent: it was measured not to matter.
+        // See docs/spikes/S1-cpal-capture.md.
+        let commit_budget = (block_ms as f64 / 1000.0) * batch_blocks as f64;
+        let inflight_budget = inflight_ms as f64 / 1000.0;
+        let block_secs = block_ms as f64 / 1000.0;
+        let raw = commit_budget + inflight_budget;
+        let budget = (raw / block_secs).ceil() * block_secs;
         let lost = (kill_after as f64 - report.duration_secs).max(0.0);
         results.push(serde_json::json!({
             "cycle": cycle,
@@ -470,6 +526,9 @@ fn cmd_crash_test(a: CrashArgs) -> Result<()> {
             "recovered_secs": report.duration_secs,
             "lost_secs": lost,
             "loss_budget_secs": budget,
+            "loss_budget_commit_secs": commit_budget,
+            "loss_budget_inflight_secs": inflight_budget,
+            "loss_budget_ring_secs_unused": ring_ms as f64 / 1000.0,
             "within_budget": lost <= budget + 1e-9,
             "report": report,
         }));
@@ -496,7 +555,7 @@ fn cmd_crash_test(a: CrashArgs) -> Result<()> {
         println!(
             "\n{}",
             if all_ok {
-                "PASS: every kill recovered within one batch, integrity and checksums clean"
+                "PASS: every kill recovered within commit granularity + driver buffer, integrity and checksums clean"
             } else {
                 "FAIL: see cycles above"
             }
