@@ -1,4 +1,4 @@
-//! S2 — SQLite capture benchmark (REQUIREMENTS.md §48).
+//! S2 - SQLite capture benchmark (REQUIREMENTS.md §48).
 //!
 //! Proves, or refuses to prove, the load-bearing claim of the architecture:
 //!
@@ -6,7 +6,7 @@
 //!                                                   -> simultaneous analysis reads
 //!
 //! Capture must never wait for the database. If the ring fills, frames are
-//! counted as lost and the run fails — exactly as a real overrun would.
+//! counted as lost and the run fails - exactly as a real overrun would.
 
 use capture_core::{config, db, metrics, producer, readers, verify, writer};
 

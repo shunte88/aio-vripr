@@ -34,7 +34,7 @@ sleep "$WINDOW"
 
 rate() { awk -v d="$1" -v w="$WINDOW" 'BEGIN{printf "%.1f", d/w}'; }
 
-echo "## $LABEL — whole-app CPU over ${WINDOW}s (% of one core)"
+echo "## $LABEL - whole-app CPU over ${WINDOW}s (% of one core)"
 echo
 printf '%-32s %7s\n' "process" "%core"
 total=0

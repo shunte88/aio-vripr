@@ -1,9 +1,9 @@
-//! REQUIREMENTS §47.6 — live peak and RMS.
+//! REQUIREMENTS §47.6 - live peak and RMS.
 //!
 //! This runs *inside* the real-time callback, so it does exactly what it is
 //! allowed to do there: fixed-point-free arithmetic over a borrowed slice,
 //! publishing through atomics. No allocation, no locking, no I/O. Metering a
-//! copy on another thread would be safer-looking and strictly worse — it would
+//! copy on another thread would be safer-looking and strictly worse - it would
 //! need a second ring, and the numbers would lag the audio they describe.
 
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
@@ -85,7 +85,7 @@ pub struct Reading {
 
 impl Reading {
     /// A clipped sample in an integer format is a real event, not a rounding
-    /// artefact — vinyl capture chains routinely arrive too hot.
+    /// artefact - vinyl capture chains routinely arrive too hot.
     pub fn clipped(&self) -> bool {
         self.peak_linear.iter().any(|p| *p >= 0.999_969)
     }

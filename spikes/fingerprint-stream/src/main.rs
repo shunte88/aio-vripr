@@ -1,4 +1,4 @@
-//! S4 — chromaprint-next streaming spike.
+//! S4 - chromaprint-next streaming spike.
 //!
 //! The plan's acceptance is narrow: feed live-shaped PCM chunks through
 //! `Fingerprinter::feed()` and assert the fingerprint equals the offline
@@ -41,7 +41,7 @@ struct Cli {
 enum Cmd {
     /// Print header, duration and the region this spike would fingerprint.
     Info { wav: PathBuf },
-    /// T1 — chunk-shape invariance. The plan's acceptance criterion.
+    /// T1 - chunk-shape invariance. The plan's acceptance criterion.
     Chunk {
         wav: PathBuf,
         #[arg(long, default_value_t = DEFAULT_START_SECS)]
@@ -49,7 +49,7 @@ enum Cmd {
         #[arg(long, default_value_t = DEFAULT_LEN_SECS)]
         len: f64,
     },
-    /// T2 — region boundary sensitivity: how wrong can the detector's start be?
+    /// T2 - region boundary sensitivity: how wrong can the detector's start be?
     Align {
         wav: PathBuf,
         #[arg(long, default_value_t = DEFAULT_START_SECS)]
@@ -57,7 +57,7 @@ enum Cmd {
         #[arg(long, default_value_t = DEFAULT_LEN_SECS)]
         len: f64,
     },
-    /// T4 — throughput and headroom against real-time capture.
+    /// T4 - throughput and headroom against real-time capture.
     Throughput {
         wav: PathBuf,
         #[arg(long, default_value_t = DEFAULT_START_SECS)]
@@ -65,7 +65,7 @@ enum Cmd {
         #[arg(long, default_value_t = DEFAULT_LEN_SECS)]
         len: f64,
     },
-    /// T5 — cross-check against the C reference (`fpcalc`) on byte-identical input.
+    /// T5 - cross-check against the C reference (`fpcalc`) on byte-identical input.
     Reference {
         wav: PathBuf,
         #[arg(long, default_value_t = DEFAULT_START_SECS)]
@@ -73,7 +73,7 @@ enum Cmd {
         #[arg(long, default_value_t = DEFAULT_LEN_SECS)]
         len: f64,
     },
-    /// T7 — stream a whole side off disk in capture-sized blocks, holding one
+    /// T7 - stream a whole side off disk in capture-sized blocks, holding one
     /// block at a time, the way the real fingerprint worker would.
     Live {
         wav: PathBuf,
@@ -87,7 +87,7 @@ enum Cmd {
         #[arg(long, default_value_t = 1)]
         instances: usize,
     },
-    /// T6 — calibrate the BER axis: what do real-world perturbations cost, and
+    /// T6 - calibrate the BER axis: what do real-world perturbations cost, and
     /// what does unrelated audio score? Every other number is read against this.
     Scale {
         wav: PathBuf,
@@ -98,7 +98,7 @@ enum Cmd {
         #[arg(long, default_value_t = DEFAULT_LEN_SECS)]
         len: f64,
     },
-    /// T3 — does the capture sample rate change the fingerprint? Needs a 192 kHz
+    /// T3 - does the capture sample rate change the fingerprint? Needs a 192 kHz
     /// source and `sox`.
     Rate {
         wav: PathBuf,
@@ -239,7 +239,7 @@ fn cmd_chunk(wav: &Path, start: f64, len: f64, json: bool) -> Result<()> {
     let offline = fp::offline(&r.samples, r.rate, r.channels, algo)?;
     let offline_ms = t.elapsed().as_secs_f64() * 1000.0;
 
-    println!("T1 — chunk-shape invariance");
+    println!("T1 - chunk-shape invariance");
     println!("  source      {}", wav.display());
     println!(
         "  region      {:.1} s from {:.1} s ({} frames @ {} Hz, {} ch)",
@@ -375,7 +375,7 @@ fn cmd_align(wav: &Path, start: f64, len: f64, json: bool) -> Result<()> {
     let base_samples = wav::read_i16(wav, &info, start_frame, frames)?;
     let base = fp::offline(&base_samples, rate, ch, algo)?;
 
-    println!("T2 — region boundary sensitivity");
+    println!("T2 - region boundary sensitivity");
     println!("  source      {}", wav.display());
     println!(
         "  region      {:.1} s from {:.1} s, {} sub-fingerprints",
@@ -466,7 +466,7 @@ fn cmd_throughput(wav: &Path, start: f64, len: f64, json: bool) -> Result<()> {
     let algo = Algorithm::default();
     let audio_secs = r.frames as f64 / r.rate as f64;
 
-    println!("T4 — throughput and real-time headroom");
+    println!("T4 - throughput and real-time headroom");
     println!(
         "  source      {} @ {} Hz {} ch",
         wav.display(),
@@ -586,7 +586,7 @@ fn cmd_reference(wav: &Path, start: f64, len: f64, json: bool) -> Result<()> {
     let algo = Algorithm::default();
     let dir = std::env::temp_dir();
 
-    println!("T5 — cross-check against the C reference (fpcalc)");
+    println!("T5 - cross-check against the C reference (fpcalc)");
     println!(
         "  {}",
         String::from_utf8_lossy(
@@ -639,7 +639,7 @@ fn cmd_reference(wav: &Path, start: f64, len: f64, json: bool) -> Result<()> {
             Some((mine, theirs))
         }
         _ => {
-            println!("  (sox unavailable — skipping the no-resample comparison)");
+            println!("  (sox unavailable - skipping the no-resample comparison)");
             None
         }
     };
@@ -733,7 +733,7 @@ fn cmd_reference(wav: &Path, start: f64, len: f64, json: bool) -> Result<()> {
                 "identical": de.is_empty(), "items_differing": de.len(), "bits_differing": bits,
             }));
         }
-        _ => println!("  (ffmpeg unavailable — skipping the swresample hypothesis test)"),
+        _ => println!("  (ffmpeg unavailable - skipping the swresample hypothesis test)"),
     }
 
     for p in [raw_native, src, dst, dstc, dir.join("vcw_s4_11025.raw")] {
@@ -758,7 +758,7 @@ fn cmd_rate(wav: &Path, start: f64, len: f64, json: bool) -> Result<()> {
     let algo = Algorithm::default();
     let dir = std::env::temp_dir();
 
-    println!("T3 — does the capture sample rate change the fingerprint?");
+    println!("T3 - does the capture sample rate change the fingerprint?");
     println!(
         "  source      {} @ {} Hz {} ch",
         wav.display(),
@@ -869,7 +869,7 @@ fn cmd_scale(wav: &Path, other: &Path, start: f64, len: f64, json: bool) -> Resu
     let base_samples = wav::read_i16_narrow(wav, &info, sf, nf, wav::Narrow::Truncate)?;
     let base = fp::offline(&base_samples, info.sample_rate, info.channels, algo)?;
 
-    println!("T6 — BER scale calibration");
+    println!("T6 - BER scale calibration");
     println!(
         "  source      {} @ {} Hz {} ch",
         wav.display(),
@@ -1010,7 +1010,7 @@ fn cmd_live(wav: &Path, block_secs: f64, len: f64, instances: usize, json: bool)
     };
     let audio_secs = total as f64 / info.sample_rate as f64;
 
-    println!("T7 — whole-side streaming, one block resident");
+    println!("T7 - whole-side streaming, one block resident");
     println!(
         "  source      {} @ {} Hz {} ch",
         wav.display(),
@@ -1102,7 +1102,7 @@ fn cmd_live(wav: &Path, block_secs: f64, len: f64, instances: usize, json: bool)
             if agree {
                 "all instances produced the identical fingerprint"
             } else {
-                "MISMATCH — instances are not independent"
+                "MISMATCH - instances are not independent"
             }
         );
     }

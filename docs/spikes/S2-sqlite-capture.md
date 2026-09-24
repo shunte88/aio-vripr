@@ -1,4 +1,4 @@
-# S2 — SQLite capture benchmark: findings
+# S2 - SQLite capture benchmark: findings
 
 **Spike:** `spikes/sqlite-capture-bench`
 **Requirement:** REQUIREMENTS.md §48 (and §10, §13, §14, §37)
@@ -21,7 +21,7 @@ Specifically at 24-bit/192 kHz stereo, under deliberate abuse and crash injectio
 ## Method
 
 `sqlite-capture-bench` replaces the CPAL callback with a synthetic source that emits
-frames on a real-time deadline and never blocks — if the ring is full it drops the chunk
+frames on a real-time deadline and never blocks - if the ring is full it drops the chunk
 and counts it, as a real overrun would. The payload is a **deterministic pattern**, so
 verification proves not merely that bytes survived (a checksum shows that) but that they
 are the *right* bytes, in the right order, at the right offsets. Two reader threads run
@@ -68,19 +68,19 @@ The §48 soak, run to completion on SSD at 24-bit/192 kHz stereo with both reade
 
 | Metric | Result | Acceptance |
 |---|---|---|
-| Wall clock | 5400.196 s, real-time factor 0.99996 | — |
-| Frames produced | 1,036,800,512 | — |
+| Wall clock | 5400.196 s, real-time factor 0.99996 | - |
+| Frames produced | 1,036,800,512 | - |
 | Frames dropped | **0** (0.0 ppm), 0 overrun events | zero ✓ |
-| Blocks committed | 21,601 | — |
+| Blocks committed | 21,601 | - |
 | Commit p50 / p95 / p99 / max | 2.1 / 48.9 / 63.2 / 102.3 ms | p99 within the 250 ms block budget ✓ |
 | Peak WAL | 4.57 MiB, against an 8.41 GB database | bounded ✓ |
-| Write amplification | 1.0135× | — |
-| Checkpoint stalls | 1 event, 21.6 ms | — |
-| Summary build p99 / max | 11.1 / 21.7 ms | — |
+| Write amplification | 1.0135× | - |
+| Checkpoint stalls | 1 event, 21.6 ms | - |
+| Summary build p99 / max | 11.1 / 21.7 ms | - |
 | Reader work | 207,707 queries, 4,236,810 blocks, **0 checksum failures** | zero ✓ |
-| Reader p99, worse of the two | 9.5 ms | — |
+| Reader p99, worse of the two | 9.5 ms | - |
 | RSS at exit | 8.1 MiB | flat ✓ |
-| Worst producer lateness | 9.9 ms | — |
+| Worst producer lateness | 9.9 ms | - |
 
 Verdict `PASS`: 8.29 GB of audio into an 8.41 GB database, nothing dropped, nothing
 corrupted, memory flat.
@@ -90,14 +90,14 @@ both *improved* slightly (4.0 → 2.1 ms, 71 → 63 ms) while the maximum grew 7
 That is the expected shape: the soak sampled 21,601 commits against the short run's 80,
 so the extreme has 270× more chances to be unlucky and the percentiles are simply better
 estimated. The worst commit observed anywhere is still 2.4× inside the block budget.
-No drift, no creep — the distribution is stationary over 90 minutes.
+No drift, no creep - the distribution is stationary over 90 minutes.
 
 **Three things to be honest about.**
 
 1. **The soak ran the harness defaults, not the firmed config.** `synchronous=NORMAL` and
    **interleaved** layout, where D3 firms to `FULL` and per-channel. The short matrix says
    FULL is free or better at the tail and per-channel is kinder to the WAL, so the firmed
-   config should be no worse — but *should be* is not *measured*. A soak in the firmed
+   config should be no worse - but *should be* is not *measured*. A soak in the firmed
    configuration must run before D3 is closed.
 2. **Recovery was not exercised by this run.** The soak exited cleanly. Crash recovery is
    evidenced by the separate three-cycle `SIGKILL` test above (and S1's live-capture
@@ -105,7 +105,7 @@ No drift, no creep — the distribution is stationary over 90 minutes.
 3. **The `reader_latency` field is mislabelled.** It reports `count: 2` because
    `main.rs:327` folds each reader's *p99* in as a single sample, so the object is a
    two-point distribution over p99s and its own `p50`/`p95`/`p99` labels are noise. The
-   one figure that does mean something is `max_us: 9501` — i.e. **both** readers held a
+   one figure that does mean something is `max_us: 9501` - i.e. **both** readers held a
    p99 under 9.5 ms while the writer was committing 21,601 blocks, which is the result we
    wanted. The per-query samples are collected (`readers.rs:53`); only the roll-up throws
    them away. Worth reporting the merged distribution properly before the Pi 5 run, where
@@ -134,12 +134,12 @@ bigger batches. This inverts the usual instinct to batch for throughput.
 > [`S1-cpal-capture.md`](S1-cpal-capture.md) Finding 4 for the measurements.
 
 **3. Recommended default: 250 ms blocks, batch 1.** Worst-case loss a quarter second,
-commit tail ~29 % of budget, WAL steady at 4 MiB. 50 ms blocks go too far — the maximum
+commit tail ~29 % of budget, WAL steady at 4 MiB. 50 ms blocks go too far - the maximum
 commit (80 ms) exceeds the block budget (50 ms), so the ring starts absorbing tails
 rather than idling. It still didn't drop a frame, but the margin is gone and there is
 nothing to gain.
 
-**4. `synchronous=FULL` is essentially free — take it.** At 250 ms/batch 1 it cost 3.7 ms
+**4. `synchronous=FULL` is essentially free - take it.** At 250 ms/batch 1 it cost 3.7 ms
 on the median and was *better* at the tail than NORMAL. For a capture you cannot repeat
 without replaying the side, maximum durability at no measurable price is an easy call.
 
@@ -148,12 +148,12 @@ interleaved layouts both ran clean; per-channel showed *lower* peak WAL (9 vs 18
 cheaper checkpoints, at slightly higher summary cost. D1's superset schema stands on
 evidence rather than aesthetics.
 
-**6. Summary computation is the largest per-block CPU cost** — 26–31 ms per 1 s block at
+**6. Summary computation is the largest per-block CPU cost** - 26–31 ms per 1 s block at
 192 kHz, scaling linearly (~1.3 ms per 50 ms block, ~3 % of real time). Acceptable on the
-writer thread today. If it grows — LUFS, true peak, richer pyramids — it should move to
+writer thread today. If it grows - LUFS, true peak, richer pyramids - it should move to
 the waveform worker rather than sit in the commit path.
 
-## Caveats — what is not yet proven
+## Caveats - what is not yet proven
 
 1. **The first round of results was measured against tmpfs.** `/tmp` is RAM on this
    machine, which made SQLite look 3–6× better at the tail than it is. Every number above
@@ -177,10 +177,10 @@ the waveform worker rather than sit in the commit path.
 | Block size | **250 ms** | High, pending Pi 5 |
 | Transaction batch | **1 block** | High |
 | Journal | **WAL** | High |
-| `synchronous` | **FULL** | High — but soaked only at NORMAL |
-| Layout | **Per-channel** (AUP4-compatible) | Medium — both work; per-channel is kinder to the WAL and keeps D1 mechanical, and S5 confirms AUP3/AUP4 store mono blocks natively. Soaked only at interleaved |
-| Ring capacity | **≥ 500 ms** | Medium — it absorbs commit tails; size it at ≥ 5× measured commit max (102 ms over 90 min → ≥ 510 ms). S1 measured that ring size does **not** affect crash loss, so this is a throughput cushion only |
-| Page size | 4 KiB default | Low — not yet swept |
+| `synchronous` | **FULL** | High - but soaked only at NORMAL |
+| Layout | **Per-channel** (AUP4-compatible) | Medium - both work; per-channel is kinder to the WAL and keeps D1 mechanical, and S5 confirms AUP3/AUP4 store mono blocks natively. Soaked only at interleaved |
+| Ring capacity | **≥ 500 ms** | Medium - it absorbs commit tails; size it at ≥ 5× measured commit max (102 ms over 90 min → ≥ 510 ms). S1 measured that ring size does **not** affect crash loss, so this is a throughput cushion only |
+| Page size | 4 KiB default | Low - not yet swept |
 
 ## Reproducing
 

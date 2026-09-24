@@ -12,7 +12,7 @@
 
 resume
 bump.sh
-# Cargo lock (keep for binaries, discard for libraries — this is a binary)
+# Cargo lock (keep for binaries, discard for libraries - this is a binary)
 # Cargo.lock
 
 # Editor temporaries
@@ -44,7 +44,7 @@ bump.sh
 !**/tests/fixtures/**
 !/fixtures/**
 
-# The bulk labelled corpus (~294 MB, 595 excerpt/label pairs) is NOT tracked —
+# The bulk labelled corpus (~294 MB, 595 excerpt/label pairs) is NOT tracked -
 # fetched on demand by scripts/fetch-corpus.sh. Only the curated subset under
 # /fixtures/boundary/ lives in the repo.
 /fixtures/corpus-full/

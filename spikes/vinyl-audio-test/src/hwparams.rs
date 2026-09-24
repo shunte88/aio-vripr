@@ -1,4 +1,4 @@
-//! REQUIREMENTS §47.11 — requested versus negotiated format, with evidence.
+//! REQUIREMENTS §47.11 - requested versus negotiated format, with evidence.
 //!
 //! CPAL will tell you what config it built. It cannot tell you whether ALSA
 //! quietly inserted a conversion behind it, and that is precisely the question
@@ -97,7 +97,7 @@ fn parse(path: String, raw: &str) -> HwParams {
     HwParams {
         format: field("format"),
         rate: field("rate").and_then(|v| {
-            // "rate: 192000 (192000/1)" — the leading integer is the one that matters.
+            // "rate: 192000 (192000/1)" - the leading integer is the one that matters.
             v.split_whitespace().next()?.parse().ok()
         }),
         channels: field("channels").and_then(|v| v.parse().ok()),

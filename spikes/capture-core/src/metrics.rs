@@ -1,5 +1,5 @@
 //! Measurement helpers. The acceptance question is not "is it fast on average"
-//! but "does the tail ever exceed one block duration" — so percentiles and max
+//! but "does the tail ever exceed one block duration" - so percentiles and max
 //! matter far more than means.
 
 use serde::Serialize;

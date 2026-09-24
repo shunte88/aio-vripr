@@ -2,7 +2,7 @@
 //!
 //! Checksums alone would only prove the bytes survived the trip. Where the payload
 //! is S2's deterministic pattern we can go further and prove the bytes are the
-//! *right* ones — that nothing was reordered, duplicated or silently resampled on
+//! *right* ones - that nothing was reordered, duplicated or silently resampled on
 //! the way in. A live capture (S1) has no such oracle, so `verify_live` checks
 //! everything except the pattern and reports `pattern_checked: false` rather than
 //! reporting a pass it did not actually perform.
@@ -37,7 +37,7 @@ pub fn verify(db_path: &str) -> Result<VerifyReport> {
     verify_inner(db_path, true)
 }
 
-/// Verify a live capture: integrity, checksums and sequencing, but no pattern —
+/// Verify a live capture: integrity, checksums and sequencing, but no pattern -
 /// real audio is not predictable, and pretending otherwise would be a false pass.
 pub fn verify_live(db_path: &str) -> Result<VerifyReport> {
     verify_inner(db_path, false)

@@ -155,7 +155,7 @@ function App(): React.JSX.Element {
 
   return (
     <div className="app">
-      <h1>VCW S3 — Tauri IPC throughput</h1>
+      <h1>VCW S3 - Tauri IPC throughput</h1>
       <p className="sub">
         base: {BASE.captureRate / 1000} kHz / {BASE.callbackFrames}-frame callbacks ={' '}
         {Math.round(BASE.captureRate / BASE.callbackFrames)} Hz worker rate; coalesced to{' '}
@@ -185,7 +185,7 @@ function App(): React.JSX.Element {
         </button>
         {busy && (
           <span className="busy">
-            running <b>{busy}</b> — {elapsed.toFixed(0)}/{duration}s
+            running <b>{busy}</b> - {elapsed.toFixed(0)}/{duration}s
           </span>
         )}
       </div>
@@ -245,7 +245,7 @@ function App(): React.JSX.Element {
               <button onClick={() => void runOne(a)} disabled={busy !== null}>
                 run
               </button>{' '}
-              <b>{a.name}</b> — {a.question}
+              <b>{a.name}</b> - {a.question}
             </li>
           ))}
         </ul>

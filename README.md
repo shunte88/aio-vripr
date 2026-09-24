@@ -1,4 +1,4 @@
-# VCW — The Vinyl Capture Workstation
+# VCW - The Vinyl Capture Workstation
 
 Capture, identify, edit, catalogue and export vinyl recordings. Bit-perfect from the
 converter to the file, in one self-contained application.
@@ -14,19 +14,19 @@ something it depends on.
 
 ## Status
 
-Pre-0.1. Phase 0 — proving the foundations before building on them.
+Pre-0.1. Phase 0 - proving the foundations before building on them.
 
 | Spike | Question | State |
 |---|---|---|
 | S1 | Does CPAL give us bit-perfect capture and playback per platform? | [Linux yes](docs/spikes/S1-cpal-capture.md), on stock CPAL 0.18; other platforms outstanding |
 | S2 | Can SQLite absorb sustained 24/192 capture, and survive a kill? | [yes on x86_64/SSD](docs/spikes/S2-sqlite-capture.md), incl. a 90-min soak; other platforms outstanding |
-| S3 | Will Tauri IPC carry the meter and waveform rates? | [yes, with 12.5× headroom](docs/spikes/S3-tauri-ipc.md), incl. a 30-min soak — the constraint is main-thread *rendering*, not IPC |
+| S3 | Will Tauri IPC carry the meter and waveform rates? | [yes, with 12.5× headroom](docs/spikes/S3-tauri-ipc.md), incl. a 30-min soak - the constraint is main-thread *rendering*, not IPC |
 | S4 | Does `chromaprint-next` fingerprint from a stream? | [yes, bit-identically](docs/spikes/S4-chromaprint-streaming.md); region boundaries need no accuracy |
-| S5 | Is the Audacity project format readable? | [AUP3 yes](docs/spikes/S5-audacity-format.md), AUP4 unmeasured |
+| S5 | Is the Audacity project format readable? | [yes, AUP3 *and* AUP4](docs/spikes/S5-audacity-format.md) - 30/30 corpus projects parsed to the last byte; the AUP3->AUP4 audio layer is byte-identical across five matched pairs |
 
-Full snapshot — what is proven, what is assumed, what is waiting on hardware or a
-decision — in [docs/STATUS.md](docs/STATUS.md).
+Full snapshot - what is proven, what is assumed, what is waiting on hardware or a
+decision - in [docs/STATUS.md](docs/STATUS.md).
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).

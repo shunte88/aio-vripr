@@ -31,7 +31,7 @@ export class Hist {
   }
 
   /**
-   * Upper edge of the bucket the pth percentile falls in — deliberately not an
+   * Upper edge of the bucket the pth percentile falls in - deliberately not an
    * interpolated percentile, because with `performance.now()` clamped to
    * milliseconds in WebKit an interpolated figure would imply a precision the
    * clock does not have.

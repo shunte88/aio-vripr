@@ -1,9 +1,9 @@
-//! REQUIREMENTS §47.8 — play the capture back out of SQLite.
+//! REQUIREMENTS §47.8 - play the capture back out of SQLite.
 //!
 //! This is the other half of the bit-perfect claim. Capture proves the bytes
 //! went in unaltered; playback proves they can come back out and drive a device
 //! at the same format. Where the output device will not accept the stored
-//! format we convert — but we say so loudly, because a silent conversion here
+//! format we convert - but we say so loudly, because a silent conversion here
 //! is the same defect as a silent conversion on the way in.
 
 use std::sync::Arc;
@@ -33,10 +33,10 @@ pub struct Report {
     pub frames_played: u64,
     /// Device-reported stream errors. With the whole capture resident in memory
     /// there is no software path to an underrun, so anything here came from the
-    /// device or the driver — see the note on `underruns` in the module docs.
+    /// device or the driver - see the note on `underruns` in the module docs.
     pub device_errors: Vec<String>,
     /// Callbacks the source could not fill completely. Exactly one is expected
-    /// — the last one, at the end of the capture.
+    /// - the last one, at the end of the capture.
     pub short_callbacks: u64,
     pub elapsed_secs: f64,
     pub verdict: String,
@@ -57,7 +57,7 @@ fn read_meta(conn: &Connection) -> Result<Stored> {
             [],
             |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
-        .context("no capture row — is this a capture database?")?;
+        .context("no capture row - is this a capture database?")?;
     Ok(Stored {
         rate,
         channels,
@@ -69,7 +69,7 @@ fn read_meta(conn: &Connection) -> Result<Stored> {
 /// Rebuild the interleaved stream for one block sequence.
 ///
 /// Per-channel storage (the AUP4-compatible layout) holds one row per channel,
-/// so playback has to re-interleave. Sample *values* are untouched either way —
+/// so playback has to re-interleave. Sample *values* are untouched either way -
 /// that equivalence is what let S2 treat layout as a measurement rather than an
 /// argument.
 fn interleave(rows: &[(i64, Vec<u8>)], channels: u16, bps: usize) -> Vec<u8> {
@@ -206,7 +206,7 @@ pub fn run(db_path: &str, device_query: Option<&str>, max_secs: Option<u64>) -> 
                 let out = data.bytes_mut();
                 // Past the end of the capture the device keeps asking until we
                 // tear the stream down. Feeding it silence is correct; counting
-                // those calls as underruns is not — that was measuring our own
+                // those calls as underruns is not - that was measuring our own
                 // shutdown latency and reporting it as a fault.
                 if cursor >= src.len() {
                     out.fill(0);
@@ -271,7 +271,7 @@ pub fn run(db_path: &str, device_query: Option<&str>, max_secs: Option<u64>) -> 
     } else if max_secs.is_none() && frames_played != expected_frames {
         format!("FAIL: played {frames_played} of {expected_frames} frames")
     } else if converted {
-        "PASS (audible, but format-converted — see conversion_note)".into()
+        "PASS (audible, but format-converted - see conversion_note)".into()
     } else {
         "PASS (played back in the stored format, no conversion)".into()
     };

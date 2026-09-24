@@ -1,4 +1,4 @@
-//! REQUIREMENTS §47.1 and §47.2 — what devices exist, and what will they accept.
+//! REQUIREMENTS §47.1 and §47.2 - what devices exist, and what will they accept.
 //!
 //! Enumeration is deliberately host-by-host rather than default-host-only. On
 //! Linux the same physical converter appears under ALSA as `hw:`, `plughw:` and
@@ -9,7 +9,7 @@
 //! CPAL 0.18 makes that honest. 0.16 enumerated ALSA through `plughw:` only and
 //! exposed no stable device identity, so the list was the plug layer's fiction
 //! and there was no way to ask for the hardware. 0.18 enumerates `hw:` *and*
-//! `plughw:` and gives every device a `DeviceId` — the PCM id itself — which is
+//! `plughw:` and gives every device a `DeviceId` - the PCM id itself - which is
 //! what we key selection on here. See docs/spikes/S1-cpal-capture.md.
 
 use anyhow::Result;
@@ -30,14 +30,14 @@ pub struct ConfigRange {
 pub struct DeviceInfo {
     pub host: String,
     pub name: String,
-    /// The backend's stable identifier — on ALSA the PCM id (`hw:2,0`). This is
+    /// The backend's stable identifier - on ALSA the PCM id (`hw:2,0`). This is
     /// what to select on: names collide, ids do not.
     pub id: Option<String>,
     pub is_default_input: bool,
     pub is_default_output: bool,
-    /// An ALSA `hw:` PCM — the only route that can be bit-perfect.
+    /// An ALSA `hw:` PCM - the only route that can be bit-perfect.
     pub direct_hardware: bool,
-    /// An ALSA `plughw:` PCM — same hardware, but the plug layer will silently
+    /// An ALSA `plughw:` PCM - same hardware, but the plug layer will silently
     /// resample or reformat to satisfy whatever you ask for. Never bit-perfect.
     pub converting: bool,
     pub input_configs: Vec<ConfigRange>,
@@ -125,7 +125,7 @@ pub fn enumerate() -> Result<Vec<DeviceInfo>> {
             });
             // Querying configs opens the PCM; a device in use by something else
             // fails here rather than at stream build. That is worth reporting,
-            // not swallowing — "no formats" and "busy" are different diagnoses.
+            // not swallowing - "no formats" and "busy" are different diagnoses.
             let input_configs = match device.supported_input_configs() {
                 Ok(it) => it.map(|r| range(&r)).collect(),
                 Err(e) => {
@@ -199,7 +199,7 @@ pub fn find(query: &str, want_input: bool) -> Result<(cpal::Device, String)> {
             }
         }
     }
-    // An exact id match is unambiguous by construction — take it even if the
+    // An exact id match is unambiguous by construction - take it even if the
     // same string also appears inside other names.
     if id_hits.len() == 1 {
         return Ok(id_hits.pop().unwrap());
@@ -222,7 +222,7 @@ pub fn find(query: &str, want_input: bool) -> Result<(cpal::Device, String)> {
             if want_input { "input" } else { "output" }
         );
     }
-    anyhow::bail!("{query:?} is ambiguous, matches: {candidates:?} — select by id");
+    anyhow::bail!("{query:?} is ambiguous, matches: {candidates:?} - select by id");
 }
 
 fn labelled(device: cpal::Device) -> (cpal::Device, String) {

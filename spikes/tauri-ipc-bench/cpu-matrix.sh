@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Whole-app CPU per arm — the comparison the bench itself cannot make.
+# Whole-app CPU per arm - the comparison the bench itself cannot make.
 #
 # The in-bench figures are all time inside a callback it owns, so they cannot
 # see the GTK main thread dispatching evals or the web process painting. This

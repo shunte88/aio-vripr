@@ -1,4 +1,4 @@
-//! REQUIREMENTS §47.3–.7, §47.11, §47.12 — open a stream, store it, measure it.
+//! REQUIREMENTS §47.3–.7, §47.11, §47.12 - open a stream, store it, measure it.
 //!
 //! The whole point of this path is that nothing touches the samples. CPAL's
 //! typed `build_input_stream::<T>` would convert; `build_input_stream_raw` hands
@@ -7,7 +7,7 @@
 //! converter produced, which is the only definition of bit-perfect worth having.
 //!
 //! The callback's contract, from §10: never allocate, never lock, never do I/O,
-//! never block. If the ring is full it drops and counts — the writer falling
+//! never block. If the ring is full it drops and counts - the writer falling
 //! behind must degrade into a reported gap, not into a stalled audio thread.
 
 use std::sync::Arc;
@@ -87,7 +87,7 @@ pub struct Report {
 ///
 /// Where the caller left a field open we bias towards the *widest integer*
 /// format the device offers rather than CPAL's default, because the default is
-/// frequently f32 — which on a 24-bit converter means the stack has already
+/// frequently f32 - which on a 24-bit converter means the stack has already
 /// converted before we ever see a sample.
 fn choose(
     supported: Vec<SupportedStreamConfigRange>,
@@ -400,11 +400,11 @@ fn verdict(
         return format!("FAIL: {}", faults.join("; "));
     }
     // A clean capture that silently got a different format than asked for is
-    // not a pass in this tool's terms — that is the §8 failure mode.
+    // not a pass in this tool's terms - that is the §8 failure mode.
     match (honoured, kernel_agrees) {
         (false, _) => "PASS (capture clean, but the requested format was not honoured)".into(),
         (true, Some(false)) => "PASS (capture clean, but the kernel negotiated a different format \
-             — NOT bit-perfect)"
+             - NOT bit-perfect)"
             .into(),
         (true, Some(true)) => "PASS (bit-perfect: kernel confirms the negotiated format)".into(),
         (true, None) => {

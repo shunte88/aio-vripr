@@ -1,4 +1,4 @@
-//! Analysis readers running against the same database while capture continues —
+//! Analysis readers running against the same database while capture continues -
 //! the contention case §48 asks about. One imitates the waveform worker (reads
 //! summaries), one the fingerprint worker (reads whole blocks and checksums them).
 

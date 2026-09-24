@@ -2,7 +2,7 @@
 //!
 //! `sampleblocks` deliberately mirrors Audacity's AUP4 table column for column
 //! (D1: our native format is an AUP4 superset). `capture_blocks` is the superset
-//! half — the provenance Audacity has nowhere to put.
+//! half - the provenance Audacity has nowhere to put.
 
 use anyhow::Result;
 use rusqlite::Connection;

@@ -3,7 +3,7 @@
 //! Every knob REQUIREMENTS.md §48 asks us to sweep is represented here, plus the
 //! block *layout* question that fell out of the AUP4-superset decision (D1): AUP4
 //! stores one channel per block, while a bit-perfect capture arrives interleaved.
-//! Deinterleaving preserves every sample value, so both layouts are legitimate —
+//! Deinterleaving preserves every sample value, so both layouts are legitimate -
 //! which one costs less is a measurement, not an opinion.
 
 use clap::{Args, ValueEnum};
@@ -60,7 +60,7 @@ pub enum Checkpoint {
     Passive,
     /// Writer issues TRUNCATE checkpoints itself; autocheckpoint disabled.
     Truncate,
-    /// No checkpointing at all — shows unbounded WAL growth.
+    /// No checkpointing at all - shows unbounded WAL growth.
     Off,
 }
 
@@ -143,7 +143,7 @@ impl Params {
     /// count and sample width rather than a sweep choosing them. Storage
     /// settings start at S2's measured recommendation (see
     /// `docs/spikes/S2-sqlite-capture.md`): 250 ms blocks committed one at a
-    /// time, WAL, `synchronous=FULL` — chosen for recovery granularity, since
+    /// time, WAL, `synchronous=FULL` - chosen for recovery granularity, since
     /// S2 showed throughput is not the binding constraint.
     pub fn default_for(rate: u32, channels: u16, bytes_per_sample: usize) -> Self {
         Self {

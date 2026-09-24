@@ -2,7 +2,7 @@
 //! workers §36 names, feeding the webview at a scheduled rate.
 //!
 //! D8 says no async on this path, so this is a plain thread with an absolute
-//! schedule (`next += period`, not `sleep(period)`) — drift-free, and its own
+//! schedule (`next += period`, not `sleep(period)`) - drift-free, and its own
 //! lateness is recorded so webview-side jitter can be attributed to the right
 //! side of the boundary.
 
@@ -310,8 +310,8 @@ fn run(
         let now = Instant::now();
         if next > now {
             // Capped, so the loop still observes `deadline` and the stop flag
-            // between ticks. Without the cap the idle control arms — whose
-            // periods are longer than the whole run — slept straight past the
+            // between ticks. Without the cap the idle control arms - whose
+            // periods are longer than the whole run - slept straight past the
             // end of the run and never recorded their stats at all.
             std::thread::sleep((next - now).min(Duration::from_millis(20)));
         }

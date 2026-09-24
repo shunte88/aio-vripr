@@ -1,4 +1,4 @@
-//! `vinyl-audio-test` — spike S1, the utility REQUIREMENTS §47 asks for.
+//! `vinyl-audio-test` - spike S1, the utility REQUIREMENTS §47 asks for.
 //!
 //! Twelve behaviours, and which subcommand covers each:
 //!
@@ -70,7 +70,7 @@ impl From<Fmt> for SampleFormat {
 
 #[derive(Subcommand)]
 enum Command {
-    /// §47.1, §47.2 — list devices and what they will accept.
+    /// §47.1, §47.2 - list devices and what they will accept.
     Devices {
         /// Show every supported configuration, not just the defaults.
         #[arg(long, short)]
@@ -79,12 +79,12 @@ enum Command {
         #[arg(long)]
         input_only: bool,
     },
-    /// §47.2 — supported formats for one device, in full.
+    /// §47.2 - supported formats for one device, in full.
     Formats {
         /// Device name or unique substring. Defaults to the default input.
         device: Option<String>,
     },
-    /// §47.3–.7, .11, .12 — capture into a SQLite project and report on it.
+    /// §47.3–.7, .11, .12 - capture into a SQLite project and report on it.
     Capture {
         #[arg(long)]
         device: Option<String>,
@@ -114,7 +114,7 @@ enum Command {
         #[arg(long, default_value_t = 1000)]
         meter_ms: u64,
     },
-    /// §47.8, §47.12 — play a capture back out of SQLite.
+    /// §47.8, §47.12 - play a capture back out of SQLite.
     Play {
         #[arg(long, default_value = "./capture.vcw")]
         db: String,
@@ -124,12 +124,12 @@ enum Command {
         #[arg(long)]
         max_secs: Option<u64>,
     },
-    /// §47.9 — integrity, checksums and sequencing over a stored capture.
+    /// §47.9 - integrity, checksums and sequencing over a stored capture.
     Verify {
         #[arg(default_value = "./capture.vcw")]
         db: String,
     },
-    /// §47.10 — kill a live capture mid-flight and verify what survived.
+    /// §47.10 - kill a live capture mid-flight and verify what survived.
     CrashTest {
         #[arg(long)]
         device: Option<String>,
@@ -151,7 +151,7 @@ enum Command {
         #[arg(long, default_value_t = 1)]
         batch_blocks: usize,
         /// Ring capacity. Measured finding: varying this 100..1000 ms does not
-        /// change recovery loss at all — the writer keeps the ring near-empty,
+        /// change recovery loss at all - the writer keeps the ring near-empty,
         /// so it is a throughput cushion, not a durability exposure.
         #[arg(long, default_value_t = 500)]
         ring_ms: u32,
@@ -591,10 +591,10 @@ fn print_capture(r: &capture::Report) {
     }
     match r.kernel_agrees {
         Some(true) => {
-            println!("kernel hw_params  agrees — the device really is running this format")
+            println!("kernel hw_params  agrees - the device really is running this format")
         }
         Some(false) => {
-            println!("kernel hw_params  DISAGREES — a conversion is happening below CPAL")
+            println!("kernel hw_params  DISAGREES - a conversion is happening below CPAL")
         }
         None => println!("kernel hw_params  not determinable here"),
     }

@@ -1,6 +1,6 @@
 //! Stands in for the CPAL callback: hands over a fixed number of frames every
 //! callback period and never blocks. If the ring is full it drops the chunk and
-//! counts it, exactly as a real overrun would — capture is not allowed to wait
+//! counts it, exactly as a real overrun would - capture is not allowed to wait
 //! for the database (§10).
 
 use std::sync::Arc;

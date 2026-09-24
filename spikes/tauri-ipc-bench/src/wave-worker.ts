@@ -1,7 +1,7 @@
 // The OffscreenCanvas arm. If this one wins, §44's waveform belongs in a worker
 // and D6 needs a third clause saying so.
 //
-// The main thread posts only the new buckets — a transferred Int16Array, so the
+// The main thread posts only the new buckets - a transferred Int16Array, so the
 // handoff is a pointer move and not a copy. The worker owns the canvas and the
 // ring, and its own rAF drives the draw, so a busy main thread cannot stall it.
 

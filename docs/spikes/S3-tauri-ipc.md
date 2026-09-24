@@ -1,6 +1,6 @@
-# S3 — Tauri 2 IPC throughput
+# S3 - Tauri 2 IPC throughput
 
-**Status:** complete on Linux/x86_64 (WebKitGTK 2.52.6) — 13-arm matrix plus a
+**Status:** complete on Linux/x86_64 (WebKitGTK 2.52.6) - 13-arm matrix plus a
 30-minute soak. Windows/WebView2 and Pi 5 outstanding.
 **Gates:** G0, via **D6**
 **Crate:** `spikes/tauri-ipc-bench`
@@ -16,8 +16,8 @@ at all.
 
 ## What reading the Tauri source changed about the experiment
 
-The obvious design — channels versus the event bus, binary versus JSON, four
-cells — would have measured the wrong thing. Two things in `tauri` 2.11.6 make
+The obvious design - channels versus the event bus, binary versus JSON, four
+cells - would have measured the wrong thing. Two things in `tauri` 2.11.6 make
 that matrix misleading before a single number is taken.
 
 **Both transports are `eval` for small payloads.** `src/ipc/channel.rs` sends a
@@ -29,7 +29,7 @@ payload under `MAX_JSON_DIRECT_EXECUTE_THRESHOLD` (8192 bytes) by calling
 ```
 
 and evals that. So "channels versus the event bus" is a question about how many
-layers of JavaScript dispatch sit between the eval and the handler — not about
+layers of JavaScript dispatch sit between the eval and the handler - not about
 two different pipes. Above the threshold, channels switch to a
 `ChannelDataIpcQueue` entry plus a `fetch`-based round trip; none of the
 payloads in §35 are anywhere near that size, so that path is not exercised
@@ -37,8 +37,8 @@ here.
 
 **Small binary payloads are inflated, not compacted.**
 `MAX_RAW_DIRECT_EXECUTE_THRESHOLD` is 1024 bytes, and under it an
-`InvokeResponseBody::Raw` is rendered by `serde_json::to_string(&bytes)` — a
-*decimal* JSON array — and evaluated as `new Uint8Array([...]).buffer`. A
+`InvokeResponseBody::Raw` is rendered by `serde_json::to_string(&bytes)` - a
+*decimal* JSON array - and evaluated as `new Uint8Array([...]).buffer`. A
 30-byte meter frame becomes well over 100 characters of JavaScript source. So
 the `raw` arm is in this matrix as a hypothesis to be disproved, not as an
 assumed win.
@@ -55,18 +55,18 @@ v135 and macOS. VCW's Linux target is WebKitGTK, which nobody has measured.
 ## Method
 
 `spikes/tauri-ipc-bench` is a real Tauri 2 app: a dedicated OS producer thread
-(D8 — no async on the real-time path) emitting the three payloads §35 names, and
+(D8 - no async on the real-time path) emitting the three payloads §35 names, and
 a React frontend that draws them.
 
 The three payloads are the real ones, not stand-ins. §35 forbids high-frequency
 PCM crossing the boundary, so a `MeterFrame` is peak/RMS/clip per channel, a
-`WaveDelta` is a run of `[min_l, max_l, min_r, max_r]` summary buckets — the
-`summary256` shape S5 found in AUP3 and D1 adopted — and a `PositionUpdate` is
+`WaveDelta` is a run of `[min_l, max_l, min_r, max_r]` summary buckets - the
+`summary256` shape S5 found in AUP3 and D1 adopted - and a `PositionUpdate` is
 a frame counter.
 
 Each is implemented in three encodings: `serde` (tauri's blanket
 `impl<T: Serialize> IpcResponse`), `manual` (hand-built compact JSON with short
-keys into a reused buffer — D6's "pre-serialised"), and `raw` (fixed-layout
+keys into a reused buffer - D6's "pre-serialised"), and `raw` (fixed-layout
 little-endian bytes). Encoding happens outside the timed region for the latter
 two, because moving that work off the IPC path is precisely what D6 proposes;
 the `serde` arm's serialisation is inside the timed region, which is the
@@ -81,8 +81,8 @@ the webview can be attributed to the correct side of the boundary.
 Thirteen arms, written out as a named list in `src/arms.ts` rather than
 generated from a cross product: a 5x5x2 product would be 50 runs, most of which
 vary two things at once and therefore answer nothing. The baseline for every arm is
-192 kHz capture with 256-frame callbacks — a 750 Hz worker rate, the worst case
-§35 has to survive — coalesced to 60 Hz meter, 30 Hz waveform, 10 Hz position.
+192 kHz capture with 256-frame callbacks - a 750 Hz worker rate, the worst case
+§35 has to survive - coalesced to 60 Hz meter, 30 Hz waveform, 10 Hz position.
 
 Three of the thirteen are controls, and they are what make the rest readable -
 a 2x2 of traffic against drawing:
@@ -255,9 +255,9 @@ D6 does not mention: **how the waveform is drawn.**
 
 A full-canvas redraw of a 1400x220 waveform at 60 Hz costs **29% of the main
 thread** and makes nearly every frame a >=4 ms frame. The same waveform in an
-`OffscreenCanvas` worker costs **0.5%**, and the in-between — incremental
+`OffscreenCanvas` worker costs **0.5%**, and the in-between - incremental
 self-blit redraw on the main thread, the `IncrementalWave` used by every other
-drawing arm — costs 1.7%.
+drawing arm - costs 1.7%.
 
 **Read that as jank risk, not as CPU.** Occupancy is the share of the *main
 thread* spent inside the draw callback, which is the right metric for
@@ -377,8 +377,8 @@ should be measured with `cpu-sample.sh`, not from the producer's own figures.
 
 ### The 30-minute soak on the recommended configuration
 
-One arm, `soak-recommended` — channel transport, `manual` encoding, coalesced,
-`OffscreenCanvas` worker — for 1800.3 s. 180,000 messages (108,000 meter,
+One arm, `soak-recommended` - channel transport, `manual` encoding, coalesced,
+`OffscreenCanvas` worker - for 1800.3 s. 180,000 messages (108,000 meter,
 54,000 waveform, 18,000 position). **Zero send errors, 108,000 of 108,000
 received, zero sequence gaps.**
 
@@ -406,8 +406,8 @@ accumulating work.
 processes went **491 MiB → 538 MiB, +47 MiB, a steady +1.46 MiB/min** with no
 plateau: the first-half slope is +1.43 MiB/min and the second-half slope
 +1.23 MiB/min, so it decelerates slightly but does not stop. This answers the
-question the soak was run to answer — the 476 → 509 MiB drift across the
-13-arm matrix was **time-based, not per-arm** — and replaces it with a better
+question the soak was run to answer - the 476 → 509 MiB drift across the
+13-arm matrix was **time-based, not per-arm** - and replaces it with a better
 one. Extrapolated, that is ~88 MiB/hour. A vinyl side is ~22 minutes (~32 MiB,
 harmless); an afternoon of capturing and editing is not.
 
@@ -415,16 +415,16 @@ Two honest qualifications on that figure. It is the sum over the tauri process
 and WebKit's network and web processes, and one sample caught a sixth process
 transiently (543 MiB at 17.6 min, back to 520 MiB at 18.1 min), so the series
 is noisy and not strictly monotonic even smoothed. And this bench's UI is two
-canvases and a table — it allocates almost nothing per frame by design, with
+canvases and a table - it allocates almost nothing per frame by design, with
 preallocated decode targets, a fixed-size `Int16Array` ring and
-allocation-free histograms — which makes application code the *least* likely
+allocation-free histograms - which makes application code the *least* likely
 explanation and WebKit or tauri's own per-message bookkeeping the most likely.
 **It is unexplained, and it is not diagnosed by this spike.**
 
 Alongside it, one mild degradation: >20 ms frame gaps drift up from a mean of
 33.5 per 30 s bucket in the first third of the run to 41.8 in the last third,
 about 25%. Small, possibly the same underlying cause, and invisible to a user
-at these magnitudes — but it is a drift rather than a stationary process, and
+at these magnitudes - but it is a drift rather than a stationary process, and
 S2's soak taught the habit of checking for exactly that.
 
 ## Conclusions
@@ -463,7 +463,7 @@ Three consequences beyond the decision itself:
 3. **G0 can close on D6.** The decision is answerable on the measurements in
    hand for the Linux target, with the platform caveats below.
 4. **One open item, carried forward: the webview's memory grows ~1.5 MiB/min
-   and does not plateau in 30 minutes.** It does not block D6 — it is
+   and does not plateau in 30 minutes.** It does not block D6 - it is
    orthogonal to transport, encoding and rendering strategy, and it appears in
    a bench that allocates almost nothing per frame. But VCW is an application
    expected to stay open across a multi-hour session, so this needs isolating
@@ -503,12 +503,12 @@ Three consequences beyond the decision itself:
   "canvas plus a DOM meter", which is the shape VCW would actually ship, not
   the cost of reconciling a waveform.
 - **The bench does not measure its own CPU cost.** Every figure it reports is
-  time inside a callback it controls — the rAF draw, `send()`, a message
+  time inside a callback it controls - the rAF draw, `send()`, a message
   handler. Whole-application CPU had to be sampled from `/proc` by a separate
   script, and it is an order of magnitude larger than the occupancy figures
   suggest: **~89% of one core** for the recommended configuration on this
   desktop. The arms were never compared on that basis, so **whether the worker
-  actually reduces total CPU relative to a naive redraw is unmeasured** — it
+  actually reduces total CPU relative to a naive redraw is unmeasured** - it
   demonstrably reduces main-thread *blocking*, which is a different claim. Any
   Pi 5 conclusion should rest on whole-app CPU, not on occupancy. This is the
   largest gap in the spike.
@@ -522,6 +522,6 @@ Three consequences beyond the decision itself:
   it is time-based rather than per-arm (+1.46 MiB/min, no plateau in 30
   minutes), which is as far as this spike goes. What it does *not* establish
   is where it comes from, whether it plateaus eventually, or whether it scales
-  with message rate — the obvious next experiments are a soak with the
+  with message rate - the obvious next experiments are a soak with the
   producer stopped and one with `echo` disabled. Until then, treat
   "~88 MiB/hour" as a measurement of this bench, not a property of Tauri.

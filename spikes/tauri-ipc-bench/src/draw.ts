@@ -117,7 +117,7 @@ const METER_W = 180
 const METER_H = 220
 
 /** Peak/RMS bars with a decaying peak-hold, which is what §44 specifies and
- * also the cheapest possible canvas work — the control against which the
+ * also the cheapest possible canvas work - the control against which the
  * waveform's cost is read. */
 export class MeterView {
   private holdL = 0

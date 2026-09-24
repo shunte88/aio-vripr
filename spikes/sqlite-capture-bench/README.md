@@ -14,7 +14,7 @@ assembles immutable blocks and commits them in batched transactions. Reader thre
 imitate the waveform and fingerprint workers against the same file.
 
 The payload is a deterministic function of (frame, channel), so `verify` can prove the
-stored bytes are the *right* bytes — not merely that a checksum matches.
+stored bytes are the *right* bytes - not merely that a checksum matches.
 
 The schema is the shape decided in D1: `sampleblocks` mirroring Audacity's AUP4 table
 column for column, plus `capture_blocks` for the provenance AUP4 cannot hold.

@@ -41,7 +41,7 @@ export const ARMS: Arm[] = [
     question: 'Frame pacing with no traffic: the compositor and canvas baseline every other arm is read against.',
     // 0.001 Hz means a period longer than any run here, so nothing is ever
     // sent. An earlier version used 1 Hz, which at 192 kHz batched 187 buckets
-    // into one 4.6 kB waveform message per second — not an idle control at all.
+    // into one 4.6 kB waveform message per second - not an idle control at all.
     cfg: { meterHz: 0.001, waveHz: 0.001, positionHz: 0.001 },
   },
   {
@@ -77,7 +77,7 @@ export const ARMS: Arm[] = [
   },
   {
     name: 'render-naive',
-    question: 'Full waveform redraw every frame — the cost D6 does not mention.',
+    question: 'Full waveform redraw every frame - the cost D6 does not mention.',
     cfg: {},
     renderMode: 'naive',
   },
@@ -106,7 +106,7 @@ export const ARMS: Arm[] = [
 ]
 
 /**
- * The soak. Not part of the matrix: it answers a different question — whether
+ * The soak. Not part of the matrix: it answers a different question - whether
  * the configuration the matrix recommends still holds after half an hour,
  * which is the shortest run that resembles one side of a record.
  *

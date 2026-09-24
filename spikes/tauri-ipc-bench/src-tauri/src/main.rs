@@ -1,4 +1,4 @@
-//! S3 — Tauri 2 IPC throughput.
+//! S3 - Tauri 2 IPC throughput.
 //!
 //! D6 proposes "Tauri 2 channels (not the event bus) for meter and waveform
 //! deltas; pre-serialised compact payloads; coalesce to <=60 Hz in Rust", and
@@ -6,7 +6,7 @@
 //! `src/event/mod.rs` first turned up two things that make the naive version of
 //! that experiment the wrong one:
 //!
-//! 1. **Both transports go through `webview.eval()`** for small payloads —
+//! 1. **Both transports go through `webview.eval()`** for small payloads -
 //!    channels via a direct callback, the event bus via a listener-dispatch
 //!    wrapper. So the channel-vs-event question is about JS dispatch layers,
 //!    not about a fundamentally different pipe.
@@ -46,7 +46,7 @@ pub enum Transport {
 pub enum Encoding {
     /// Let tauri's `T: Serialize` blanket impl serialise each frame.
     Serde,
-    /// Hand-built compact JSON into a reused buffer — D6's "pre-serialised".
+    /// Hand-built compact JSON into a reused buffer - D6's "pre-serialised".
     Manual,
     /// Fixed-layout little-endian bytes. Not available on the event bus.
     Raw,
@@ -62,7 +62,7 @@ pub struct BenchConfig {
     pub wave_hz: f64,
     pub position_hz: f64,
     /// When false, meter frames go out at the raw worker rate
-    /// (`captureRate / callbackFrames`) with no coalescing — 750 Hz at
+    /// (`captureRate / callbackFrames`) with no coalescing - 750 Hz at
     /// 192 kHz with 256-frame callbacks. This is the arm that tests whether
     /// D6's "coalesce in Rust" is load-bearing or just tidy.
     pub coalesce: bool,
@@ -81,7 +81,7 @@ pub struct SendStats {
     pub meter_send: HistSummary,
     pub wave_send: HistSummary,
     pub position_send: HistSummary,
-    /// How late each tick fired against its schedule — the producer's own
+    /// How late each tick fired against its schedule - the producer's own
     /// jitter, so UI-side jitter can be attributed correctly.
     pub tick_lateness: HistSummary,
     pub meter_sent: u64,

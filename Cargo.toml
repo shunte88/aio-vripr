@@ -14,9 +14,9 @@ members = [
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.90"
-description = "VCW — The Vinyl Capture Workstation"
+description = "VCW - The Vinyl Capture Workstation"
 # MIT today. Becomes "MIT AND LGPL-2.1-or-later" when chromaprint-next lands in
-# Phase 2 — see THIRD-PARTY-NOTICES.md and the relink obligation it documents.
+# Phase 2 - see THIRD-PARTY-NOTICES.md and the relink obligation it documents.
 license = "MIT"
 repository = "https://github.com/shunte88/vcw"
 authors = ["Stue Hunter"]

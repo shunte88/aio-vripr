@@ -121,13 +121,13 @@ pub fn probe(path: &Path) -> Result<WavInfo> {
 /// measures whether the choice is visible in the fingerprint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Narrow {
-    /// Arithmetic shift — drop the low bits. What a naive `>> 16` does.
+    /// Arithmetic shift - drop the low bits. What a naive `>> 16` does.
     Truncate,
     /// Round to nearest, ties away from zero, saturating at i16::MAX.
     Round,
 }
 
-/// Read `frames` frames starting at `start_frame`, converting to interleaved i16 —
+/// Read `frames` frames starting at `start_frame`, converting to interleaved i16 -
 /// the only shape `Fingerprinter::feed` accepts. The conversion is a plain
 /// arithmetic right shift of the most significant bits, which is what the capture
 /// path will do: the rips are 24-bit samples left-aligned in a 32-bit container.

@@ -92,7 +92,7 @@ export interface ClientReport {
   timeline: TimelineSample[]
   worker?: unknown
   elapsedSecs: number
-  /** Frames whose interval exceeded 20 ms / 33 ms — §37's "the UI must not
+  /** Frames whose interval exceeded 20 ms / 33 ms - §37's "the UI must not
    * stutter" made countable. */
   jank20: number
   jank33: number

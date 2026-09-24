@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Spike S5 — clean-room decoder for the Audacity project document blob.
+"""Spike S5 - clean-room decoder for the Audacity project document blob.
 
 The grammar below was derived by observation of file bytes alone: no Audacity
 source was consulted, so nothing here inherits Audacity's GPL. It is validated
-against a corpus by requiring every byte of every document to be consumed —
+against a corpus by requiring every byte of every document to be consumed -
 a wrong grammar desynchronises and fails loudly rather than quietly guessing.
 
     ./probe.py corpus/*.aup3          # structural report
@@ -34,6 +34,7 @@ doc  := record*
    08 id:u16 value:u32                         attribute, 32-bit
    0A id:u16 value:f64 digits:i32              attribute, double + precision
    0C nbytes:u32 utf32le[nbytes]               character data
+   10 id:u16 nbytes:u32 bytes[nbytes]           attribute, binary blob  (AUP4)
 
 0x06 and 0x08 carry identical 4-byte payloads and are used interchangeably for
 the same attribute across files (`sampleformat` appears under both). They are
@@ -42,6 +43,22 @@ presumably distinct C++ overloads upstream; a reader can treat them alike.
 
 Tags 0x00, 0x09, 0x0B, 0x0D, 0x0E do not occur in the corpus. A reader must
 reject them rather than assume a width.
+
+--- AUP4 delta --------------------------------------------------------------
+
+Same container, same application_id; user_version becomes 0x04000001. The
+schema gains exactly one table, `project_history(generation, saved_at, dict,
+doc)`, holding one full document per save. Tag 0x10 is the only new record: a
+length-prefixed binary blob, used so far only for `project/thumbnail/@data`,
+a PNG screenshot of the editor window.
+
+--- A trap worth stating here ----------------------------------------------
+
+`project/@rate` is a stored *preference*, not a property of the audio: it reads
+192000.0 in every file of the corpus including those whose audio is 48 kHz.
+The authoritative rate is `wavetrack/@rate`, confirmed against the source WAV
+headers and against label extents. This module reports both and never collapses
+them.
 """
 
 import argparse
@@ -58,11 +75,14 @@ START, END, CHARDATA, DICT_ENTRY = 0x01, 0x02, 0x0C, 0x0F
 # tag -> (label, payload width in bytes after the u16 name id)
 FIXED = {0x04: ("i32", 4), 0x05: ("u8", 1), 0x06: ("u32", 4),
          0x07: ("u64", 8), 0x08: ("u32", 4), 0x0A: ("f64", 12)}
-ATTR_STR = 0x03
+ATTR_STR, ATTR_BLOB = 0x03, 0x10
 
 # Sample formats observed. The high half is bytes-per-sample, the low half a
-# type code. Note the absence of any 32-bit integer format — see S5 findings.
+# type code. Note the absence of any 32-bit integer format - see S5 findings.
 SAMPLE_FORMATS = {0x00020001: "int16", 0x00040001: "int24", 0x0004000F: "float32"}
+# The high half of sampleformat is bytes per stored sample, so it doubles as the
+# divisor for checking AUP4's waveblock/@length against len(samples).
+BYTES_PER_SAMPLE = {0x00020001: 2, 0x00040001: 4, 0x0004000F: 4}
 
 
 class FormatError(Exception):
@@ -71,6 +91,16 @@ class FormatError(Exception):
 
 def _utf32(raw):
     return raw.decode("utf-32-le")
+
+
+def sniff(raw):
+    """Describe a binary blob without claiming to decode it."""
+    if raw[:8] == b"\x89PNG\r\n\x1a\n" and raw[12:16] == b"IHDR":
+        w, h = struct.unpack_from(">II", raw, 16)
+        return f"PNG {w}x{h}"
+    if raw[:3] == b"\xff\xd8\xff":
+        return "JPEG"
+    return "unknown"
 
 
 def parse_dict(blob):
@@ -117,6 +147,11 @@ def parse_doc(blob, names):
             i += 4
             yield "attr", name, _utf32(blob[i : i + nbytes])
             i += nbytes
+        elif tag == ATTR_BLOB:
+            (nbytes,) = struct.unpack_from("<I", blob, i)
+            i += 4
+            yield "blob", name, blob[i : i + nbytes]
+            i += nbytes
         elif tag in FIXED:
             kind, width = FIXED[tag]
             if kind == "i32":
@@ -152,6 +187,9 @@ def to_xml(events):
         elif kind == "attr":
             text = value if isinstance(value, str) else repr(value)
             out.append(f' {name}="{text}"')
+        elif kind == "blob":
+            # Never inline megabytes of PNG into the reconstructed XML.
+            out.append(f' {name}="&lt;binary {len(value)} bytes {sniff(value)}&gt;"')
         elif kind == "end":
             if open_tag == name:
                 out.append("/>")
@@ -159,6 +197,40 @@ def to_xml(events):
             else:
                 out.append(f"</{name}>")
     return "".join(out)
+
+
+def _scoped(events):
+    """Yield (enclosing_element, name, value) for every attribute."""
+    stack = []
+    for kind, name, value in events:
+        if kind == "start":
+            stack.append(name)
+        elif kind == "end":
+            if stack:
+                stack.pop()
+        elif kind in ("attr", "blob"):
+            yield (stack[-1] if stack else None), name, value
+
+
+def _waveblock_lengths(events):
+    """Yield (blockid, length) for AUP4 waveblocks. Empty on AUP3, which has no
+    @length: the attribute is the one place the document restates the size of a
+    sampleblocks blob, so it is worth checking rather than trusting."""
+    blockid = length = None
+    for kind, name, value in events:
+        if kind == "start" and name == "waveblock":
+            blockid = length = None
+        elif kind == "attr" and name == "blockid":
+            blockid = value
+        elif kind == "attr" and name == "length":
+            length = value
+        elif kind == "end" and name == "waveblock":
+            if blockid is not None and length is not None:
+                yield blockid, length
+
+
+def _attr_of(events, element, attr):
+    return next((v for e, n, v in _scoped(events) if e == element and n == attr), None)
 
 
 def inspect(path):
@@ -173,9 +245,41 @@ def inspect(path):
     events = list(parse_doc(row[1], names))
 
     tags = Counter(n for k, n, _ in events if k == "start")
+    # `project/@rate` is a stored preference; `wavetrack/@rate` is the truth.
+    # Report both and let the caller see any disagreement -- see S5 findings.
+    project_rate = _attr_of(events, "project", "rate")
+    track_rates = sorted({v for e, n, v in _scoped(events) if e == "wavetrack" and n == "rate"})
+    blobs = [{"name": n, "bytes": len(v), "kind": sniff(v)}
+             for k, n, v in events if k == "blob"]
+    tables = sorted(r[0] for r in db.execute(
+        "select name from sqlite_master where type='table' and name not like 'sqlite_%'"))
+    history = None
+    if "project_history" in tables:
+        history = [{"generation": g, "saved_at": t,
+                    "dict_bytes": len(d or b""), "doc_bytes": len(o or b"")}
+                   for g, t, d, o in db.execute(
+                       "select generation, saved_at, dict, doc from project_history"
+                       " order by generation")]
     # Cross-check the document against the audio actually present.
-    referenced = {v for k, n, v in events if k == "attr" and n == "blockid"}
+    # A blockid may be referenced by more than one waveblock: clip splits and
+    # copy/paste share blocks. Count elements and distinct ids separately, or a
+    # reader will conclude blocks are missing when they are merely shared.
+    refs = [v for e, n, v in _scoped(events) if e == "waveblock" and n == "blockid"]
+    referenced = set(refs)
     stored = {r[0] for r in db.execute("select blockid from sampleblocks")}
+    # AUP4 adds waveblock/@length, the block's sample count. Cross-check it
+    # against the stored blob: it is a free integrity test on the document.
+    sizes = {r[0]: (r[1], r[2]) for r in db.execute(
+        "select blockid, sampleformat, length(samples) from sampleblocks")}
+    length_mismatches = []
+    declared = 0
+    for bid, ln in _waveblock_lengths(events):
+        declared += 1
+        fmt, nbytes = sizes.get(bid, (None, None))
+        bps = BYTES_PER_SAMPLE.get(fmt)
+        if bps and ln != nbytes // bps:
+            length_mismatches.append({"blockid": bid, "declared": ln,
+                                      "actual": nbytes // bps})
     fmts = {r[0] for r in db.execute("select distinct sampleformat from sampleblocks")}
     result = {
         "path": path,
@@ -190,9 +294,18 @@ def inspect(path):
         "sample_formats": sorted(SAMPLE_FORMATS.get(f, hex(f)) for f in fmts),
         "blocks_stored": len(stored),
         "blocks_referenced": len(referenced),
+        "waveblock_refs": len(refs),
+        "shared_blocks": len(refs) - len(referenced),
+        "lengths_declared": declared,
+        "length_mismatches": length_mismatches,
         "dangling_refs": sorted(referenced - stored),
         "orphan_blocks": len(stored - referenced),
-        "rate": next((v for k, n, v in events if k == "attr" and n == "rate"), None),
+        "project_rate": project_rate,
+        "track_rates": track_rates,
+        "rate_disagrees": bool(track_rates) and any(r != project_rate for r in track_rates),
+        "tables": tables,
+        "blobs": blobs,
+        "history": history,
         "xml": to_xml(events),
     }
     db.close()
@@ -223,9 +336,18 @@ def main():
         name = path.rsplit("/", 1)[-1]
         print(f"{name[:44]:46} {r['magic']} v{r['user_version']:9} "
               f"page={r['page_size']:<6} {'+'.join(r['sample_formats']):8} "
-              f"rate={r['rate']!s:8} blocks={r['blocks_stored']:<6} "
+              f"trate={'/'.join(f'{v:g}' for v in r['track_rates']) or '?':7}"
+              f"{'!=proj ' if r['rate_disagrees'] else '       '}"
+              f"blocks={r['blocks_stored']:<6} "
               f"refs={r['blocks_referenced']:<6} "
-              f"dangling={len(r['dangling_refs'])} orphan={r['orphan_blocks']}")
+              f"dangling={len(r['dangling_refs'])} orphan={r['orphan_blocks']}"
+              + (f" shared={r['shared_blocks']}" if r["shared_blocks"] else "")
+              + (f" gens={len(r['history'])}" if r["history"] else "")
+              + (f" blobs={len(r['blobs'])}" if r["blobs"] else "")
+              + (f" len_ok={r['lengths_declared']}" if r["lengths_declared"]
+                 and not r["length_mismatches"] else "")
+              + (f" LENGTH_MISMATCH={len(r['length_mismatches'])}"
+                 if r["length_mismatches"] else ""))
 
     if args.json:
         json.dump(results, sys.stdout, indent=2)

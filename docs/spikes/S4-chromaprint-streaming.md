@@ -1,10 +1,10 @@
-# S4 — chromaprint-next streaming fingerprints
+# S4 - chromaprint-next streaming fingerprints
 
 **Status:** COMPLETE on Linux/x86_64. Acceptance met, and met with more margin than asked for.
 **Date:** 2026-09-24
 **Requirement:** REQUIREMENTS §25, §26, §46 · **Plan:** PROJECT_PLAN §4 (S4)
 **Artefact:** [`spikes/fingerprint-stream`](../../spikes/fingerprint-stream)
-**Corpus:** `/data2/source_rips` — 62 real vinyl rips, 71 GB, 48 kHz and 192 kHz 32-bit WAV plus 24-bit FLAC
+**Corpus:** `/data2/source_rips` - 62 real vinyl rips, 71 GB, 48 kHz and 192 kHz 32-bit WAV plus 24-bit FLAC
 
 ## Question
 
@@ -17,7 +17,7 @@ capture.
 
 Chunk equivalence turned out to be the easy half. The harder question, which
 §25 also depends on and the plan did not name, is what happens when the
-detector puts the region boundary in slightly the wrong place — because it
+detector puts the region boundary in slightly the wrong place - because it
 will.
 
 ## Answer
@@ -26,11 +26,11 @@ will.
 
 Chunk shape is irrelevant: every shape tried, down to feeding one frame at a
 time, reproduces the offline fingerprint **bit for bit**. Region boundary error
-costs at most **0.064 BER** — reached at half a sub-fingerprint step, 62 ms —
+costs at most **0.064 BER** - reached at half a sub-fingerprint step, 62 ms -
 and that is the worst case, not a tail. For scale, unrelated audio scores
 **0.47–0.49** and an MP3 320k round-trip costs **0.0009**. The fingerprint
 worker costs **0.79 MiB** per stream and, on a whole 192 kHz side read off disk,
-**0.6% of one core** — of which most is the disk read; the fingerprinting alone
+**0.6% of one core** - of which most is the disk read; the fingerprinting alone
 is 0.06%.
 
 The consequences for Phase 2 are concrete:
@@ -45,7 +45,7 @@ The consequences for Phase 2 are concrete:
   under 5% of a core. Measured, eight was cheaper than that, because they share
   the one read of the stream.
 
-## Test 1 — chunk shape invariance *(the plan's acceptance criterion)*
+## Test 1 - chunk shape invariance *(the plan's acceptance criterion)*
 
 120 s from 60 s in, `Algorithm::Test2` (the AcoustID default), fed as the
 offline one-shot and then as each chunk shape. Shapes were chosen to hit the
@@ -73,8 +73,8 @@ $ fingerprint-stream chunk "/data2/source_rips/King Buffalo_Repeater.wav"
   PASS: every chunk shape reproduces the offline fingerprint exactly
 ```
 
-The pathological shape — **one frame per `feed()` call**, 3.84 M calls for a
-20 s region — is also bit-identical, and costs only 4× the one-shot:
+The pathological shape - **one frame per `feed()` call**, 3.84 M calls for a
+20 s region - is also bit-identical, and costs only 4× the one-shot:
 
 ```
 $ fingerprint-stream chunk "/data2/source_rips/King Buffalo_Repeater.wav" --len 20
@@ -89,9 +89,9 @@ into a fixed 32768-sample mono buffer and only resamples when that buffer fills,
 so the resampler always sees the same input in the same 32768-sample units
 regardless of how the caller split the feed. `finish()` flushes the remainder.
 Nothing in the chain is sensitive to call granularity. This is a structural
-property of the crate, not a coincidence of these inputs — but it is worth
+property of the crate, not a coincidence of these inputs - but it is worth
 re-asserting in CI, because it is exactly the kind of property an optimisation
-could quietly break — so it is. `cargo test -p fingerprint-stream` asserts chunk
+could quietly break - so it is. `cargo test -p fingerprint-stream` asserts chunk
 invariance, instance independence and the unrelated-audio baseline against a
 deterministic synthetic signal, in 0.5 s, with no corpus on disk:
 
@@ -114,7 +114,7 @@ guarantee whole frames at the type level** rather than rely on the callback
 happening to deliver them. `fp::streamed` in the spike takes chunk sizes in
 frames for this reason.
 
-## Test 2 — region boundary sensitivity *(the finding that matters)*
+## Test 2 - region boundary sensitivity *(the finding that matters)*
 
 The reference is the region cut exactly where the detector would ideally cut
 it. Each row moves the start by some number of frames and re-fingerprints the
@@ -154,7 +154,7 @@ that matters:
 *(all columns are `BER best`)*
 
 **The model.** A region start error decomposes into a whole number of
-sub-fingerprint steps plus a remainder. The whole-step part is free — it is a
+sub-fingerprint steps plus a remainder. The whole-step part is free - it is a
 pure shift, and the matcher absorbs it completely. Only the **sub-step
 remainder** costs anything, and its cost depends on the remainder alone, not on
 how large the total error was: a 5-second error (40.4 steps) costs 0.049, less
@@ -164,7 +164,7 @@ closer to alignment than 0.5 of one.
 So the penalty is **bounded at ~0.064 regardless of how wrong the boundary is**.
 That is the number Phase 2 should design against.
 
-## Test 3 — capture rate
+## Test 3 - capture rate
 
 Does the rate we happen to capture at change the fingerprint? It matters
 because AcoustID's stored fingerprints were submitted from whatever rate the
@@ -184,11 +184,11 @@ $ fingerprint-stream rate "/data2/source_rips/Side B Raw WAV.wav"
        44100     948      0.000165   0.000165      0
 ```
 
-Zero on one recording, ≤0.0002 on the other — the same magnitude as the
+Zero on one recording, ≤0.0002 on the other - the same magnitude as the
 single-bit resampler noise in Test 5. **Rate is a non-issue.** Fingerprint off
 the capture stream at whatever rate the user chose; do not decimate first.
 
-## Test 4 — throughput and headroom
+## Test 4 - throughput and headroom
 
 ```
 $ fingerprint-stream throughput "/data2/source_rips/King Buffalo_Repeater.wav" --len 300
@@ -203,10 +203,10 @@ $ fingerprint-stream throughput "/data2/source_rips/King Buffalo_Repeater.wav" -
 48 kHz is 3579–4116× real time. Chunk shape has no meaningful effect on cost,
 so the worker can drain the ring in whatever units the ring gives it.
 
-## Test 5 — cross-check against the C reference
+## Test 5 - cross-check against the C reference
 
 The crate claims bit-identical output to C. That claim is load-bearing for
-AcoustID match rates, so it gets checked here rather than taken on trust —
+AcoustID match rates, so it gets checked here rather than taken on trust -
 the same discipline that made S1 worth running.
 
 `fpcalc` reads raw PCM, so both implementations can be handed **byte-identical
@@ -230,18 +230,18 @@ Nine recordings at both rates:
 
 | recording | rate | case A | case B |
 |---|---|---|---|
-| Manitoba — Jacknuggeted EP | 48k | exact | exact |
-| Pole — Fading | 48k | exact | exact |
-| Klaus Schulze — Deus Arrakis | 48k | exact | exact |
-| Koreless — Agor | 48k | 5 bits / 0.000165 | exact |
-| Nils Frahm — Encores One | 48k | 2 bits / 0.000066 | exact |
-| King Buffalo — Repeater | 192k | exact | exact |
-| King Buffalo — Demo 10th | 192k | 5 bits / 0.000165 | exact |
+| Manitoba - Jacknuggeted EP | 48k | exact | exact |
+| Pole - Fading | 48k | exact | exact |
+| Klaus Schulze - Deus Arrakis | 48k | exact | exact |
+| Koreless - Agor | 48k | 5 bits / 0.000165 | exact |
+| Nils Frahm - Encores One | 48k | 2 bits / 0.000066 | exact |
+| King Buffalo - Repeater | 192k | exact | exact |
+| King Buffalo - Demo 10th | 192k | 5 bits / 0.000165 | exact |
 | Side A Raw | 192k | 2 bits / 0.000066 | exact |
 | Side B Raw | 192k | 6 bits / 0.000198 | exact |
 
 **The post-resample pipeline is bit-identical to C on every recording tested,
-9 for 9.** With resampling in the path, 5 of 9 differ — always by **single
+9 for 9.** With resampling in the path, 5 of 9 differ - always by **single
 isolated bit flips**, 2 to 6 of 30,336 bits, at both rates. That is the
 signature of a classifier sitting exactly on its threshold and being tipped by a
 ±1 LSB difference in the resampled stream, not of a structural divergence.
@@ -249,13 +249,13 @@ signature of a classifier sitting exactly on its threshold and being tipped by a
 **Cause, as far as this spike establishes it.** `ldd` shows the packaged
 `fpcalc` (Ubuntu `libchromaprint-tools 1.6.0-2build1`) links
 `libswresample.so.6` and `libsoxr.so.0`, so that build does not use
-chromaprint's bundled `av_resample` — which is what chromaprint-next ports.
+chromaprint's bundled `av_resample` - which is what chromaprint-next ports.
 Case B isolates the difference to the resample stage conclusively, since B
 shares every other stage with A and is exact.
 
 I tried to close the loop by letting FFmpeg's swresample do the downmix and
 resample and then fingerprinting *that* with chromaprint-next (case C, in the
-tool). It did **not** converge on fpcalc's answer either — 1 to 6 bits, in
+tool). It did **not** converge on fpcalc's answer either - 1 to 6 bits, in
 different places. So the `ffmpeg` CLI's resampler configuration is not
 chromaprint's either, and the hypothesis is **not confirmed**: all that is
 established is that a resampler difference exists and that it is confined to
@@ -266,12 +266,12 @@ with its bundled resampler, which this spike did not do.
 context: 0.0002 is **five times smaller than a 320 kbps MP3 round-trip**, which
 is a perturbation AcoustID handles as a matter of routine. It is ~2400× below
 unrelated audio. It cannot change a match outcome. The finding is recorded
-because it contradicts a blanket reading of the crate's "bit-identical" claim —
+because it contradicts a blanket reading of the crate's "bit-identical" claim -
 the claim holds against libchromaprint built from its own tree, not against
-every distro build of `fpcalc` — and because that distinction would be
+every distro build of `fpcalc` - and because that distinction would be
 expensive to rediscover from a failing test later.
 
-## Test 6 — what the BER axis actually means
+## Test 6 - what the BER axis actually means
 
 Every other number in this report is unreadable without a scale, so the scale
 is measured rather than assumed. Reference is the 24-bit source truncated to
@@ -314,9 +314,9 @@ Two of these are decisions VCW owns, and both are now settled:
   preamp gain and pressing level vary between plays and between users, and none
   of it reaches the fingerprint.
 
-## Test 7 — the worker as it will actually run
+## Test 7 - the worker as it will actually run
 
-Streams a whole side off disk in 250 ms blocks, holding one block at a time —
+Streams a whole side off disk in 250 ms blocks, holding one block at a time -
 no region resident, which is how the real worker behaves and which the Test 4
 numbers do not show because they hold the region in RAM.
 
@@ -343,7 +343,7 @@ $ fingerprint-stream live "/data2/source_rips/Klaus Schulze_Deus Arrakis.wav"
 A 22-minute 192 kHz side and a 75-minute 48 kHz one both run in **6.5 MiB**,
 with `feed()` taking **0.3% of its 250 ms block budget at p99**. The 155×
 figure is lower than Test 4's 1578× because disk reads dominate it (1.45 ms
-read against 0.25 ms of fingerprinting per block) — the fingerprinting itself
+read against 0.25 ms of fingerprinting per block) - the fingerprinting itself
 did not get slower.
 
 Fingerprint accumulation is bounded in practice: a whole side is 42–143 KiB,
@@ -395,7 +395,7 @@ and upstream it, rather than carrying a local path copy.
 ### Licensing
 
 This is the first LGPL contact point. `chromaprint-next` is `MIT AND
-LGPL-2.1-or-later` — the LGPL part is the `av_resample` port in
+LGPL-2.1-or-later` - the LGPL part is the `av_resample` port in
 `src/audio/resample.rs`, derived from FFmpeg. Nothing changes today because the
 spike is not shipped, but when the crate lands in Phase 2 the workspace license
 becomes `MIT AND LGPL-2.1-or-later` and the relink obligation attaches, as
@@ -408,15 +408,15 @@ PROJECT_PLAN already anticipates. `THIRD-PARTY-NOTICES.md` and
    are bit-identical for every chunk shape, down to one frame per call, at 48 kHz
    and 192 kHz.
 2. **§25's progressive-region approach is confirmed and is cheaper than it
-   looked.** The boundary penalty is bounded at ~0.064 BER — 7.3× better than
-   unrelated audio — so no re-fingerprint pass is needed after the detector
+   looked.** The boundary penalty is bounded at ~0.064 BER - 7.3× better than
+   unrelated audio - so no re-fingerprint pass is needed after the detector
    refines a boundary.
 3. **§46's isolation requirement is satisfied by a wide margin.** 0.79 MiB and
    0.6% of one core per stream, `feed()` at 0.3% of its block budget at p99.
    The fingerprint worker cannot starve capture.
 4. **Fingerprint from the capture stream at the capture rate.** Rate, gain and
    sample-narrowing are all measurably free.
-5. **chromaprint-next matches the C reference where it counts** — the whole
+5. **chromaprint-next matches the C reference where it counts** - the whole
    pipeline after the resampler, exactly, on 9 of 9 recordings. A resampler
    difference against the distro `fpcalc` exists and is bounded at 0.0002,
    five times below an MP3 320k round-trip.
@@ -424,13 +424,13 @@ PROJECT_PLAN already anticipates. `THIRD-PARTY-NOTICES.md` and
 ## Honest limits
 
 - **Linux/x86_64 only.** Pure Rust with one FFT dependency, so no
-  platform-specific risk is expected — but S1 is the standing reminder that
+  platform-specific risk is expected - but S1 is the standing reminder that
   "expected" is not "measured". Re-run on Pi 5 (aarch64) and Windows with the
   rest of the Tier 1 matrix. The SIMD paths in the local checkout are NEON and
   x86 specific and deserve the same cross-check on aarch64 that was done here.
 - **No AcoustID lookup.** Everything here is fingerprint *generation* and
   self-consistency. Whether these fingerprints actually resolve against
-  AcoustID's database — the §26/§27 question — is untested, needs an API key,
+  AcoustID's database - the §26/§27 question - is untested, needs an API key,
   and is Phase 2 work. The BER ladder says a match should not be lost to
   anything VCW does, but that is an argument, not a measurement.
 - **The C-reference resampler difference is characterised, not root-caused.**
