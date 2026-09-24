@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>VCW S3 — Tauri IPC bench</title>
+    <style>
+      :root { color-scheme: dark; }
+      body {
+        margin: 0; background: #14161a; color: #d7dae0;
+        font: 13px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      #root { padding: 12px 16px; }
+      canvas { display: block; background: #0c0e11; border: 1px solid #2a2f37; }
+      table { border-collapse: collapse; }
+      td, th { padding: 1px 12px 1px 0; text-align: left; font-weight: normal; }
+      th { color: #7d8794; }
+      .num { text-align: right; font-variant-numeric: tabular-nums; }
+      button, select { font: inherit; background: #222730; color: inherit;
+        border: 1px solid #39404b; padding: 3px 9px; }
+      h1 { font-size: 14px; margin: 0 0 10px; color: #9aa4b2; font-weight: normal; }
+      .bad { color: #ff8b6b; }
+      .good { color: #7fd18a; }
+      .sub { color: #7d8794; margin: 0 0 10px; }
+      .controls { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+      .controls input { font: inherit; background: #222730; color: inherit;
+        border: 1px solid #39404b; padding: 3px 6px; width: 5em; }
+      .busy { color: #e0c46b; }
+      .error { color: #ff8b6b; white-space: pre-wrap; }
+      /* The two canvases sit side by side so one rAF callback paints both, the
+         way the real transport view will. */
+      .stage { display: flex; gap: 8px; margin-bottom: 8px; }
+      /* The DOM meter is mounted in every arm so the document shape is a
+         constant; only the react-dom arm actually animates it. */
+      .dommeter { display: flex; gap: 4px; align-items: flex-end;
+        height: 24px; margin-bottom: 10px; }
+      .dommeter .bar { width: 60px; background: #5ec98a; min-height: 1px; }
+      .path { color: #7d8794; }
+      .arms { list-style: none; padding: 0; }
+      .arms li { margin: 4px 0; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // Runs before the bundle. `__s3boot` proves the document parsed;
+      // `__s3err` catches a module that fails to load or throws on parse,
+      // neither of which reaches the bundle's own error handler.
+      window.__s3boot = true
+      window.__s3err = []
+      window.addEventListener('error', function (e) {
+        window.__s3err.push(
+          e.message || 'resource error: ' + ((e.target && e.target.src) || '?'),
+        )
+      }, true)
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

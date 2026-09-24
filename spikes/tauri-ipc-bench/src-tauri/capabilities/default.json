@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Spike harness: channels plus the event bus, for the D6 comparison.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

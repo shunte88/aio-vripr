@@ -1,0 +1,28 @@
+[package]
+name = "tauri-ipc-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "S3 spike: Tauri 2 IPC throughput for 60 Hz meters and progressive waveform deltas"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = [] }
+
+[features]
+# Tauri decides "am I a dev build?" from this feature, not from the cargo
+# profile: without it the window loads `devUrl` and lands on about:blank when
+# no vite server is up. The tauri CLI adds it for release builds; this spike is
+# driven straight from `cargo` so that the unattended runs need no CLI, so it
+# is on by default here. `--no-default-features` gets the vite-dev-server
+# behaviour back.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

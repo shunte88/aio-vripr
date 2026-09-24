@@ -1,8 +1,8 @@
 # VCW — project status
 
-**As of:** 2026-09-23
+**As of:** 2026-09-24
 **Phase:** 0 (de-risking spikes), gate G0 not yet passed
-**Branch:** `main`, Phase 0 spikes committed (`f4a408c`)
+**Branch:** `main`, clean at `a28fd85`; S4 is a working-tree change on top of it
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -28,11 +28,12 @@ Predecessor **VRipr** keeps its own name — VCW is its successor, not a rebrand
 |---|---|---|
 | **S1** | Bit-perfect capture and playback through CPAL? | **Yes on Linux/x86_64**, on stock CPAL 0.18.2. Other platforms open. |
 | **S2** | Can SQLite absorb sustained 24/192 and survive a kill? | **Yes on x86_64/SSD**, 90-minute soak passed. Other platforms open. |
-| **S3** | Will Tauri IPC carry meter and waveform rates? | Not started. |
-| **S4** | Does `chromaprint-next` fingerprint from a stream? | Not started. |
+| **S3** | Will Tauri IPC carry meter and waveform rates? | **Yes, with 12.5× headroom** on Linux/WebKitGTK, incl. a 30-min soak with zero loss. The constraint is main-thread *rendering* (29% naive vs 0.5% in a worker), not IPC. One open item: webview RSS +1.46 MiB/min (R8). Other platforms open. |
+| **S4** | Does `chromaprint-next` fingerprint from a stream? | **Yes, bit-identically.** Linux/x86_64. Other platforms open. |
 | **S5** | Is the Audacity project format readable? | **AUP3 yes, decisively.** AUP4 unmeasured. |
 
-~3,640 lines of Rust across three spike crates, plus a 243-line Python format probe.
+~6,200 lines of Rust across five spike crates, plus ~1,240 lines of TypeScript
+(the S3 bench frontend) and ~440 lines of Python analysis and format probing.
 Write-ups in [`docs/spikes/`](spikes/).
 
 ### S1 — what it proved, and what upstream then fixed
@@ -80,6 +81,107 @@ not the D3-firmed `FULL` + per-channel. The short matrix says the firmed config 
 no worse, but *should be* is not *measured* — **D3 should not close until the firmed
 config is soaked.**
 
+### S3 — the experiment was aimed at the wrong thing
+
+Thirteen arms × 60 s on the real compositor. The boundary itself is a non-issue: **zero
+send errors, `recv/sent` = 1.000 and zero sequence gaps in every arm**, including two
+that pushed 45,000 messages at the full 750 Hz worker rate (192 kHz, 256-frame
+callbacks — the worst case §35 has to survive). The producer thread costs 0.14–0.19% of
+a core coalesced and 0.75% uncoalesced, with send p99 ≤64 µs.
+
+D6 asked three questions and got "doesn't matter", "backwards" and "backwards":
+
+- **Channels vs the event bus** is indistinguishable at §35 payload sizes — 1.7–1.8%
+  main-thread occupancy and 10.0–10.7 ms round trip for both, with the gap counts
+  ordered *against* D6's prediction. Reading `tauri` 2.11.6 first explained why: under
+  the 8192-byte threshold both transports are the same `webview.eval()` call.
+- **Binary payloads are a pessimisation.** Under `MAX_RAW_DIRECT_EXECUTE_THRESHOLD`
+  (1024 B) Tauri renders an `InvokeResponseBody::Raw` as a *decimal JSON array*. A 30 B
+  meter frame becomes 116 B of evaluated JavaScript — 3.9× inflation, and 42% *more*
+  source through the parser than the compact JSON it was supposed to beat.
+- **Coalescing to 60 Hz is worse than not coalescing.** At 750 Hz occupancy was
+  unchanged (1.6% vs 1.7%), long frames were *fewer* (71 vs 140), and delivery latency
+  fell from 10.5 ms to **2.8 ms**. Coalescing sends bought nothing and cost ~7 ms.
+
+**The load-bearing finding is one D6 never mentioned.** A full-canvas main-thread
+redraw of a 1400×220 waveform at 60 Hz costs **29.0% of the main thread**, with 8.9% of
+frames over 20 ms and nearly every frame over 4 ms. The same waveform in an
+`OffscreenCanvas` worker costs **0.5%**, and was the only configuration measured that
+never exceeded its frame budget — 3988 frames in a minute, maximum interval 16.0 ms,
+where every main-thread arm reached 18–25 ms. So the engineering belongs in the
+renderer, and the IPC layer can be chosen on ergonomics and never revisited.
+
+The spike's other durable output is methodological, and it is why the numbers above are
+stated the way they are. `performance.now()` on WebKitGTK is clamped to exactly 1 ms,
+which made the first draft report every client-side latency as zero; the fix was to time
+a round trip entirely on the Rust clock. The clamp truncates *timestamps*, not
+durations, so the **mean** of clamped samples is unbiased while every individual sample
+is useless — hence occupancy from means, corroborated by exact counts of frames over
+1/4/8 ms, and no client-side percentile quoted as if it were precise. And
+`requestAnimationFrame` is **not** vsync-paced here: 56–97 callbacks/s on a fixed 60 Hz
+output, so fps is not a quality measure and **main-thread occupancy is the acceptance
+metric instead**.
+
+The 30-minute soak on the recommended configuration (channel + `manual` + worker) held
+everything: 180,000 messages, **zero send errors, zero loss, zero sequence gaps**; the
+worker rendered 119,133 frames with a **maximum interval of 18.0 ms**; main-thread draw
+cost *fell* over the run (JIT warm-up) and whole-app CPU was flat at ~86–89% of one
+core. Three frames out of 160,856 exceeded 33 ms.
+
+**One thing did not hold, and it is now R8's first hard evidence.** Total RSS grew
+491 → 538 MiB — a steady **+1.46 MiB/min with no plateau**, ~88 MiB/hour extrapolated.
+That settles what the soak was run to settle (the matrix's 476 → 509 MiB drift was
+time-based, not per-arm) and replaces it with a sharper question. It is orthogonal to
+D6, and it is *not* diagnosed: this bench's UI allocates almost nothing per frame by
+design, which makes application code the least likely cause and WebKit or tauri
+per-message bookkeeping the most likely. It must be isolated before G2, because VCW is
+meant to stay open across a multi-hour session.
+
+Also worth recording because it nearly escaped: **every figure the bench reports is time
+inside a callback it owns**, so it cannot see its own cost. Sampled from `/proc`, the
+recommended configuration runs at ~89% of one core — 68% in `WebKitWebProcess`, 18% on
+the tauri process's GTK main thread dispatching evals. The "0.5% occupancy" headline is
+a main-thread *blocking* figure, not a CPU budget, and the Pi 5 conclusion will have to
+rest on the latter. `cpu-sample.sh` and `cpu-matrix.sh` exist for that.
+
+Honest gaps: one run per arm, so only the order-of-magnitude findings carry weight; this
+rig mirrors a 59.98 Hz and a 29.96 Hz output, so absolute jank counts are contaminated
+and only differences from the controls mean anything; the coalescing-raises-latency
+effect is consistent across five arms but was not isolated by a controlled experiment;
+and the bench UI is two canvases and a table, so these figures are a floor for a real
+editor window.
+
+### S4 — the acceptance was the easy half
+
+Streamed and offline fingerprints are **bit-identical for every chunk shape tried**,
+including one frame per `feed()` call, the ALSA period and buffer sizes, S2's 250 ms
+block, a prime size and ragged ring drains — at 48 kHz and 192 kHz. Cost: **0.79 MiB and
+0.6% of one core per stream**, with `feed()` taking 0.3% of its 250 ms block budget at
+p99. A whole 22-minute 192 kHz side streams through in 6.5 MiB. Eight concurrent region
+fingerprinters agree bit-for-bit and cost 2 ms of a 250 ms budget between them, so §46's
+isolation requirement is satisfied several orders of magnitude over.
+
+The more useful finding is one the plan did not ask for. **Region-boundary error is
+bounded at ~0.064 BER**, reached at half a sub-fingerprint step (62 ms); a whole-step
+error is a pure shift the matcher absorbs entirely. Unrelated audio scores 0.47–0.49 and
+an MP3 320k round-trip costs 0.0009, so the worst boundary error a detector can make
+still leaves a comfortable match. Consequence for Phase 2: **no re-fingerprint pass after
+boundary refinement**, and the detector's precision requirement belongs to *editing*, not
+identification. Capture rate (192k vs 44.1k), gain (−20 dB to +3 dB) and i16 narrowing
+(truncate vs round) are all measurably **free** — fingerprint straight off the capture
+stream at whatever rate the user chose.
+
+Rather than trust the crate's "bit-identical to C" claim, it was checked against `fpcalc`
+on byte-identical input. The pipeline after the resampler is exact on **9 of 9**
+recordings. A resampler difference does exist — the packaged `fpcalc` links
+`libswresample`/`libsoxr`, not chromaprint's bundled `av_resample` which the crate ports —
+worth 2 to 6 single-bit flips out of 30,336, i.e. **five times smaller than an MP3 320k
+round-trip**. Characterised, bounded, immaterial, and deliberately not root-caused.
+
+One trap recorded for WP-11: `feed()` only `debug_assert!`s frame alignment, so a release
+build handed a partial frame silently transposes the channel interleave and returns a
+plausible wrong answer. The worker must guarantee whole frames at the type level.
+
 ### S5 — the format is not a mystery any more
 
 The AUP3 `ProjectSerializer` document format is decoded and verified against **all 25**
@@ -110,10 +212,48 @@ defect to fix.
   copy, page-size sweep, WAL2, and the full `sweep` matrix to completion.
 - **Real converters.** Everything so far is onboard audio. The HiFiBerry DAC+ADC Pro and
   the Tascam DA-3000 are untested, as is `snd-aloop` bit-exactness (needs root).
-- **S3** Tauri IPC throughput (2 sessions) and **S4** `chromaprint-next` streaming
-  (1 session) — both unstarted.
+- **S3's memory growth (R8).** +1.46 MiB/min with no plateau over 30 minutes, measured
+  and undiagnosed. Two cheap experiments split it: re-soak with the producer stopped
+  (WebKit baseline vs per-message cost), then with `echo` disabled (tauri's
+  per-invocation bookkeeping). Needed before G2, not before G0.
+- **S3's whole-app CPU per arm.** `cpu-matrix.sh` is written and ready but unrun: it
+  samples `/proc` across `control-raf` → `control-nodraw` → `channel-manual` →
+  `render-naive` → `render-worker`, which is the comparison the bench cannot make
+  itself. Until it runs, **whether the worker reduces total CPU — as opposed to
+  main-thread blocking — is unmeasured**, and that is the figure the Pi 5 decision needs.
+- **S3 on other webviews.** Windows/WebView2 and the Pi 5. Tauri's two direct-execute
+  thresholds were tuned upstream against WebView2 v135 and macOS, and the 1 ms clock
+  clamp plus non-vsync `rAF` that shape every S3 conclusion are WebKit-specific. The
+  `Raw`-inflation finding in particular is threshold-dependent and should be re-checked,
+  not assumed portable.
+- **S4 on other platforms.** Pure Rust, so low risk, but the local checkout's SIMD paths
+  are NEON/x86-specific and deserve the aarch64 cross-check on the Pi 5.
 - **AUP4.** Blocked on obtaining Audacity 4.x. Also unexercised: a project with a
   non-empty `envelope`, and one with a populated `autosave`.
+
+## Decisions resolved 2026-09-24
+
+1. **`chromaprint-next 0.1.0` from crates.io is the dependency of record**, applying the
+   CPAL policy below to the second dependency that had a local checkout. The checkout at
+   `/data2/chromaprint-next` sits two SIMD commits ahead of the release; both were
+   verified **fingerprint-neutral** out of tree rather than patched in. Same rule as
+   cpal: fork only for a defect not already fixed upstream, never a `[patch.crates-io]`
+   path copy.
+2. **Fingerprinting runs off the capture stream, at the capture rate, with plain `>> 16`
+   narrowing.** S4 measured rate, gain and narrowing to be free, so no staging file, no
+   pre-decimation and no dither on the fingerprint path.
+3. **D6 rewritten, not confirmed.** S3 rejected two of its three clauses. Channels are
+   kept for API shape, not speed (indistinguishable from the event bus). `Raw` binary
+   payloads are **out** — Tauri eval's them as decimal JSON arrays, making them 42%
+   larger than the compact JSON they replace. Send-side coalescing is **out** — 750 Hz
+   cost no extra main-thread time and a quarter of the latency; coalesce *paints*
+   instead. And D6 gained the clause that actually mattered: **the waveform renders in
+   an `OffscreenCanvas` worker**, against 29% of the main thread for a naive redraw.
+   Acceptance metric is main-thread occupancy, not fps.
+4. **Main-thread occupancy is the UI acceptance metric**, because `rAF` on WebKitGTK is
+   not vsync-paced (56–97/s on a fixed 60 Hz output), so fps is not comparable across
+   configurations. Corollary recorded the hard way: occupancy is a *blocking* measure and
+   says nothing about CPU, which needs external `/proc` sampling.
 
 ## Decisions resolved 2026-09-23
 
@@ -135,14 +275,25 @@ defect to fix.
 
 ## Next up
 
-`WP-01` proper: the full crate layout per §6, CI matrix, `cargo-deny`, ported
+**`WP-01` proper.** All five Phase 0 spikes have now returned a verdict on their
+primary platform, and every G0 decision they gate is answered or provisional-pending-
+hardware. The remaining spike work is *portability re-measurement* on rigs that are
+either unavailable (macOS) or not yet set up (Pi 5, Windows) — it does not block the
+foundation work, and re-running an existing harness on new hardware is a much smaller
+task than the original spike.
+
+`WP-01` is: the full crate layout per §6, CI matrix, `cargo-deny`, ported
 `THIRD-PARTY-NOTICES.md` and `LICENSE-LGPL-2.1`, and ADR-0001 (D1) / ADR-0002 (D2). No
 vendored-cpal notice is needed any more — cpal is a plain Apache-2.0 dependency again.
 
 ## Housekeeping
 
-- Phase 0 spikes are committed at `f4a408c`. The CPAL 0.18 upgrade, the `.vcw` rename and
-  this revision are working-tree changes on top of it.
+- Phase 0 spikes, the CPAL 0.18 upgrade and the `.vcw` rename are committed at `a28fd85`.
+  S4 — `spikes/fingerprint-stream` and its write-up — is a working-tree change on top.
+- **`/data2/source_rips`** is the source-audio corpus S4 ran against: 62 real vinyl rips,
+  71 GB, 48 kHz and 192 kHz 32-bit WAV plus 24-bit FLAC. Distinct from
+  `/data2/vinyl_rips`, which holds the 25 AUP3 *projects* S5 used. Several titles appear
+  in both, which will make a good AUP3-import round-trip test at WP-20.
 - `.bench/` holds **~8 GB** of scratch databases — the 8.4 GB soak artefact plus older
   `.vripr`-suffixed files from before the rename. All gitignored and safe to delete; the
   S1 and S2 numbers are recorded here and in the spike write-ups.

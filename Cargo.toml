@@ -2,7 +2,13 @@
 # root carries shared metadata rather than a crate of its own.
 [workspace]
 resolver = "3"
-members = ["spikes/capture-core", "spikes/sqlite-capture-bench", "spikes/vinyl-audio-test"]
+members = [
+    "spikes/capture-core",
+    "spikes/fingerprint-stream",
+    "spikes/sqlite-capture-bench",
+    "spikes/tauri-ipc-bench/src-tauri",
+    "spikes/vinyl-audio-test",
+]
 
 [workspace.package]
 version = "0.1.0"

@@ -1,0 +1,22 @@
+[package]
+name = "fingerprint-stream"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "S4 spike: chromaprint-next streaming equivalence, region alignment and throughput"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+# The released crate is the dependency of record — the CPAL lesson: never carry a
+# path copy that hides how stale the pin is. The local checkout at
+# /data2/chromaprint-next sits two commits ahead of 0.1.0 (both SIMD); those two
+# commits were checked to be fingerprint-neutral out of tree rather than by
+# patching them in here. See docs/spikes/S4-chromaprint-streaming.md.
+chromaprint-next = "0.1"
