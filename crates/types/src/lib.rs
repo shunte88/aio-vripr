@@ -12,5 +12,5 @@
 pub mod format;
 pub mod rate;
 
-pub use format::{CaptureMode, SampleFormat};
+pub use format::{CaptureMode, SampleFormat, StorageFormat};
 pub use rate::{STANDARD_RATES, SampleRate};

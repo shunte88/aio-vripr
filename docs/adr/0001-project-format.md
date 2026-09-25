@@ -70,7 +70,8 @@ last byte. The findings that bear directly on this decision:
 ## Consequences
 
 - WP-02 builds the schema against a real `.aup4`, diffed in CI, rather than against a
-  description of one.
+  description of one. Built 2026-09-25; the result is documented in
+  [`docs/SCHEMA.md`](../SCHEMA.md), generated from the DDL.
 - WP-20 builds the importer. The corpus is its regression set and needs a fixture
   shrinker, since 451 MB to 4.7 GB projects are not committable.
 - The clean-room constraint (risk R13) holds: the document grammar was derived by

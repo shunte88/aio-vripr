@@ -543,7 +543,7 @@ sequencing, not as a forecast. Dependencies are hard unless noted.
 | WP | Scope | Req | Deps | Sess | Exit criteria |
 |----|-------|-----|------|------|---------------|
 | **01** | Workspace scaffold: cargo workspace per §6, CI matrix (Linux x86_64/aarch64, Windows, macOS), clippy/fmt/deny gates, MSRV pin, licence + notices ported | §6, D7, D10 | - | 5 | **Built 2026-09-25.** Ten `vcw-*` crates under `crates/`, one per §6 group with §6's leaves as modules ([ADR-0003](docs/adr/0003-workspace-layout.md)); spikes moved to their own excluded workspace; `fmt`/`clippy -D warnings`/`test`/`cargo deny check` all clean locally on Linux x86_64. The aarch64, Windows and macOS legs are asserted by `.github/workflows/ci.yml` and **unverified until it runs on a push** - aarch64 Linux runs natively on `ubuntu-24.04-arm` rather than cross-compiled, because `alsa-sys` and bundled SQLite are what a cross-build gets wrong quietly |
-| **02** | `project`: schema v1 as an **AUP4 superset** (`sampleblocks` column-for-column, same summary pyramids, never-update-a-block), `application_id`/`user_version`, transactional migrations, create/open/validate, integrity check | §12, §16, §49 | S2, S5 | 8 | Round-trip + migration property tests; schema doc generated from source; `sampleblocks` shape diffed against a real `.aup4` in CI |
+| **02** | `project`: schema v1 as an **AUP4 superset** (`sampleblocks` column-for-column, same summary pyramids, never-update-a-block), `application_id`/`user_version`, transactional migrations, create/open/validate, integrity check | §12, §16, §49 | S2, S5 | 8 | **Built 2026-09-25.** Schema v1 in `vcw-project`: create/open/read-only-open/close, transactional migrations, `validate()` with 17 finding codes, `integrity_check()`. 44 tests. Round-trip proves bytes survive across all five storage formats; `tests/migrations.rs` proves resumption from any version reaches the same schema and that a failing step leaves no trace; [`docs/SCHEMA.md`](docs/SCHEMA.md) is generated from the DDL and `tests/schema_doc.rs` fails on drift *and* cross-checks the parse against `PRAGMA table_info`; `tests/aup4_shape.rs` diffs `sampleblocks` against DDL extracted verbatim from a corpus `.aup3` **and** `.aup4`. Not yet exercised: anything a real capture writes, which is WP-05 |
 | **03** | `audio/devices`: enumeration, capability probing, independent in/out selection, persistence, hot-unplug handling | §7, §8 | S1 | 4 | Device matrix reported on 3 OS; unplug during idle/record is non-corrupting |
 | **04** | `audio/capture`: CPAL stream, `CaptureMode` negotiation, bounded lock-free ring, RT-safe callback, diagnostics counters, **and a per-platform format verifier** (S1 finding 1 - CPAL alone cannot detect a silent resample) | §9, §10, §38 | 03 | 9 | Callback provably allocation-free and lock-free; requested vs negotiated reported; **negotiated format cross-checked against the OS and bit-perfect never claimed without that confirmation**; counters persisted |
 | **05** | `project/persistence`: capture writer thread, batched transactions, checkpoint policy from S2 | §13, §14 | 02, 04 | 6 | 90-min 24/192 soak, zero loss, bounded WAL |
@@ -704,26 +704,27 @@ demonstrable from CLI or UI.
 ## 12. Immediate next actions
 
 *Updated 2026-09-25. The three actions that stood here - repo groundwork, S1, S2 - are
-all done, and so are S3, S4 and S5.*
+all done, and so are S3, S4 and S5. WP-01 and WP-02 are built.*
 
-1. **Next** - **WP-02, the `.vcw` schema.** The largest single lever in Phase 1 and the
-   one the whole recovery story hangs off. It has everything it needs: D1 locked and
-   validated against real AUP4 bytes, D2 locked, S2's block parameters provisional but
-   measured, and a 30-project corpus to diff `sampleblocks` against in CI. Build the
-   schema as a superset, not as a clone - §8's 32-bit integer format is the case
-   Audacity cannot represent, and pretending otherwise is how a format grows a lie.
+1. **Next** - **WP-03 and WP-04, devices and capture.** With the schema in place the
+   audio side is the critical path: WP-05's writer needs WP-04, and WP-04 needs WP-03.
+   S1 has already fixed the shape of both - select by PCM id, and never claim
+   bit-perfect without OS confirmation, because CPAL cannot detect a silent resample on
+   its own.
 2. **In parallel, on the machine's own time** - the three measurement jobs still queued
    from Phase 0, none of which need attention while they run:
    - **D3's firmed-config soak** (`synchronous=FULL` + per-channel blocks). **D3 does
-     not close until this runs**, and it is a G0 exit item.
+     not close until this runs**, it is a G0 exit item, and WP-02 has now baked D3's
+     block parameters into `schema.rs` as constants, so the soak also settles those.
    - **S3's `cpu-matrix.sh`**, written and unrun. Until it does, whether the
      `OffscreenCanvas` worker reduces *total* CPU rather than main-thread blocking is
      unmeasured - and that is the figure the Pi 5 decision needs.
    - **S3's two R8 isolation soaks** (producer stopped; `echo` disabled), which split
      the +1.46 MiB/min webview growth into baseline versus per-message cost. Needed
      before G2, not before G0.
-3. **Then** - WP-03 and WP-04, devices and capture. S1 has already fixed the shape of
-   both: select by PCM id, and never claim bit-perfect without OS confirmation.
+3. **Then** - WP-05 and WP-06, the persistence writer and recovery. These are what turn
+   WP-02's schema from a shape into a guarantee: every WP-02 test today builds its
+   blocks synthetically, and nothing has yet been written by a real capture.
 
 **The remaining G0 exposure is hardware, not spikes.** Windows, Pi 5, Android, macOS
 and the real converters (HiFiBerry DAC+ADC Pro, Tascam DA-3000) are all re-runs of

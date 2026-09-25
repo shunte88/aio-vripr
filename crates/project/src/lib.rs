@@ -1,7 +1,7 @@
 //! The `.vcw` project: a single self-contained SQLite file.
 //!
 //! Requirements: §12 (format), §13, §14 (block capture and transactions), §15
-//! (recovery), §16, §29, §31, §49.
+//! (recovery), §16 (versioning), §29, §31, §49.
 //!
 //! D1 fixes the shape: the schema is a deliberate *superset* of Audacity's AUP4 -
 //! `sampleblocks` column-for-column identical, same summary pyramids, blocks never
@@ -12,11 +12,44 @@
 //! Superset, not clone: §8 requires 32-bit integer capture and Audacity has no
 //! sample-format code for it (S5). Compatibility is architectural and one-way -
 //! we import `.aup3` and `.aup4`, we do not write them.
+//!
+//! ```no_run
+//! # fn main() -> Result<(), vcw_project::Error> {
+//! use vcw_project::{validate, Options, Project};
+//!
+//! let project = Project::create("side-a.vcw")?;
+//! assert!(validate(&project, Options::default())?.is_clean());
+//! project.close()?;
+//! # Ok(()) }
+//! ```
 
 pub mod disc;
+pub mod doc;
+pub mod error;
+pub mod meta;
+pub mod migrate;
 pub mod persistence;
 pub mod recovery;
+pub mod schema;
 pub mod session;
 pub mod side;
 pub mod sqlite;
 pub mod track;
+pub mod validate;
+
+pub use error::{Error, Result};
+pub use migrate::{MIGRATIONS, Migration};
+pub use schema::{APPLICATION_ID, EXTENSION, FORMAT_VERSION, SCHEMA_VERSION};
+pub use sqlite::{Access, Project, block_checksum};
+pub use validate::{Finding, Options, Report, integrity_check, validate};
+
+/// Unix seconds, for the `*_at` columns.
+///
+/// Saturating rather than panicking on a clock before the epoch: a wrong timestamp
+/// is a nuisance, and refusing to commit a captured block over it is not.
+pub(crate) fn now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}

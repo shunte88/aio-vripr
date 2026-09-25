@@ -10,8 +10,12 @@ authors.workspace = true
 
 [dependencies]
 vcw-types = { workspace = true }
+crc32fast = { workspace = true }
 rusqlite = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

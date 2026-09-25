@@ -87,6 +87,100 @@ pub enum CaptureMode {
     Exclusive,
 }
 
+/// How a block of samples is laid out on disk, and the `sampleformat` code that
+/// records it.
+///
+/// Distinct from [`SampleFormat`], which says what the samples *are*. The same
+/// logical format can be stored two ways: Audacity pads 24-bit to four bytes, and
+/// we do not. A block therefore carries a storage code, not a sample format, and
+/// the codes are a superset of Audacity's three.
+///
+/// The encoding is Audacity's - `(bytes_per_sample << 16) | type_code` - kept so
+/// that imported blocks need no rewriting and stay byte-identical to the source
+/// project. Type code 1 is integer and 15 is float in Audacity's space; the two
+/// formats it has no code for take type code 2, which Audacity never emits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum StorageFormat {
+    /// 16-bit integer, 2 bytes. Audacity's code, identical meaning.
+    Int16,
+    /// 24-bit integer packed into 3 bytes. Ours: this is what the device hands us
+    /// and D4 stores it verbatim, where Audacity would pad it.
+    Int24Packed,
+    /// 24-bit integer padded into 4 bytes. Audacity's code and layout, produced
+    /// only by import.
+    Int24Padded,
+    /// 32-bit integer, 4 bytes. Ours; §8 requires it and Audacity has no code for
+    /// it, which is the concrete reason D1 is a superset rather than a clone.
+    Int32,
+    /// 32-bit float, 4 bytes. Audacity's code, identical meaning.
+    Float32,
+}
+
+impl StorageFormat {
+    /// The `sampleformat` code written into a block row.
+    pub const fn code(self) -> u32 {
+        match self {
+            Self::Int16 => 0x0002_0001,
+            Self::Int24Packed => 0x0003_0002,
+            Self::Int24Padded => 0x0004_0001,
+            Self::Int32 => 0x0004_0002,
+            Self::Float32 => 0x0004_000F,
+        }
+    }
+
+    /// Reads a `sampleformat` code from a `.vcw` or an imported Audacity project.
+    pub const fn from_code(code: u32) -> Option<Self> {
+        match code {
+            0x0002_0001 => Some(Self::Int16),
+            0x0003_0002 => Some(Self::Int24Packed),
+            0x0004_0001 => Some(Self::Int24Padded),
+            0x0004_0002 => Some(Self::Int32),
+            0x0004_000F => Some(Self::Float32),
+            _ => None,
+        }
+    }
+
+    /// Bytes one sample of one channel occupies in the stored blob.
+    pub const fn bytes_per_sample(self) -> usize {
+        ((self.code() >> 16) & 0xFFFF) as usize
+    }
+
+    /// What the samples are, independent of how they are laid out.
+    pub const fn sample_format(self) -> SampleFormat {
+        match self {
+            Self::Int16 => SampleFormat::S16,
+            Self::Int24Packed | Self::Int24Padded => SampleFormat::S24,
+            Self::Int32 => SampleFormat::S32,
+            Self::Float32 => SampleFormat::F32,
+        }
+    }
+
+    /// Whether Audacity writes this code, i.e. whether a block carrying it could
+    /// have arrived by import.
+    pub const fn is_audacity(self) -> bool {
+        matches!(self, Self::Int16 | Self::Int24Padded | Self::Float32)
+    }
+
+    /// How VCW stores a freshly captured sample format: verbatim, no padding (D4).
+    pub const fn native_for(format: SampleFormat) -> Self {
+        match format {
+            SampleFormat::S16 => Self::Int16,
+            SampleFormat::S24 => Self::Int24Packed,
+            SampleFormat::S32 => Self::Int32,
+            SampleFormat::F32 => Self::Float32,
+        }
+    }
+
+    /// Every storage format, for exhaustive tests and schema documentation.
+    pub const ALL: [Self; 5] = [
+        Self::Int16,
+        Self::Int24Packed,
+        Self::Int24Padded,
+        Self::Int32,
+        Self::Float32,
+    ];
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -110,5 +204,58 @@ mod tests {
     fn audacity_pads_24_bit_and_we_do_not() {
         assert_eq!(SampleFormat::S24.bytes_per_sample(), 3);
         assert_eq!(SampleFormat::S24.audacity_bytes(), Some(4));
+    }
+
+    #[test]
+    fn storage_codes_round_trip_and_are_distinct() {
+        let mut seen = std::collections::HashSet::new();
+        for s in StorageFormat::ALL {
+            assert!(seen.insert(s.code()), "duplicate code for {s:?}");
+            assert_eq!(StorageFormat::from_code(s.code()), Some(s));
+        }
+    }
+
+    #[test]
+    fn audacitys_three_codes_are_ours_verbatim() {
+        for f in [SampleFormat::S16, SampleFormat::S24, SampleFormat::F32] {
+            let code = f.audacity_code().expect("representable");
+            let stored = StorageFormat::from_code(code).expect("we read it too");
+            assert!(stored.is_audacity());
+            assert_eq!(stored.sample_format(), f);
+            assert_eq!(Some(stored.bytes_per_sample()), f.audacity_bytes());
+        }
+    }
+
+    #[test]
+    fn our_two_extra_codes_are_outside_audacitys() {
+        for s in [StorageFormat::Int24Packed, StorageFormat::Int32] {
+            assert!(!s.is_audacity());
+            assert_eq!(SampleFormat::from_audacity_code(s.code()), None);
+        }
+    }
+
+    #[test]
+    fn capture_stores_verbatim_and_never_pads() {
+        for f in [
+            SampleFormat::S16,
+            SampleFormat::S24,
+            SampleFormat::S32,
+            SampleFormat::F32,
+        ] {
+            let stored = StorageFormat::native_for(f);
+            assert_eq!(stored.sample_format(), f);
+            assert_eq!(stored.bytes_per_sample(), f.bytes_per_sample());
+        }
+        assert_eq!(
+            StorageFormat::native_for(SampleFormat::S24).bytes_per_sample(),
+            3
+        );
+    }
+
+    #[test]
+    fn the_width_lives_in_the_high_half_of_the_code() {
+        for s in StorageFormat::ALL {
+            assert_eq!(s.bytes_per_sample(), (s.code() >> 16) as usize);
+        }
     }
 }

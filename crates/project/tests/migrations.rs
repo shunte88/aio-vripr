@@ -1,0 +1,221 @@
+//! The migration runner, tested against a synthetic migration set.
+//!
+//! Synthetic on purpose. There is exactly one real migration today, so testing
+//! only against `MIGRATIONS` would test that a single step works and prove nothing
+//! about the machinery §16 depends on. These fixtures exercise multi-step upgrades,
+//! resumption from an intermediate version, and rollback.
+
+use rusqlite::Connection;
+use vcw_project::migrate::{self, Migration};
+
+/// Migration 1 has to create `schema_migrations` itself, because the runner
+/// records itself there - exactly as the real schema does.
+const V1: &str = "
+CREATE TABLE schema_migrations (
+    version     INTEGER PRIMARY KEY,
+    description TEXT    NOT NULL,
+    applied_at  INTEGER NOT NULL,
+    applied_by  TEXT    NOT NULL
+);
+CREATE TABLE alpha (id INTEGER PRIMARY KEY, a TEXT);
+";
+
+const V2: &str = "CREATE TABLE beta (id INTEGER PRIMARY KEY, b TEXT);";
+const V3: &str = "ALTER TABLE alpha ADD COLUMN c INTEGER NOT NULL DEFAULT 0;";
+
+const SET: &[Migration] = &[
+    Migration {
+        version: 1,
+        description: "alpha",
+        sql: V1,
+    },
+    Migration {
+        version: 2,
+        description: "beta",
+        sql: V2,
+    },
+    Migration {
+        version: 3,
+        description: "alpha.c",
+        sql: V3,
+    },
+];
+
+/// A migration whose second statement fails, after the first has succeeded.
+const BROKEN: &[Migration] = &[
+    Migration {
+        version: 1,
+        description: "alpha",
+        sql: V1,
+    },
+    Migration {
+        version: 2,
+        description: "half-good",
+        sql: "CREATE TABLE gamma (id INTEGER PRIMARY KEY); CREATE TABLE alpha (oops);",
+    },
+    Migration {
+        version: 3,
+        description: "never reached",
+        sql: "CREATE TABLE delta (id INTEGER);",
+    },
+];
+
+fn db() -> Connection {
+    Connection::open_in_memory().unwrap()
+}
+
+/// Everything in `sqlite_master`, as a comparable fingerprint of the schema.
+fn fingerprint(conn: &Connection) -> Vec<(String, String, String)> {
+    let mut stmt = conn
+        .prepare("SELECT type, name, COALESCE(sql, '') FROM sqlite_master ORDER BY type, name")
+        .unwrap();
+    stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap()
+}
+
+fn version(conn: &Connection) -> u32 {
+    migrate::current_version(conn).unwrap()
+}
+
+fn tables(conn: &Connection) -> Vec<String> {
+    let mut stmt = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+        .unwrap();
+    stmt.query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<rusqlite::Result<Vec<_>>>()
+        .unwrap()
+}
+
+#[test]
+fn an_empty_database_gets_every_migration_in_order() {
+    let mut conn = db();
+    assert_eq!(migrate::apply(&mut conn, SET).unwrap(), vec![1, 2, 3]);
+    assert_eq!(version(&conn), 3);
+    assert_eq!(tables(&conn), ["alpha", "beta", "schema_migrations"]);
+
+    let recorded: Vec<(u32, String)> = {
+        let mut stmt = conn
+            .prepare("SELECT version, description FROM schema_migrations ORDER BY version")
+            .unwrap();
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+    };
+    assert_eq!(
+        recorded,
+        [
+            (1, "alpha".into()),
+            (2, "beta".into()),
+            (3, "alpha.c".into())
+        ]
+    );
+}
+
+#[test]
+fn applying_again_changes_nothing() {
+    let mut conn = db();
+    migrate::apply(&mut conn, SET).unwrap();
+    let before = fingerprint(&conn);
+
+    assert!(migrate::apply(&mut conn, SET).unwrap().is_empty());
+    assert_eq!(fingerprint(&conn), before);
+    assert_eq!(version(&conn), 3);
+}
+
+/// The property §16 actually needs: however far a project got, finishing the
+/// migration lands it on the same schema as a fresh one.
+#[test]
+fn resuming_from_any_version_reaches_the_same_schema() {
+    let mut fresh = db();
+    migrate::apply(&mut fresh, SET).unwrap();
+    let target = fingerprint(&fresh);
+
+    for stop in 1..=SET.len() {
+        let mut conn = db();
+        migrate::apply(&mut conn, &SET[..stop]).unwrap();
+        assert_eq!(version(&conn), stop as u32);
+
+        let applied = migrate::apply(&mut conn, SET).unwrap();
+        assert_eq!(applied, ((stop as u32 + 1)..=3).collect::<Vec<_>>());
+        assert_eq!(
+            fingerprint(&conn),
+            target,
+            "resuming from version {stop} diverged"
+        );
+        assert_eq!(version(&conn), 3);
+    }
+}
+
+#[test]
+fn pending_reports_what_is_left() {
+    let mut conn = db();
+    assert_eq!(migrate::pending(&conn, SET).unwrap().len(), 3);
+    migrate::apply(&mut conn, &SET[..1]).unwrap();
+    let left: Vec<u32> = migrate::pending(&conn, SET)
+        .unwrap()
+        .iter()
+        .map(|m| m.version)
+        .collect();
+    assert_eq!(left, [2, 3]);
+}
+
+#[test]
+fn a_failing_migration_leaves_no_trace() {
+    let mut conn = db();
+    let err = migrate::apply(&mut conn, BROKEN).unwrap_err();
+    match err {
+        vcw_project::Error::Migration {
+            version,
+            ref description,
+            ..
+        } => {
+            assert_eq!(version, 2);
+            assert_eq!(description, "half-good");
+        }
+        other => panic!("expected Migration, got {other:?}"),
+    }
+
+    // Migration 1 stands. Migration 2 is entirely gone, including the table its
+    // first statement created. Migration 3 was never attempted.
+    assert_eq!(version(&conn), 1);
+    assert_eq!(tables(&conn), ["alpha", "schema_migrations"]);
+    let recorded: i64 = conn
+        .query_row("SELECT count(*) FROM schema_migrations", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(recorded, 1);
+}
+
+#[test]
+fn a_failure_can_be_retried_once_the_migration_is_fixed() {
+    let mut conn = db();
+    migrate::apply(&mut conn, BROKEN).unwrap_err();
+    assert_eq!(migrate::apply(&mut conn, SET).unwrap(), vec![2, 3]);
+    assert_eq!(version(&conn), 3);
+}
+
+/// A fresh project is a migration run against an empty database, so the create
+/// path and the upgrade path cannot drift apart. This is what proves it.
+#[test]
+fn the_real_migration_set_builds_the_real_schema() {
+    let mut migrated = db();
+    migrate::apply(&mut migrated, vcw_project::MIGRATIONS).unwrap();
+
+    let direct = db();
+    direct
+        .execute_batch(vcw_project::schema::SCHEMA_V1)
+        .unwrap();
+
+    let mut from_migration = fingerprint(&migrated);
+    // The migration run inserts its own audit row; the fingerprint is structural,
+    // so the only difference should be none at all.
+    from_migration.retain(|(kind, name, _)| !(kind == "table" && name == "sqlite_sequence"));
+    let mut from_ddl = fingerprint(&direct);
+    from_ddl.retain(|(kind, name, _)| !(kind == "table" && name == "sqlite_sequence"));
+
+    assert_eq!(from_migration, from_ddl);
+    assert_eq!(version(&migrated), vcw_project::SCHEMA_VERSION);
+}

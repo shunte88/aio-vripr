@@ -1,10 +1,10 @@
 # VCW - project status
 
 **As of:** 2026-09-25
-**Phase:** 1 has started - WP-01 is built. All five Phase 0 spikes returned verdicts on
-their primary platform; gate G0 remains open on hardware coverage and on D3's
-firmed-config soak, neither of which blocks foundation work.
-**Branch:** `main` at `19dd459` plus the WP-01 scaffold in the working tree.
+**Phase:** 1 is underway - WP-01 and WP-02 are built. All five Phase 0 spikes returned
+verdicts on their primary platform; gate G0 remains open on hardware coverage and on
+D3's firmed-config soak, neither of which blocks foundation work.
+**Branch:** `main` at `cd8e445` (WP-01), plus WP-02 in the working tree.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -406,23 +406,82 @@ than cross-compiled. `alsa-sys` and bundled SQLite are exactly the dependencies 
 cross-build gets wrong quietly, and aarch64 is the Pi 5 target, so the cross-compile
 saves nothing worth having.
 
+## Phase 1 - WP-02, the `.vcw` schema
+
+Built 2026-09-25. Schema v1 lives in `vcw-project` and is a deliberate superset of
+Audacity's AUP4: `sampleblocks` is reproduced column for column, including the
+AUTOINCREMENT key and the *absence* of `NOT NULL`, so an imported block needs no
+rewriting and stays byte-identical. Everything else is the half Audacity has nowhere
+to put.
+
+| module | what it is |
+|---|---|
+| `schema.rs` | the v1 DDL, heavily commented, plus the identity constants |
+| `migrate.rs` | the transactional runner: one transaction per step, `user_version` moved inside it |
+| `sqlite.rs` | `Project::create` / `open` / `open_read_only` / `close`, connection pragmas, `block_checksum` |
+| `meta.rs` | the six required `meta` keys, §16's versions among them |
+| `validate.rs` | `validate()` with 17 finding codes, and `integrity_check()` |
+| `error.rs` | a `NotAProject` that tells an Audacity file it wants the importer |
+| `doc.rs` | generates [`SCHEMA.md`](SCHEMA.md) from the DDL, comments and all |
+
+Six tables. `sampleblocks` is Audacity's; `captures`, `capture_blocks`,
+`capture_diagnostics`, `meta` and `schema_migrations` are ours. `capture_blocks` is the
+key one: Audacity keeps block provenance inside its document blob, and recovery cannot
+parse a document that was never written, so ours is a table that recovery can read from
+committed rows alone.
+
+**Sample formats.** §8 requires 32-bit integer capture and D4 stores 24-bit verbatim,
+and Audacity has a code for neither - it knows three formats and pads 24-bit to four
+bytes. `StorageFormat` in `vcw-types` reuses Audacity's three codes unchanged and adds
+`Int24Packed` (`0x00030002`) and `Int32` (`0x00040002`) in unused space, using
+Audacity's own `(width << 16) | type` encoding with a type code it never emits. Nothing
+imported is touched; nothing exported is a lie.
+
+#### What is verified, and what is not
+
+44 tests in `vcw-project`, 55 across the workspace, all green, plus `fmt`, `clippy -D
+warnings` and `cargo deny check`.
+
+- `tests/aup4_shape.rs` diffs `sampleblocks` against DDL extracted **verbatim** from a
+  corpus `.aup3` *and* `.aup4`, column for column via `PRAGMA table_info`, and asserts
+  the two Audacity versions agree with each other. This is D1's central claim, now
+  checked by CI instead of asserted in prose.
+- `tests/roundtrip.rs` writes and reads blocks in all five storage formats across seven
+  shapes and compares bytes. It also proves a read-only open honours the `-wal` - the
+  writer is held open so the rows exist *only* in the WAL, which is the S5 trap that
+  `immutable=1` falls into.
+- `tests/migrations.rs` runs a synthetic multi-step set, because one real migration
+  proves nothing about the machinery: resumption from any intermediate version reaches
+  the same schema, re-applying is a no-op, and a step that fails halfway leaves
+  `user_version`, the table set and `schema_migrations` untouched and retryable.
+- `tests/schema_doc.rs` regenerates `docs/SCHEMA.md` and fails on drift, then
+  cross-checks the parse against `PRAGMA table_info` on a real database - a generator
+  is only as trustworthy as its parser, and a self-consistent wrong document is worse
+  than none.
+
+Not verified: anything a real capture writes. Every test above builds its blocks
+synthetically. The writer thread, batching and checkpoint policy are WP-05, and the
+kill-at-random-point recovery suite is WP-06. D3's block parameters are baked into
+`schema.rs` as constants and stay **provisional** until the firmed-config soak runs.
+
 ## Next up
 
-**`WP-02`, the `.vcw` schema.** The largest single lever in Phase 1: schema v1 as a
-deliberate AUP4 superset, `sampleblocks` column-for-column, transactional migrations,
-create/open/validate, integrity check. Everything it needs is in place - D1 locked and
-validated against real AUP4 bytes, D2 locked, S2's block parameters measured, and a
-30-project corpus to diff the `sampleblocks` shape against in CI.
+**`WP-03` and `WP-04`, device enumeration and capture.** The dependency chain says
+WP-05 (the persistence writer) needs WP-04, and WP-04 needs WP-03, so the audio side is
+now the critical path. WP-04 carries the S1 finding that matters most: CPAL alone cannot
+detect a silent resample, so the negotiated format has to be cross-checked against the
+OS and bit-perfection never claimed without that confirmation.
 
 Three measurement jobs stay queued and can run on the machine's own time: D3's
-firmed-config soak (**D3 does not close until it runs**), S3's `cpu-matrix.sh`, and
-S3's two R8 isolation soaks.
+firmed-config soak (**D3 does not close until it runs, and WP-02's block constants
+depend on it**), S3's `cpu-matrix.sh`, and S3's two R8 isolation soaks.
 
 ## Housekeeping
 
 - All of Phase 0 is committed: the spikes, the CPAL 0.18 upgrade and the `.vcw` rename
   at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
-  `19dd459`. The WP-01 scaffold is the current working-tree change.
+  `19dd459`. WP-01 is committed at `cd8e445`; WP-02 is the current working-tree
+  change.
 - **`/data2/source_rips`** is the source-audio corpus S4 ran against: 62 real vinyl rips,
   71 GB, 48 kHz and 192 kHz 32-bit WAV plus 24-bit FLAC. Distinct from
   `/data2/vinyl_rips`, which holds the 30 *projects* S5 used - 25 AUP3 and 5 AUP4, the

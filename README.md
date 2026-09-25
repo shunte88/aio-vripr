@@ -10,6 +10,7 @@ something it depends on.
 
 - **Requirements:** [REQUIREMENTS.md](REQUIREMENTS.md)
 - **Delivery plan:** [PROJECT_PLAN.md](PROJECT_PLAN.md)
+- **Project format:** [docs/SCHEMA.md](docs/SCHEMA.md) (generated from the schema)
 - **Spike findings:** [docs/spikes/](docs/spikes/)
 
 ## Status
@@ -36,6 +37,7 @@ under `crates/`, a four-target CI matrix, and the licence and toolchain gates.
 crates/          the product - one crate per REQUIREMENTS §6 group, §6's leaves
                  as modules. See docs/adr/0003-workspace-layout.md
 spikes/          Phase 0 evidence, a separate workspace, excluded from the product
+docs/SCHEMA.md   the .vcw schema, generated - do not edit by hand
 docs/adr/        architecture decision records
 docs/spikes/     the S1-S5 write-ups
 ```

@@ -1,0 +1,87 @@
+//! What can go wrong opening, creating or validating a project.
+
+use std::path::PathBuf;
+
+/// A project-layer failure.
+///
+/// Refusals are deliberately specific. §15 makes recovery a correctness
+/// requirement, and a recovery tool that reports "could not open project" has
+/// thrown away the information the user needs.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum Error {
+    /// The file exists but is not a VCW project.
+    #[error(
+        "{path} is not a VCW project: application_id is 0x{found:08X}{}",
+        describe_application_id(*found)
+    )]
+    NotAProject {
+        /// The file we were asked to open.
+        path: PathBuf,
+        /// The `application_id` the file actually carries.
+        found: u32,
+    },
+
+    /// The project was written by a newer VCW than this one.
+    ///
+    /// Refused rather than guessed at. §16 allows newer versions to upgrade older
+    /// projects; it says nothing about older versions reading newer ones, and a
+    /// partial read of a schema we do not know is how data gets lost.
+    #[error(
+        "{path} has schema version {found}, and this build understands up to {supported}. \
+         Upgrade VCW to open it."
+    )]
+    SchemaTooNew {
+        /// The file we were asked to open.
+        path: PathBuf,
+        /// The schema version in the file.
+        found: u32,
+        /// The newest schema version this build can read.
+        supported: u32,
+    },
+
+    /// A migration failed, and was rolled back.
+    #[error("migration to schema version {version} ({description}) failed and was rolled back")]
+    Migration {
+        /// The version being migrated to.
+        version: u32,
+        /// That migration's description.
+        description: String,
+        /// The underlying SQLite failure.
+        #[source]
+        source: rusqlite::Error,
+    },
+
+    /// The project opened, but its contents are not self-consistent.
+    #[error("{path} failed validation: {} problem(s)", findings.len())]
+    Invalid {
+        /// The project that failed.
+        path: PathBuf,
+        /// Every problem found, not just the first.
+        findings: Vec<String>,
+    },
+
+    /// SQLite said no.
+    #[error(transparent)]
+    Sqlite(#[from] rusqlite::Error),
+
+    /// The filesystem said no.
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
+
+/// Adds a hint when the `application_id` is one we recognise.
+fn describe_application_id(id: u32) -> &'static str {
+    match id {
+        0x4155_4459 => {
+            " - that is an Audacity project. Import it instead; VCW reads .aup3 and .aup4."
+        }
+        0 => {
+            " - the file has no application_id, so it is a plain SQLite database or not SQLite at all."
+        }
+        _ => "",
+    }
+}
+
+/// A project-layer result.
+pub type Result<T> = std::result::Result<T, Error>;
