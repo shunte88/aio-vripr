@@ -68,7 +68,7 @@ One row per capture session (§13, §15). A session is unfinished exactly when f
 | `sample_rate` | `INTEGER NOT NULL` | Hz, as negotiated with the device. Authoritative, unlike Audacity's project/@rate, which is only an editor preference. |
 | `channels` | `INTEGER NOT NULL` | Channel count. Blocks are stored per channel, never interleaved. |
 | `storage_format` | `INTEGER NOT NULL` | StorageFormat code, matching sampleblocks.sampleformat for this capture. |
-| `capture_mode` | `TEXT NOT NULL` | How the stream was opened: 'exclusive', 'shared' or 'unknown' (§9). |
+| `capture_mode` | `TEXT NOT NULL` | How the stream was opened: 'exclusive', 'native' or 'shared' (§9). These are CaptureMode's three spellings; a request, not a confirmed outcome. |
 | `host_api` | `TEXT` | CPAL host, e.g. 'ALSA', 'WASAPI', 'CoreAudio'. Recorded for provenance. |
 | `device_id` | `TEXT` | Stable device identifier where the platform offers one. |
 | `device_name` | `TEXT` | Human-readable device name at the time of capture. |

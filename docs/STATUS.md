@@ -1,11 +1,11 @@
 # VCW - project status
 
 **As of:** 2026-09-25
-**Phase:** 1 is underway - WP-01, WP-02 and WP-03 are built, the last of them on Linux
-x86_64 only. All five Phase 0 spikes returned verdicts on their primary platform; gate
-G0 remains open on hardware coverage and on D3's firmed-config soak, neither of which
+**Phase:** 1 is underway - WP-01 through WP-04 are built, the last two on Linux x86_64
+only. All five Phase 0 spikes returned verdicts on their primary platform; gate G0
+remains open on hardware coverage and on D3's firmed-config soak, neither of which
 blocks foundation work.
-**Branch:** `main` at `acb8835` (WP-02), plus WP-03 in the working tree.
+**Branch:** `main` at `941981a` (WP-03), plus WP-04 in the working tree.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -541,20 +541,119 @@ silencing it needs `snd_lib_error_set_handler` through `alsa-sys`. And CPAL enum
 the same card twice on this host, once as `CARD=PCH` and once as `CARD=0` - harmless,
 because both keys open the same PCM, but it makes the list longer than the hardware.
 
+## Phase 1 - WP-04, capture
+
+Built 2026-09-25, **on Linux x86_64 only**. This is the work package the whole project
+turns on: §9's bit-perfect capture, §10's real-time callback, and §38's provenance. Its
+one non-negotiable rule is that the application never claims bit-perfection on the
+audio API's word.
+
+| module | what it is |
+|---|---|
+| `types/capture.rs` | `CaptureState`, `Diagnostics`, `CaptureInfo` - the vocabulary `vcw-audio` and `vcw-project` share without depending on each other |
+| `audio/buffers.rs` | the wait-free SPSC ring: whole-chunk-or-nothing writes, a 500 ms floor from S2 |
+| `audio/verify.rs` | the OS cross-check. Reads `/proc/asound/.../hw_params` and compares rate, channels and format |
+| `audio/capture.rs` | `Request` -> `Negotiated`, the RT callback as `Sink::on_data`, the counters, and `verdict()` |
+| `audio/source.rs` | the `Source` trait, and `Simulated` - a device-free capture with fault injection |
+| `project/session.rs` | the `captures` and `capture_diagnostics` rows: begin, advance, record, finish |
+| `cli/capture.rs` | `vcw capture`, which drives all of it headlessly (§4.5) |
+
+**The callback is provably allocation-free, not assertedly.** The whole body of the
+CPAL callback is `Sink::on_data(&mut self, bytes: &[u8])`, an ordinary function over a
+byte slice. That is what makes it testable at all - a closure inside a live stream
+cannot be driven by a test. `tests/rt_safety.rs` installs a counting global allocator
+and runs it 1000 times on the ordinary path, 1000 times while overrunning, 1000 times
+on an empty callback, and once while recording a stream error. Every count is zero. The
+file's first test is the control: it allocates a `Vec` and asserts the counter *saw*
+it, because a broken counter would otherwise "prove" everything.
+
+Lock-freedom is claimed only as far as it is measured. That rtrb is wait-free SPSC and
+the counters are relaxed atomics is an argument from construction; what the file
+actually demonstrates is the consequence that matters - a consumer parked forever
+cannot make a callback take 100 ms, and the ring overruns instead.
+
+**Bit-perfection has exactly one source of truth**, the free function `verdict()`. It
+returns `Confirmed` only when all four hold: the OS agrees with the negotiated format,
+every field the caller pinned came back unchanged, the transport is direct hardware,
+and all four counters are zero. Anything else is `Refuted` with reasons or
+`Unconfirmed` with the gap named - never a pass by default. `Source::verdict` is a
+*defaulted* trait method precisely so no implementation can override it; a source that
+could override it could also lie. And `Negotiated::simulated` reports an unknown
+transport and a shared mode, so a simulated capture is refused the claim on two
+independent grounds however clean its counters are.
+
+**The verifier is pointed only at `hw:`.** Resolving a `plughw:` id to the card beneath
+it would confirm a format the application never received, which is worse than not
+checking. `plughw:`, `default`, `pipewire` and `pulse` all resolve to `None` and report
+`Unavailable`, and path traversal in a device id is rejected.
+
+**Counters are persisted, not merely counted.** `session.rs` writes both rows in one
+transaction, advances `frames` as the capture runs rather than once at the end, and
+keys recovery on `finished_at IS NULL` - the absence of a write, which is the one thing
+a crash cannot forge.
+
+#### What is verified, and what is not
+
+185 tests across the workspace, all green, plus `fmt`, `clippy -D warnings` and
+`cargo deny check`. 106 are in `vcw-audio`, 57 in `vcw-project`, 17 in `vcw-types`, and
+5 in `vcw-core`, which is where a test can finally watch a capture's counters land in a
+project file - the two crates are deliberately independent, so neither could prove it
+alone.
+
+Measured live on this host, through the new `vcw capture`:
+
+- `hw:CARD=0,DEV=0` with nothing pinned negotiated 96 kHz / 2 ch / S32 in exclusive mode
+  over a direct hardware path, and `/proc/asound/card0/pcm0c/sub0/hw_params` read back
+  `S32_LE 96000 Hz 2 ch`. 294912 frames in 3 s, every counter zero, verdict **bit-perfect,
+  confirmed against the OS**. That is the first end-to-end confirmation in the project.
+- The same card through `plughw:CARD=0,DEV=0` was refused: exclusive mode was downgraded
+  to shared and reported as a divergence, the transport is converting, and the verifier
+  declined to resolve the id at all. Two reasons, no claim.
+- A request for 22050 Hz - not a §8 rate and not one the card offers - is an error
+  naming what the device does offer, not a quiet capture at 44100.
+
+Device-free, in CI:
+
+- `audio/tests/capture_path.rs` runs the deterministic source through the ring and
+  compares every byte against a recomputed expectation. "The capture completed" becomes
+  "the capture contains exactly the right bytes in exactly the right order".
+- **R9, device removal mid-capture**, is closed for the capture path.
+  `Faults::unplug_after` makes the source go quiet without ending the stream; the tests
+  assert one stream error counted, no overruns, byte-exact data up to the moment it
+  went, the counters reaching the file, and `validate()` still clean afterwards. A cable
+  cannot be pulled by CI, so it is pulled here instead.
+- `core/tests/capture_to_project.rs` also drops a project handle mid-capture with no
+  `finish()` call, reopens the file, and asserts recovery can see how far it got and
+  that an unfinished capture does not read as a damaged project.
+
+**Exit criteria partly met.** "Callback provably allocation-free and lock-free",
+"requested vs negotiated reported" and "counters persisted" are done and demonstrated.
+The third clause - *"negotiated format cross-checked against the OS"* - is met **on
+Linux only**. Windows needs the WASAPI exclusive-mode format and macOS needs its own
+reading; both return `Unavailable` today, which downgrades the verdict to `Unconfirmed`
+rather than passing it, so the failure is in the safe direction. But an honest refusal
+to claim is not the same as a cross-check, and until those two exist WP-04 stays open.
+
+One deliberate omission: `vcw capture` drains the ring and discards the samples. WP-05
+owns the writer, and a second block-committing implementation that nothing else uses
+would be worse than none.
+
 ## Next up
 
-**`WP-04`, capture.** With WP-03 built the device layer is no longer the blocker, and
-WP-05 (the persistence writer) is waiting directly on WP-04. It carries the S1 finding
-that matters most: CPAL alone cannot detect a silent resample, so the negotiated format
-has to be cross-checked against the OS - `/proc/asound/card*/pcm*c/sub*/hw_params` on
-Linux, the WASAPI exclusive-mode format on Windows - and bit-perfection never claimed
-without that confirmation. WP-03 caught the weaker case, where the backend's own
-advertisement is wrong; WP-04 has to catch the one where the backend says yes and the
-hardware did something else.
+**`WP-05`, the persistence writer.** WP-02's schema has still never had a byte written
+into it by a capture - every block in every test today is synthetic - and this is what
+closes that. WP-04 left it what it needs: a `Source` trait with a live CPAL
+implementation *and* a simulated one behind it, so the writer can be built and soaked in
+CI on a machine with no sound card and then run unchanged against a turntable. Its exit
+criterion is the 90-minute 24/192 soak with zero loss and a bounded WAL, which is the
+last unproven claim in the storage stack.
 
-Also queued from WP-04: the file-backed capture source, which the plan calls the single
-highest-leverage testing decision in it. Deterministic, device-free capture tests are
-what make WP-05's soak and WP-06's kill-at-random-point suite runnable in CI.
+Then **`WP-06`**, recovery, against the same trait and the same `session` rows.
+
+Still open on WP-03 and WP-04, and both for the same reason: **Windows and macOS.** The
+device matrix is reported on one OS, and the OS format verifier exists for Linux/ALSA
+only. On the other two the verdict degrades to `Unconfirmed` rather than to a false
+pass, which is the right failure, but neither work package can close on it.
 
 Three measurement jobs stay queued and can run on the machine's own time: D3's
 firmed-config soak (**D3 does not close until it runs, and WP-02's block constants

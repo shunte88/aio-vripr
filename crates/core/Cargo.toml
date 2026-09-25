@@ -18,5 +18,8 @@ vcw-identify = { workspace = true }
 vcw-metadata = { workspace = true }
 vcw-fingerprint = { workspace = true }
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [lints]
 workspace = true

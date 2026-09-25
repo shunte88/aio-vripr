@@ -30,8 +30,14 @@ decision - in [docs/STATUS.md](docs/STATUS.md).
 
 Phase 1 has started. The workspace scaffold (WP-01) is in place: ten `vcw-*` crates
 under `crates/`, a four-target CI matrix, and the licence and toolchain gates. Schema v1
-(WP-02) is built and [documented](docs/SCHEMA.md), and device enumeration (WP-03) is
-built on Linux x86_64, with Windows and macOS still unverified.
+(WP-02) is built and [documented](docs/SCHEMA.md); device enumeration (WP-03) and
+capture (WP-04) are built on Linux x86_64, with Windows and macOS still unverified.
+
+Capture has been confirmed bit-perfect end to end on this machine: 96 kHz / 2 ch / S32
+requested and granted in exclusive mode over a direct hardware path, cross-checked
+against what the kernel says the card is actually running. That cross-check is the
+point - the audio API's report of its own success is not evidence, and on the same card
+through a converting path the claim is correctly refused.
 
 ## Layout
 
@@ -60,17 +66,33 @@ cargo run -p vcw-cli -- doctor
 ```
 
 `vcw` is the headless driver - §4.5 requires the whole workflow to be drivable without a
-UI. Today it can answer what this machine will record:
+UI. Today it can answer what this machine will record, and record from it:
 
 ```sh
 cargo run -p vcw-cli -- devices --which input --hardware
 cargo run -p vcw-cli -- formats "hw:CARD=0,DEV=0" --which input --confirm
+cargo run -p vcw-cli -- capture "hw:CARD=0,DEV=0" --rate 96000 --seconds 10
 ```
 
 `devices` lists what the host advertises; `--hardware` keeps only the direct paths that
 could be bit-perfect. `formats` shows the §8 configurations one device offers, and
 `--confirm` opens it once per configuration to find out which of them are real - an
 advertisement is not a promise, and on an ALSA plug device most of them are not.
+
+`capture` opens the device, reports what was asked for beside what was granted, reads
+the format back from the operating system, and says whether the result can honestly be
+called bit-perfect. It refuses the claim rather than guessing:
+
+```
+  negotiated  96000 Hz, 2 ch, S32, exclusive, direct hardware, buffer backend default
+  os says     confirmed by /proc/asound/card0/pcm0c/sub0/hw_params: S32_LE 96000 Hz 2 ch
+  counters    0 overruns, 0 underruns, 0 dropped frames, 0 stream errors
+  verdict     bit-perfect, confirmed against the OS
+```
+
+Add `--project take1.vcw` to record the session and its diagnostics counters into a
+project file. The samples themselves are drained and discarded for now: the writer that
+commits them is WP-05.
 
 Requires a Rust toolchain at 1.90 or newer and, on Linux, `libasound2-dev`. SQLite is
 compiled in, so there is no system SQLite to match.

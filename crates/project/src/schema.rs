@@ -132,7 +132,8 @@ CREATE TABLE captures (
     channels       INTEGER NOT NULL,
     -- StorageFormat code, matching sampleblocks.sampleformat for this capture.
     storage_format INTEGER NOT NULL,
-    -- How the stream was opened: 'exclusive', 'shared' or 'unknown' (§9).
+    -- How the stream was opened: 'exclusive', 'native' or 'shared' (§9). These are
+    -- CaptureMode's three spellings; a request, not a confirmed outcome.
     capture_mode   TEXT    NOT NULL,
     -- CPAL host, e.g. 'ALSA', 'WASAPI', 'CoreAudio'. Recorded for provenance.
     host_api       TEXT,

@@ -37,15 +37,18 @@
 //! convenience, it is how the architectural rule in §2 gets tested - a core that
 //! cannot be driven headlessly has leaked into its shell.
 //!
-//! Today it carries `doctor`, `devices` and `formats`: enough to answer "what can
-//! this machine record, and through which path", which is WP-03's whole question.
-//! The capture verbs arrive with the engine at WP-07.
+//! Today it carries `doctor`, `devices` and `formats`, which answer "what can
+//! this machine record, and through which path" (WP-03), and `capture`, which
+//! answers "and what did it actually do" (WP-04). The editing and export verbs
+//! arrive with the engine at WP-07.
 
+mod capture;
 mod devices;
 
 use clap::{Parser, Subcommand};
 use vcw_types::STANDARD_RATES;
 
+use crate::capture::{Format, Mode};
 use crate::devices::Which;
 
 #[derive(Parser)]
@@ -96,6 +99,39 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+
+    /// Record from a device and report what was really negotiated (§9).
+    ///
+    /// The samples are drained and discarded: WP-05 owns the writer. What this
+    /// persists, given --project, is the capture session and its counters.
+    Capture {
+        /// Device id, as printed by `vcw devices`. A name works only if unique.
+        device: String,
+        /// Sample rate in Hz. Omit to take the best the device offers.
+        #[arg(long)]
+        rate: Option<u32>,
+        /// Channel count. Omit to take the best on offer.
+        #[arg(long)]
+        channels: Option<u16>,
+        /// Sample format. Omit to take the widest integer format available.
+        #[arg(long, value_enum)]
+        format: Option<Format>,
+        /// How to open the device. Only exclusive can be bit-perfect (§9).
+        #[arg(long, value_enum, default_value_t = Mode::Exclusive)]
+        mode: Mode,
+        /// How long to record.
+        #[arg(long, default_value_t = 5.0)]
+        seconds: f64,
+        /// Ring capacity in milliseconds. Raised to the 500 ms floor if lower.
+        #[arg(long, default_value_t = 1000)]
+        ring_millis: u32,
+        /// Project file to record the session in. Created if absent.
+        #[arg(long)]
+        project: Option<std::path::PathBuf>,
+        /// Machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -114,6 +150,27 @@ fn main() -> anyhow::Result<()> {
             max_channels,
             json,
         } => devices::formats(&device, which, confirm, max_channels, json),
+        Command::Capture {
+            device,
+            rate,
+            channels,
+            format,
+            mode,
+            seconds,
+            ring_millis,
+            project,
+            json,
+        } => capture::run(&capture::Options {
+            device,
+            rate,
+            channels,
+            format,
+            mode,
+            seconds,
+            ring_millis,
+            project,
+            json,
+        }),
     }
 }
 

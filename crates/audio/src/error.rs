@@ -122,6 +122,24 @@ pub enum Error {
     },
 
     /// The audio backend refused.
+    /// The device offers no §8 configuration matching what was asked for.
+    ///
+    /// Distinct from a backend refusal: the device is present and working, and
+    /// what it can do simply does not include this. §9 makes it an error rather
+    /// than a silent downgrade - a capture quietly made at half the requested
+    /// rate is the exact failure the honesty rules exist to prevent.
+    #[error("{device} cannot record {wanted}; it offers {offered}")]
+    NoConfiguration {
+        /// The device, as a user would recognise it.
+        device: String,
+        /// What was asked for.
+        wanted: String,
+        /// What is actually on offer.
+        offered: String,
+    },
+
+    /// Whatever the backend said, passed through unedited. Its own wording is
+    /// usually more specific than anything we could put in front of it.
     #[error(transparent)]
     Cpal(#[from] cpal::Error),
 }

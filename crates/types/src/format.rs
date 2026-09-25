@@ -119,6 +119,41 @@ pub enum CaptureMode {
     Exclusive,
 }
 
+impl CaptureMode {
+    /// The `capture_mode` column's spelling.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Shared => "shared",
+            Self::Native => "native",
+            Self::Exclusive => "exclusive",
+        }
+    }
+
+    /// Reads the `capture_mode` column. `None` for a value no version of VCW wrote.
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "shared" => Some(Self::Shared),
+            "native" => Some(Self::Native),
+            "exclusive" => Some(Self::Exclusive),
+            _ => None,
+        }
+    }
+
+    /// Whether this mode *could* deliver untouched samples, on a platform that
+    /// honours it.
+    ///
+    /// [`CaptureMode::Shared`] never can: the OS mixer owns the device and
+    /// conversion is the mixer's job. The other two might, which is a long way
+    /// from saying they did - §9 settles that against the operating system, not
+    /// against the mode that was asked for.
+    pub const fn could_be_bit_perfect(self) -> bool {
+        matches!(self, Self::Native | Self::Exclusive)
+    }
+
+    /// Every mode, widest access first, for negotiation that falls back.
+    pub const ALL: [Self; 3] = [Self::Exclusive, Self::Native, Self::Shared];
+}
+
 /// How a block of samples is laid out on disk, and the `sampleformat` code that
 /// records it.
 ///
@@ -236,6 +271,22 @@ mod tests {
     fn audacity_pads_24_bit_and_we_do_not() {
         assert_eq!(SampleFormat::S24.bytes_per_sample(), 3);
         assert_eq!(SampleFormat::S24.audacity_bytes(), Some(4));
+    }
+
+    #[test]
+    fn capture_modes_round_trip_and_reject_nonsense() {
+        for m in CaptureMode::ALL {
+            assert_eq!(CaptureMode::parse(m.as_str()), Some(m));
+        }
+        assert_eq!(CaptureMode::parse("Exclusive"), None);
+        assert_eq!(CaptureMode::parse("unknown"), None);
+    }
+
+    #[test]
+    fn shared_is_the_one_mode_that_can_never_be_bit_perfect() {
+        assert!(!CaptureMode::Shared.could_be_bit_perfect());
+        assert!(CaptureMode::Native.could_be_bit_perfect());
+        assert!(CaptureMode::Exclusive.could_be_bit_perfect());
     }
 
     #[test]

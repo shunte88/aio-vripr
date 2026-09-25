@@ -1,0 +1,294 @@
+/*
+ *  capture.rs
+ *
+ *  VCW - The Vinyl Capture Workstation
+ *  (c) 2026 Stue Hunter
+ *
+ *  What a capture session is, and the counters that belong to the recording.
+ *
+ * MIT License
+ *
+ * Copyright (c) 2026 Stue Hunter
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ */
+
+//! What a capture session is, and the counters that belong to the recording.
+//!
+//! These types are the contract between the crate that makes a capture and the
+//! crate that stores one. `vcw-audio` produces them from a live stream; the
+//! `captures` and `capture_diagnostics` tables in `vcw-project` are their
+//! resting place. Neither crate depends on the other, which is why the
+//! vocabulary lives here.
+//!
+//! §10 is the reason the counters are a persisted type rather than a process
+//! statistic: overruns and dropped frames are facts about the *recording*, and a
+//! recording outlives the run that made it.
+
+use serde::{Deserialize, Serialize};
+
+use crate::{CaptureMode, SampleRate, StorageFormat};
+
+/// How far a capture session got. Mirrors the `state` column, and `validate()`
+/// rejects any value outside this set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CaptureState {
+    /// The stream is open, or was open when the process died.
+    Recording,
+    /// Stopped cleanly, every block committed.
+    Finalised,
+    /// Stopped by something other than a request: a stream error, a device that
+    /// went away, or a crash that recovery found afterwards.
+    Interrupted,
+}
+
+impl CaptureState {
+    /// The `state` column's spelling.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Recording => "recording",
+            Self::Finalised => "finalised",
+            Self::Interrupted => "interrupted",
+        }
+    }
+
+    /// Reads the `state` column. `None` for a value no version of VCW wrote.
+    pub fn parse(text: &str) -> Option<Self> {
+        match text {
+            "recording" => Some(Self::Recording),
+            "finalised" => Some(Self::Finalised),
+            "interrupted" => Some(Self::Interrupted),
+            _ => None,
+        }
+    }
+
+    /// Whether recovery has to look at this session on the next launch.
+    pub const fn is_unfinished(self) -> bool {
+        matches!(self, Self::Recording)
+    }
+}
+
+/// §10's four counters, which §38 requires persisted.
+///
+/// Saturating rather than wrapping throughout. A counter that wraps to zero
+/// turns a catastrophic capture into a clean-looking one, and the whole purpose
+/// of these numbers is to stop a damaged recording being mistaken for a good
+/// one. Reaching `u64::MAX` overruns is not a situation worth being precise in.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Diagnostics {
+    /// Times the ring filled before the writer drained it. Each one is samples
+    /// the device produced and nothing collected.
+    pub overruns: u64,
+    /// Times the device callback found no data ready.
+    pub underruns: u64,
+    /// Frames known to be lost. Non-zero means the capture is not bit-perfect,
+    /// whatever the format verifier says.
+    pub dropped_frames: u64,
+    /// Stream errors reported by the host, counted here and described in the
+    /// capture's `os_report`.
+    pub stream_errors: u64,
+}
+
+impl Diagnostics {
+    /// Whether the capture is free of every defect these counters can see.
+    ///
+    /// Necessary for a bit-perfect claim and nowhere near sufficient: a capture
+    /// can be clean by all four counts and still have been silently resampled,
+    /// which is what the format verifier is for.
+    pub const fn is_clean(self) -> bool {
+        self.overruns == 0
+            && self.underruns == 0
+            && self.dropped_frames == 0
+            && self.stream_errors == 0
+    }
+
+    /// Adds another set, saturating. Used to fold a worker's counters into the
+    /// session's.
+    #[must_use]
+    pub const fn saturating_add(self, other: Self) -> Self {
+        Self {
+            overruns: self.overruns.saturating_add(other.overruns),
+            underruns: self.underruns.saturating_add(other.underruns),
+            dropped_frames: self.dropped_frames.saturating_add(other.dropped_frames),
+            stream_errors: self.stream_errors.saturating_add(other.stream_errors),
+        }
+    }
+}
+
+/// §38's provenance: what was recorded, through what, and whether anyone checked.
+///
+/// Every field here answers a question a reader might ask years later about a
+/// file whose origin is otherwise unrecoverable. [`CaptureInfo::os_verified`] is
+/// the load-bearing one: §9 forbids claiming bit-perfect operation on the
+/// backend's own report, so the claim is stored as *what was checked*, not as a
+/// boolean opinion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CaptureInfo {
+    /// Rate as negotiated with the device, not as requested.
+    pub rate: SampleRate,
+    /// Channel count. Blocks are stored per channel, never interleaved.
+    pub channels: u16,
+    /// How the samples are laid out on disk. D4 stores them as the device gave
+    /// them, so this follows the device's format rather than a house style.
+    pub storage_format: StorageFormat,
+    /// How the stream was opened (§9).
+    pub capture_mode: CaptureMode,
+    /// CPAL host: `alsa`, `wasapi`, `coreaudio`.
+    pub host_api: Option<String>,
+    /// The device's stable id, as `vcw-audio` spells it.
+    pub device_id: Option<String>,
+    /// The device's human-readable name at the time of capture. Names change and
+    /// are not unique; this is provenance, not identity.
+    pub device_name: Option<String>,
+    /// Whether the operating system confirmed the negotiated format. False until
+    /// a platform verifier has actually run and agreed.
+    pub os_verified: bool,
+    /// What the OS reported, verbatim, so the claim can be audited rather than
+    /// believed.
+    pub os_report: Option<String>,
+}
+
+impl CaptureInfo {
+    /// A minimal record for a capture whose format nobody has verified.
+    ///
+    /// Deliberately the only constructor that does not take a verification
+    /// result: making the unverified case the explicit, named one keeps
+    /// `os_verified: true` from ever being reached by a struct literal filled in
+    /// on autopilot.
+    pub const fn unverified(
+        rate: SampleRate,
+        channels: u16,
+        storage_format: StorageFormat,
+        capture_mode: CaptureMode,
+    ) -> Self {
+        Self {
+            rate,
+            channels,
+            storage_format,
+            capture_mode,
+            host_api: None,
+            device_id: None,
+            device_name: None,
+            os_verified: false,
+            os_report: None,
+        }
+    }
+
+    /// Bytes one frame occupies: one sample per channel, at the storage width.
+    pub const fn frame_bytes(&self) -> usize {
+        self.storage_format.bytes_per_sample() * self.channels as usize
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SampleFormat;
+
+    #[test]
+    fn states_round_trip_and_reject_nonsense() {
+        for s in [
+            CaptureState::Recording,
+            CaptureState::Finalised,
+            CaptureState::Interrupted,
+        ] {
+            assert_eq!(CaptureState::parse(s.as_str()), Some(s));
+        }
+        assert_eq!(CaptureState::parse("Recording"), None);
+        assert_eq!(CaptureState::parse("done"), None);
+    }
+
+    #[test]
+    fn only_recording_is_unfinished() {
+        assert!(CaptureState::Recording.is_unfinished());
+        assert!(!CaptureState::Finalised.is_unfinished());
+        assert!(!CaptureState::Interrupted.is_unfinished());
+    }
+
+    #[test]
+    fn a_fresh_diagnostics_is_clean_and_any_counter_spoils_it() {
+        assert!(Diagnostics::default().is_clean());
+        for spoil in [
+            Diagnostics {
+                overruns: 1,
+                ..Default::default()
+            },
+            Diagnostics {
+                underruns: 1,
+                ..Default::default()
+            },
+            Diagnostics {
+                dropped_frames: 1,
+                ..Default::default()
+            },
+            Diagnostics {
+                stream_errors: 1,
+                ..Default::default()
+            },
+        ] {
+            assert!(!spoil.is_clean(), "{spoil:?} should not be clean");
+        }
+    }
+
+    #[test]
+    fn counters_saturate_rather_than_wrapping_to_a_clean_looking_zero() {
+        let full = Diagnostics {
+            overruns: u64::MAX,
+            underruns: u64::MAX,
+            dropped_frames: u64::MAX,
+            stream_errors: u64::MAX,
+        };
+        let sum = full.saturating_add(Diagnostics {
+            overruns: 9,
+            ..Default::default()
+        });
+        assert_eq!(sum.overruns, u64::MAX);
+        assert!(!sum.is_clean());
+    }
+
+    #[test]
+    fn frame_bytes_follows_the_storage_width_not_the_logical_one() {
+        // 24-bit is the case that differs: 3 bytes packed, 4 padded.
+        let packed = CaptureInfo::unverified(
+            SampleRate(96_000),
+            2,
+            StorageFormat::native_for(SampleFormat::S24),
+            CaptureMode::Exclusive,
+        );
+        assert_eq!(packed.frame_bytes(), 6);
+        let padded = CaptureInfo {
+            storage_format: StorageFormat::Int24Padded,
+            ..packed
+        };
+        assert_eq!(padded.frame_bytes(), 8);
+    }
+
+    #[test]
+    fn the_unverified_constructor_leaves_no_claim_behind() {
+        let info = CaptureInfo::unverified(
+            SampleRate(192_000),
+            2,
+            StorageFormat::Int32,
+            CaptureMode::Shared,
+        );
+        assert!(!info.os_verified);
+        assert!(info.os_report.is_none());
+    }
+}

@@ -75,6 +75,8 @@ pub mod error;
 pub mod playback;
 pub mod probe;
 pub mod selection;
+pub mod source;
+pub mod verify;
 
 pub use devices::{Change, DeviceKey, DeviceReport, Direction, Snapshot, Transport};
 pub use error::{Error, Result};
