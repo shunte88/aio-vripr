@@ -1,5 +1,7 @@
-# Build output
+# Build output. Two workspaces, two target directories: the product at the root and
+# the Phase 0 spikes, which are excluded from it (ADR-0003).
 /target
+/spikes/target
 
 # Benchmark scratch databases (S2 spike output)
 /.bench/

@@ -1,0 +1,26 @@
+[package]
+name = "vcw-cli"
+description = "Headless driver for the VCW core - the whole application without a UI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "vcw"
+path = "src/main.rs"
+
+# vcw-core arrives here at WP-07, when there is an engine to drive. Until then the
+# binary declares only what it actually links, so `cargo deny` and the dependency
+# graph both stay honest.
+[dependencies]
+vcw-audio = { workspace = true }
+vcw-project = { workspace = true }
+vcw-types = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+
+[lints]
+workspace = true

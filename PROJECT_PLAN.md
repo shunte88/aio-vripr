@@ -129,21 +129,22 @@ so if the SQLite write path holds there it will hold on a desktop.
 
 ## 3. Decisions to lock
 
-Each has a recommendation and a deadline. Recording them as ADRs in `docs/adr/` keeps
-§49's "openly documented" promise honest from day one.
+Each has a recommendation and a deadline. Recording them as ADRs in
+[`docs/adr/`](docs/adr/) keeps §49's "openly documented" promise honest from day one.
+Four are written: D1, D2, D7+D10, and the workspace layout WP-01 had to settle.
 
 | # | Decision | Recommendation | Lock by |
 |---|----------|----------------|---------|
 | **D1** | Native project format and extension, and the degree of Audacity compatibility (§12) | **Locked 2026-09-22.** Native `.vcw`, schema a deliberate superset of AUP4's (identical `sampleblocks` shape and summary columns) plus our own tables; SQLite `application_id` + `user_version` so the file self-identifies. Audacity interop is **import-only** (`.aup3` and `.aup4`, tier A). Export to Audacity is declined. *Validated against real AUP4 bytes 2026-09-24: `sampleblocks` is column-for-column identical between AUP3 and AUP4 and converts byte-identically, so the superset claim rests on measurement rather than on the 3.x schema plus an assumption.* | Locked |
-| **D2** | SQLite binding | `rusqlite` with `bundled` feature - synchronous, predictable, no async runtime on the writer thread; bundled build removes platform SQLite variance. `sqlx` is async-first and wrong here. | WP-02 |
+| **D2** | SQLite binding | **Locked 2026-09-25, [ADR-0002](docs/adr/0002-sqlite-binding.md).** `rusqlite` with the `bundled` feature - synchronous, predictable, no async runtime on the writer thread; bundled build removes platform SQLite variance, which matters because §15 makes recovery a correctness requirement and recovery behaviour depends on WAL semantics that vary by SQLite version. `sqlx` is async-first and wrong here. | Locked |
 | **D3** | Block layout & size | **Provisional from S2 (2026-09-22):** per-channel (AUP4-compatible) blocks of **250 ms**, **batch 1**, WAL, `synchronous=FULL`, ring ≥ 500 ms. Rationale inverted the starting hypothesis - throughput proved a non-issue, so the budget buys *recovery granularity* instead. Confirm on Pi 5 before locking. See `docs/spikes/S2-sqlite-capture.md` | G0 (pending Pi 5) |
 | **D4** | Sample representation at rest | Store the device's bytes **verbatim** plus a format tag. §9 forbids conversion; converting to f32 at rest would silently break the bit-perfect claim. | WP-02 |
 | **D5** | Encoder stack | WAV: own writer (trivial, avoids `hound`'s format limits). FLAC: `flacenc` (pure Rust, Apache-2.0). MP3: `mp3lame-encoder` (LGPL, links libmp3lame) - Phase 2. Ogg Vorbis: `vorbis_rs` (LGPL) - Phase 2. Licensing consequence: MP3/OGG extend the LGPL relink obligation already established for chromaprint-next; alternatively make them optional features. | WP-14 (FLAC/WAV), G3 (MP3/OGG) |
 | **D6** | High-rate IPC transport *and* waveform rendering | **Revised from S3 (2026-09-24); the original wording was wrong in two of its three clauses.** Channels for meter/waveform/position - chosen for API shape (typed, per-invocation, no global event namespace), *not* throughput, which is indistinguishable from the event bus at §35 payload sizes. Hand-built compact JSON; **never** `InvokeResponseBody::Raw` for small frames - under Tauri's 1024-byte direct-execute threshold it is eval'd as a decimal JSON array, 42% *larger* than the JSON it replaces. **Do not coalesce sends**: the webview absorbed the full 750 Hz worker rate with zero loss, no added main-thread cost and a quarter of the delivery latency. Coalesce *paints* instead - one read of latest state per `rAF`. **Draw the waveform incrementally, in an `OffscreenCanvas` worker**: full-canvas main-thread redraw costs 29% of the main thread against 0.5% in a worker. Acceptance metric is **main-thread occupancy, not fps** - WebKitGTK does not pace `rAF` to vsync. See `docs/spikes/S3-tauri-ipc.md` | G0 (met on Linux) |
-| **D7** | Licence posture | MIT core + ported `THIRD-PARTY-NOTICES.md` + LGPL relink instructions; `cargo-deny` in CI to catch licence drift on every dependency bump. | WP-01 |
+| **D7** | Licence posture | **Locked 2026-09-25, [ADR-0004](docs/adr/0004-licence-and-toolchain.md).** MIT core; `THIRD-PARTY-NOTICES.md` and `LICENSE-LGPL-2.1` in the repository, written ahead of the Phase 2 obligation and describing the present position honestly - permissive dependencies only today. `deny.toml` carries the allowlist and `cargo deny check` runs on every push. The LGPL exception stays commented out until `chromaprint-next` actually lands: an allowance carried ahead of its dependency is one nobody reviews. | Locked |
 | **D8** | Concurrency model | Tokio **only** for network/metadata/export I/O. Dedicated OS threads (with elevated priority where permitted) for capture writer, meter, waveform, detector. No async on the RT path (§10, §36). | WP-07 |
 | **D9** | Typed Rust↔TS contract | Generate TS types from Rust (`ts-rs` or `specta`) and fail CI on drift. Hand-written TS interfaces are how §2 erodes. | WP-15 |
-| **D10** | Toolchain floor | Rust edition 2024, pinned MSRV, `rust-toolchain.toml`; Node LTS; pnpm. | WP-01 |
+| **D10** | Toolchain floor | **Locked 2026-09-25, [ADR-0004](docs/adr/0004-licence-and-toolchain.md).** Rust edition 2024, MSRV **1.90** declared in `[workspace.package]` and enforced by a CI job pinned to 1.90 - an untested floor is not a floor. `rust-toolchain.toml` stays on `stable` so daily work gets current diagnostics. Node 22 LTS in `.nvmrc`; pnpm. | Locked |
 
 ### 3.1 Candidate crate shortlist
 
@@ -541,7 +542,7 @@ sequencing, not as a forecast. Dependencies are hard unless noted.
 
 | WP | Scope | Req | Deps | Sess | Exit criteria |
 |----|-------|-----|------|------|---------------|
-| **01** | Workspace scaffold: cargo workspace per §6, CI matrix (Linux x86_64/aarch64, Windows, macOS), cross-compilation targets, clippy/fmt/deny gates, MSRV pin, licence + notices ported | §6, D7, D10 | - | 5 | Green CI on four targets; `cargo deny` clean |
+| **01** | Workspace scaffold: cargo workspace per §6, CI matrix (Linux x86_64/aarch64, Windows, macOS), clippy/fmt/deny gates, MSRV pin, licence + notices ported | §6, D7, D10 | - | 5 | **Built 2026-09-25.** Ten `vcw-*` crates under `crates/`, one per §6 group with §6's leaves as modules ([ADR-0003](docs/adr/0003-workspace-layout.md)); spikes moved to their own excluded workspace; `fmt`/`clippy -D warnings`/`test`/`cargo deny check` all clean locally on Linux x86_64. The aarch64, Windows and macOS legs are asserted by `.github/workflows/ci.yml` and **unverified until it runs on a push** - aarch64 Linux runs natively on `ubuntu-24.04-arm` rather than cross-compiled, because `alsa-sys` and bundled SQLite are what a cross-build gets wrong quietly |
 | **02** | `project`: schema v1 as an **AUP4 superset** (`sampleblocks` column-for-column, same summary pyramids, never-update-a-block), `application_id`/`user_version`, transactional migrations, create/open/validate, integrity check | §12, §16, §49 | S2, S5 | 8 | Round-trip + migration property tests; schema doc generated from source; `sampleblocks` shape diffed against a real `.aup4` in CI |
 | **03** | `audio/devices`: enumeration, capability probing, independent in/out selection, persistence, hot-unplug handling | §7, §8 | S1 | 4 | Device matrix reported on 3 OS; unplug during idle/record is non-corrupting |
 | **04** | `audio/capture`: CPAL stream, `CaptureMode` negotiation, bounded lock-free ring, RT-safe callback, diagnostics counters, **and a per-platform format verifier** (S1 finding 1 - CPAL alone cannot detect a silent resample) | §9, §10, §38 | 03 | 9 | Callback provably allocation-free and lock-free; requested vs negotiated reported; **negotiated format cross-checked against the OS and bit-perfect never claimed without that confirmation**; counters persisted |
@@ -702,11 +703,30 @@ demonstrable from CLI or UI.
 
 ## 12. Immediate next actions
 
-1. **First** - Repo groundwork: cargo workspace skeleton per §6, `rust-toolchain.toml`, CI matrix, `cargo-deny`, port `THIRD-PARTY-NOTICES.md` + `LICENSE-LGPL-2.1`, create `docs/adr/` and write ADR-0001 (D1: project extension) and ADR-0002 (D2: rusqlite).
-2. **Then** - Build S1 `vinyl-audio-test`. Run it on Linux first, then confirm the negotiated-format reporting on Windows (WASAPI exclusive) and macOS (CoreAudio hog mode) - the aim is an accurate published matrix, not a feasibility verdict.
-3. **Then** - Build S2, the capture/SQLite benchmark harness. This is the one you most want proven, and its result can still reshape the architecture cheaply.
+*Updated 2026-09-25. The three actions that stood here - repo groundwork, S1, S2 - are
+all done, and so are S3, S4 and S5.*
 
-One decision wants making before the first commit: the **project file extension** (D1,
-recommendation `.vcw`). The other open question is simply whether Windows and macOS
-machines are to hand for S1 - not as a feasibility gate, but because the published
-capture-mode matrix is only worth having if it is measured rather than assumed.
+1. **Next** - **WP-02, the `.vcw` schema.** The largest single lever in Phase 1 and the
+   one the whole recovery story hangs off. It has everything it needs: D1 locked and
+   validated against real AUP4 bytes, D2 locked, S2's block parameters provisional but
+   measured, and a 30-project corpus to diff `sampleblocks` against in CI. Build the
+   schema as a superset, not as a clone - §8's 32-bit integer format is the case
+   Audacity cannot represent, and pretending otherwise is how a format grows a lie.
+2. **In parallel, on the machine's own time** - the three measurement jobs still queued
+   from Phase 0, none of which need attention while they run:
+   - **D3's firmed-config soak** (`synchronous=FULL` + per-channel blocks). **D3 does
+     not close until this runs**, and it is a G0 exit item.
+   - **S3's `cpu-matrix.sh`**, written and unrun. Until it does, whether the
+     `OffscreenCanvas` worker reduces *total* CPU rather than main-thread blocking is
+     unmeasured - and that is the figure the Pi 5 decision needs.
+   - **S3's two R8 isolation soaks** (producer stopped; `echo` disabled), which split
+     the +1.46 MiB/min webview growth into baseline versus per-message cost. Needed
+     before G2, not before G0.
+3. **Then** - WP-03 and WP-04, devices and capture. S1 has already fixed the shape of
+   both: select by PCM id, and never claim bit-perfect without OS confirmation.
+
+**The remaining G0 exposure is hardware, not spikes.** Windows, Pi 5, Android, macOS
+and the real converters (HiFiBerry DAC+ADC Pro, Tascam DA-3000) are all re-runs of
+harnesses that already exist, which is a much smaller task than the original spike was.
+Whether those rigs are to hand is the one question that shapes the schedule, and it is
+not a question the code can answer.

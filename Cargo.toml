@@ -1,14 +1,14 @@
-# Virtual workspace root: the project is a set of crates (PROJECT_PLAN §6), so the
-# root carries shared metadata rather than a crate of its own.
+# Virtual workspace root. The product lives in `crates/`, one crate per §6 group with
+# §6's leaves as modules - see docs/adr/0003-workspace-layout.md for why the grouping
+# stops there rather than going all the way down to ~35 crates.
+#
+# The Phase 0 spikes are a separate workspace under `spikes/`. They are finished
+# evidence, not living code: excluding them keeps the product's CI matrix about the
+# product, and a Linux-only job still compiles them so they cannot rot silently.
 [workspace]
 resolver = "3"
-members = [
-    "spikes/capture-core",
-    "spikes/fingerprint-stream",
-    "spikes/sqlite-capture-bench",
-    "spikes/tauri-ipc-bench/src-tauri",
-    "spikes/vinyl-audio-test",
-]
+members = ["crates/*"]
+exclude = ["spikes"]
 
 [workspace.package]
 version = "0.1.0"
@@ -22,14 +22,45 @@ repository = "https://github.com/shunte88/vcw"
 authors = ["Stue Hunter"]
 
 [workspace.dependencies]
+# Internal. Versioned as well as pathed so the crates stay publishable if that ever
+# becomes useful, and so a stale path cannot resolve to the wrong thing.
+vcw-audio = { path = "crates/audio", version = "0.1.0" }
+vcw-core = { path = "crates/core", version = "0.1.0" }
+vcw-export = { path = "crates/export", version = "0.1.0" }
+vcw-fingerprint = { path = "crates/fingerprint", version = "0.1.0" }
+vcw-identify = { path = "crates/identify", version = "0.1.0" }
+vcw-metadata = { path = "crates/metadata", version = "0.1.0" }
+vcw-project = { path = "crates/project", version = "0.1.0" }
+vcw-signal = { path = "crates/signal", version = "0.1.0" }
+vcw-types = { path = "crates/types", version = "0.1.0" }
+
+# External. Single source of version truth for the whole tree; a bump happens here
+# and nowhere else.
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 crc32fast = "1"
+# 0.18.2 or newer is a hard floor, not a preference: 0.16 mis-reported ALSA formats
+# and could not select a device by PCM id. See docs/spikes/S1-cpal-capture.md.
+cpal = "0.18.2"
+rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+thiserror = "2"
+
+# Enforced as errors in CI (`clippy --all-targets -- -D warnings`), warnings locally.
+# `missing_docs` is deliberate: a scaffold whose modules do not say what they are for
+# and which work package fills them is just empty directories.
+[workspace.lints.rust]
+missing_docs = "warn"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+todo = "warn"
+dbg_macro = "warn"
 
 [profile.release]
 opt-level = 3
 lto = true
 debug = 1
-

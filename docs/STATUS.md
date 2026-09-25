@@ -1,11 +1,10 @@
 # VCW - project status
 
-**As of:** 2026-09-24
-**Phase:** 0 (de-risking spikes). All five spikes have returned verdicts on their
-primary platform; gate G0 is still open on hardware coverage and on D3's firmed-config
-soak.
-**Branch:** `main` at `096a8a0`; S4, S5 and the AUP4 delta are working-tree changes on
-top of it - 42 modified files, nothing untracked.
+**As of:** 2026-09-25
+**Phase:** 1 has started - WP-01 is built. All five Phase 0 spikes returned verdicts on
+their primary platform; gate G0 remains open on hardware coverage and on D3's
+firmed-config soak, neither of which blocks foundation work.
+**Branch:** `main` at `19dd459` plus the WP-01 scaffold in the working tree.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -283,6 +282,31 @@ silently. `probe.py` reports `project_rate` and `track_rates` as separate fields
   time), a project *created* natively in Audacity 4 rather than converted, an envelope
   with more than one point or a non-unity `val`, and a populated `autosave`.
 
+## Decisions resolved 2026-09-25
+
+1. **One crate per §6 group, not one per leaf** ([ADR-0003](adr/0003-workspace-layout.md)).
+   §6's thirty-five leaves become modules. The boundaries worth enforcing - core
+   independent of the UI, analysis independent of device access, one crate owning the
+   database - are all group-level, and splitting further is cheap later and expensive
+   to undo.
+2. **`vcw-types` exists although §6 does not list it.** Sample formats, capture modes
+   and rates are spoken everywhere; without a shared leaf they would live in
+   `vcw-audio` and drag CPAL into the dependency closure of every crate that merely
+   wants an enum. The test that makes the case concrete: WP-11's A/B harness has to run
+   against the labelled corpus on a machine with no audio stack.
+3. **The Phase 0 spikes leave the product workspace.** Finished evidence, not shipped
+   code. A Linux-only CI job keeps them compiling so `docs/spikes/` stays reproducible,
+   while the product's four-target matrix stays about the product.
+4. **D2 locked** ([ADR-0002](adr/0002-sqlite-binding.md)): `rusqlite` with `bundled`.
+   The bundling is not convenience - §15 makes recovery a correctness requirement and
+   recovery depends on WAL semantics that vary across the SQLite versions distributions
+   ship. A recovery test that passes in CI and fails on a Pi because the OS shipped an
+   older SQLite is not a test.
+5. **D7 and D10 locked** ([ADR-0004](adr/0004-licence-and-toolchain.md)). The two
+   clauses that are easy to get wrong: the LGPL exception in `deny.toml` stays
+   commented out until `chromaprint-next` actually lands, and the MSRV is enforced by a
+   pinned CI job because an untested floor is not a floor.
+
 ## Decisions resolved 2026-09-24
 
 1. **`chromaprint-next 0.1.0` from crates.io is the dependency of record**, applying the
@@ -331,29 +355,74 @@ silently. `probe.py` reports `project_rate` and `track_rates` as separate fields
 
 ## Still open
 
-- **Corpus fixture strategy.** The 25 real rips are the import regression set; they need
-  a shrinker (WP-20) so fixtures are committable.
-- **Crate naming** - `vcw-audio`, `vcw-signal`, … - settled at WP-01.
+- **Corpus fixture strategy.** The 30 real projects are the import regression set; they
+  need a shrinker (WP-20) so fixtures are committable.
+- ~~**Crate naming.**~~ Settled at WP-01 - see [ADR-0003](adr/0003-workspace-layout.md).
+
+## Phase 1 - WP-01, the workspace scaffold
+
+Built 2026-09-25. Ten crates under `crates/`, one per REQUIREMENTS §6 group with §6's
+leaves as modules, named `vcw-*`, binary `vcw`. The full reasoning - including why not
+one crate per leaf, and why `vcw-types` exists when §6 does not list it - is
+[ADR-0003](adr/0003-workspace-layout.md).
+
+What landed:
+
+- **`crates/`**: `types`, `audio`, `signal`, `fingerprint`, `identify`, `metadata`,
+  `project`, `export`, `core`, `cli`. Every module file states its scope, its
+  requirement sections and the work package that fills it; `missing_docs` is a lint CI
+  treats as an error, so a module cannot be added without saying what it is for.
+- **Real content where a decision already fixed it.** `vcw-types` carries
+  `SampleFormat` with the Audacity code mapping S5 measured - including the `None` arm
+  for 32-bit integer, which is the concrete reason D1 is a superset and not a clone -
+  plus `CaptureMode` from §9 and §8's six standard rates. `vcw-project::sqlite` carries
+  the `.vcw` `application_id` and asserts it is not Audacity's. Seven tests, all
+  passing.
+- **`vcw doctor`** runs and prints host APIs, the bundled SQLite version and the
+  supported rates. A scaffold that runs is worth more than one that only builds.
+- **The spikes moved to their own workspace** at `spikes/`, excluded from the root.
+  They are finished evidence, not shipped code; a Linux-only CI job keeps them
+  compiling so the numbers in `docs/spikes/` stay reproducible.
+- **CI** (`.github/workflows/ci.yml`): build + test on four targets, `fmt`, `clippy -D
+  warnings`, an MSRV job pinned to 1.90, `cargo deny check`, the spikes job, and an
+  assertion that **no crate under `crates/` depends on `tauri`, `wry`, `tao` or
+  `webkit2gtk`** - §2 as a test rather than a code-review habit.
+- **Licence gates**: `deny.toml` with the permissive allowlist, `THIRD-PARTY-NOTICES.md`
+  rewritten for VCW's actual dependency set, and `LICENSE-LGPL-2.1` ported. D7 and D10
+  locked in [ADR-0004](adr/0004-licence-and-toolchain.md).
+- **ADRs 0001-0004** written, with an index at [`docs/adr/`](adr/).
+
+#### What is verified, and what is not
+
+`cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+`cargo test --workspace` and `cargo deny check` are all clean **on Linux x86_64 with
+Rust 1.94.1**. The aarch64, Windows and macOS legs exist only as workflow YAML and are
+**unverified until the workflow runs on a push** - as is the MSRV 1.90 job, since only
+1.94.1 is installed locally. WP-01's exit criterion is "green CI on four targets", so
+WP-01 is built but not yet met.
+
+One choice worth flagging: aarch64 Linux runs **natively** on `ubuntu-24.04-arm` rather
+than cross-compiled. `alsa-sys` and bundled SQLite are exactly the dependencies a
+cross-build gets wrong quietly, and aarch64 is the Pi 5 target, so the cross-compile
+saves nothing worth having.
 
 ## Next up
 
-**`WP-01` proper.** All five Phase 0 spikes have now returned a verdict on their
-primary platform, and every G0 decision they gate is answered or provisional-pending-
-hardware. The remaining spike work is *portability re-measurement* on rigs that are
-either unavailable (macOS) or not yet set up (Pi 5, Windows) - it does not block the
-foundation work, and re-running an existing harness on new hardware is a much smaller
-task than the original spike.
+**`WP-02`, the `.vcw` schema.** The largest single lever in Phase 1: schema v1 as a
+deliberate AUP4 superset, `sampleblocks` column-for-column, transactional migrations,
+create/open/validate, integrity check. Everything it needs is in place - D1 locked and
+validated against real AUP4 bytes, D2 locked, S2's block parameters measured, and a
+30-project corpus to diff the `sampleblocks` shape against in CI.
 
-`WP-01` is: the full crate layout per §6, CI matrix, `cargo-deny`, ported
-`THIRD-PARTY-NOTICES.md` and `LICENSE-LGPL-2.1`, and ADR-0001 (D1) / ADR-0002 (D2). No
-vendored-cpal notice is needed any more - cpal is a plain Apache-2.0 dependency again.
+Three measurement jobs stay queued and can run on the machine's own time: D3's
+firmed-config soak (**D3 does not close until it runs**), S3's `cpu-matrix.sh`, and
+S3's two R8 isolation soaks.
 
 ## Housekeeping
 
-- Phase 0 spikes, the CPAL 0.18 upgrade and the `.vcw` rename are committed at `a28fd85`;
-  the S3 IPC bench at `096a8a0`. S4 (`spikes/fingerprint-stream`), S5
-  (`spikes/aup-format-probe`) and the AUP4 delta are working-tree changes on top, along
-  with the em-dash sweep that touched 46 files.
+- All of Phase 0 is committed: the spikes, the CPAL 0.18 upgrade and the `.vcw` rename
+  at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
+  `19dd459`. The WP-01 scaffold is the current working-tree change.
 - **`/data2/source_rips`** is the source-audio corpus S4 ran against: 62 real vinyl rips,
   71 GB, 48 kHz and 192 kHz 32-bit WAV plus 24-bit FLAC. Distinct from
   `/data2/vinyl_rips`, which holds the 30 *projects* S5 used - 25 AUP3 and 5 AUP4, the

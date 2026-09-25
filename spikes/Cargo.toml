@@ -1,0 +1,38 @@
+# Phase 0 spikes: a workspace of their own, excluded from the product workspace at
+# the repository root.
+#
+# These crates are the evidence behind the S1-S5 write-ups in docs/spikes/. They are
+# kept compiling - CI builds them on Linux - so the numbers in those documents stay
+# reproducible, but they are not part of the shipped product and do not belong in
+# its four-target matrix. `tauri-ipc-bench` alone would drag WebKitGTK into every
+# platform's CI for no gain.
+[workspace]
+resolver = "3"
+members = [
+    "capture-core",
+    "fingerprint-stream",
+    "sqlite-capture-bench",
+    "tauri-ipc-bench/src-tauri",
+    "vinyl-audio-test",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+description = "VCW Phase 0 spikes"
+license = "MIT"
+repository = "https://github.com/shunte88/vcw"
+authors = ["Stue Hunter"]
+
+[workspace.dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+crc32fast = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+debug = 1

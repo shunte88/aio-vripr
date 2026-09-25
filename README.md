@@ -27,6 +27,39 @@ Pre-0.1. Phase 0 - proving the foundations before building on them.
 Full snapshot - what is proven, what is assumed, what is waiting on hardware or a
 decision - in [docs/STATUS.md](docs/STATUS.md).
 
+Phase 1 has started. The workspace scaffold (WP-01) is in place: ten `vcw-*` crates
+under `crates/`, a four-target CI matrix, and the licence and toolchain gates.
+
+## Layout
+
+```
+crates/          the product - one crate per REQUIREMENTS §6 group, §6's leaves
+                 as modules. See docs/adr/0003-workspace-layout.md
+spikes/          Phase 0 evidence, a separate workspace, excluded from the product
+docs/adr/        architecture decision records
+docs/spikes/     the S1-S5 write-ups
+```
+
+## Building
+
+```sh
+cargo build --workspace     # the product
+cargo test --workspace
+cargo run -p vcw-cli -- doctor
+```
+
+Requires a Rust toolchain at 1.90 or newer and, on Linux, `libasound2-dev`. SQLite is
+compiled in, so there is no system SQLite to match.
+
+The spikes build separately:
+
+```sh
+cd spikes && cargo build --workspace
+```
+
 ## Licence
 
-MIT - see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE). Third-party obligations, including the LGPL relink
+instructions that arrive with Phase 2 fingerprinting, are recorded in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md); `cargo deny` enforces the licence
+allowlist in CI.

@@ -1,0 +1,17 @@
+[package]
+name = "vcw-identify"
+description = "Evidence collection, candidate scoring and release resolution"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+vcw-types = { workspace = true }
+vcw-fingerprint = { workspace = true }
+vcw-metadata = { workspace = true }
+
+[lints]
+workspace = true
