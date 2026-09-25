@@ -145,6 +145,17 @@ pub enum Error {
         blocks: usize,
     },
 
+    /// A capture id that is not in this project.
+    ///
+    /// Its own variant rather than an `Option`, because every caller that asks
+    /// for a capture by id already believes it exists - it came from a list, a
+    /// command line or a row - so `None` would only ever be unwrapped.
+    #[error("capture {capture_id} is not in this project")]
+    NoSuchCapture {
+        /// The id that was asked for.
+        capture_id: i64,
+    },
+
     /// SQLite said no.
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),

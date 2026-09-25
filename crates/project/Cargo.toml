@@ -10,6 +10,10 @@ authors.workspace = true
 
 [dependencies]
 vcw-types = { workspace = true }
+# The waveform reader folds stored triplets with `vcw_signal::waveform`. Allowed
+# by ADR-0003: the rule is that analysis must not reach a device and that only
+# this crate opens the project, and `vcw-signal` depends on `vcw-types` alone.
+vcw-signal = { workspace = true }
 crc32fast = { workspace = true }
 rusqlite = { workspace = true }
 thiserror = { workspace = true }

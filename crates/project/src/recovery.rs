@@ -987,9 +987,22 @@ mod tests {
         // Checkpointed while the log is still hot, which is the case that has
         // a number worth returning: `checkpoint` reports what it found, so the
         // caller can say how much was at risk.
+        //
+        // A floor rather than an identity, and the difference is a real one.
+        // `Project::open` stamps `last_written_at` on its way in, so by the
+        // time the checkpoint runs the log can hold one more frame than the
+        // inspection saw - 64 KiB, one page. Whether it does depends on the
+        // checkpoint SQLite attempts when the writer's connection closes, which
+        // `keep_open` can only partly block: an equality here passes most runs
+        // and fails perhaps one in twenty-five. The claim worth making is that
+        // the checkpoint found everything the inspection did.
         let project = open(&path);
         let folded = checkpoint(&project).expect("checkpoint");
-        assert_eq!(folded, hot.wal_bytes);
+        assert!(
+            folded >= hot.wal_bytes,
+            "the checkpoint folded {folded} B but the log already held {} B",
+            hot.wal_bytes
+        );
         assert!(folded > 0);
 
         drop(keep_open);

@@ -50,6 +50,7 @@ mod devices;
 mod recover;
 mod session;
 mod soak;
+mod waveform;
 
 use clap::{Parser, Subcommand};
 use vcw_types::STANDARD_RATES;
@@ -179,6 +180,39 @@ enum Command {
         /// Print the 50 Hz level meters too. Loud, and off by default.
         #[arg(long)]
         meters: bool,
+    },
+
+    /// Draw a capture's waveform at the terminal (§19).
+    ///
+    /// The pyramid picks its own resolution from the span and the width, so
+    /// this reads the same rows a UI would and reports which level it used.
+    Waveform {
+        /// Project to draw from.
+        project: std::path::PathBuf,
+        /// Capture to draw. Omit for the most recent.
+        #[arg(long)]
+        capture: Option<i64>,
+        /// Channel to draw. Omit for all of them.
+        #[arg(long)]
+        channel: Option<u16>,
+        /// Where to start, in seconds.
+        #[arg(long)]
+        start: Option<f64>,
+        /// Where to end, in seconds. Omit for the end of the capture.
+        #[arg(long)]
+        end: Option<f64>,
+        /// Columns to draw.
+        #[arg(long, default_value_t = 100)]
+        pixels: u32,
+        /// Rows per channel.
+        #[arg(long, default_value_t = 12)]
+        rows: u32,
+        /// Recompute the pyramid from the stored audio before drawing (§19).
+        #[arg(long)]
+        rebuild: bool,
+        /// Machine-readable output: the columns as JSON.
+        #[arg(long)]
+        json: bool,
     },
 
     /// Find unfinished captures left by a crash and close them honestly (§15).
@@ -315,6 +349,27 @@ fn main() -> anyhow::Result<()> {
             script,
             json,
             meters,
+        }),
+        Command::Waveform {
+            project,
+            capture,
+            channel,
+            start,
+            end,
+            pixels,
+            rows,
+            rebuild,
+            json,
+        } => waveform::run(&waveform::Args {
+            project,
+            capture,
+            channel,
+            start,
+            end,
+            pixels,
+            rows,
+            rebuild,
+            json,
         }),
         Command::Recover {
             project,

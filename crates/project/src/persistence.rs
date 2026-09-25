@@ -215,65 +215,11 @@ impl Config {
     }
 }
 
-/// A (min, max, rms) triplet over a run of samples, normalised to -1.0..=1.0.
-///
-/// Audacity's shape, verified against the corpus rather than assumed.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Summary {
-    /// Least sample value in the run.
-    pub min: f32,
-    /// Greatest sample value in the run.
-    pub max: f32,
-    /// Root mean square across the run.
-    pub rms: f32,
-}
-
-impl Summary {
-    /// The summary of no samples at all. Zeroes rather than Audacity's
-    /// `(FLT_MAX, -FLT_MAX, 0)` sentinel: we never emit a triplet for a run that
-    /// does not exist, so the sentinel has nothing to mean here.
-    pub const EMPTY: Self = Self {
-        min: 0.0,
-        max: 0.0,
-        rms: 0.0,
-    };
-
-    /// Summarises `samples` of one channel, stored in `format`.
-    #[must_use]
-    pub fn of(format: StorageFormat, samples: &[u8]) -> Self {
-        let n = format.samples_in(samples.len());
-        if n == 0 {
-            return Self::EMPTY;
-        }
-        let mut min = f32::INFINITY;
-        let mut max = f32::NEG_INFINITY;
-        let mut squares = 0f64;
-        for i in 0..n {
-            let Some(v) = format.decode_sample(samples, i) else {
-                break;
-            };
-            min = min.min(v);
-            max = max.max(v);
-            squares += f64::from(v) * f64::from(v);
-        }
-        Self {
-            min,
-            max,
-            rms: (squares / n as f64).sqrt() as f32,
-        }
-    }
-
-    /// The 12 bytes Audacity stores: three little-endian `f32`s, min then max
-    /// then rms.
-    #[must_use]
-    pub fn to_le_bytes(self) -> [u8; 12] {
-        let mut out = [0u8; 12];
-        out[0..4].copy_from_slice(&self.min.to_le_bytes());
-        out[4..8].copy_from_slice(&self.max.to_le_bytes());
-        out[8..12].copy_from_slice(&self.rms.to_le_bytes());
-        out
-    }
-}
+/// Re-exported so the writer's callers need not learn a second path to it.
+/// The type belongs to [`vcw_types`] because the writer produces these and the
+/// renderer in `vcw-signal` consumes them; see its module doc for why merging
+/// them is exact.
+pub use vcw_types::Summary;
 
 /// Builds one level of the waveform pyramid: a triplet per `stride` samples.
 ///

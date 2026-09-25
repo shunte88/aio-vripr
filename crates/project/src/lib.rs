@@ -68,6 +68,7 @@ pub mod side;
 pub mod sqlite;
 pub mod track;
 pub mod validate;
+pub mod waveform;
 
 pub use error::{Error, Result};
 pub use migrate::{MIGRATIONS, Migration};

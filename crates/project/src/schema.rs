@@ -186,6 +186,38 @@ CREATE TABLE capture_blocks (
 CREATE INDEX capture_blocks_timeline
     ON capture_blocks (capture_id, channel, start_frame);
 
+-- Ours, not Audacity's, and the difference between a zoomed-out waveform drawing
+-- in milliseconds and in seconds (§37).
+--
+-- A sampleblocks row carries a 192 KB samples blob at 24/192, so it occupies
+-- several 64 KiB pages. Reading nothing but summin/summax/sumrms still costs one
+-- page fault per block, and a 26-minute side is 12,528 blocks: 784 MiB of page
+-- reads to obtain 150 KB of triplets. Measured cold on ext4, that is 3.77 s.
+-- This index holds the three values beside the key, so the block level is served
+-- entirely from it: 9 pages, 576 KiB against a 2.3 GiB project, and 14 ms.
+CREATE INDEX sampleblocks_levels
+    ON sampleblocks (blockid, summin, summax, sumrms);
+
+-- The same trick one rung finer, and it is not free: this one duplicates the
+-- 256-frame triplets rather than three floats, which on a 24/192 side is 28 MiB
+-- against 2.3 GiB - 1.2%. It buys the zoom an editor actually works at. An
+-- eight-minute span at 1920 px is 1,916 blocks per channel, and reaching their
+-- summary256 through the row costs 594 ms per channel cold; through this index,
+-- 29 ms. Without it that drawing takes 1.35 s, and §37 asks for sub-second.
+--
+-- It repeats the whole-block triplet as well, twelve bytes beside two kilobytes,
+-- because the reader falls back to it when a block has no summary blob. Leaving
+-- those three columns out makes the index a lookup rather than a covering one,
+-- SQLite fetches the row after all, and the whole 28 MiB buys nothing - measured.
+--
+-- There is no matching index for summary64k. Nothing VCW writes ever reads that
+-- rung - it is coarser than a 250 ms block and exists for AUP4 compatibility
+-- (§49) - and the blocks that do need it, imported from Audacity, have no
+-- `capture_blocks` row and so never reach this query. If import ever makes it
+-- hot, measure it then.
+CREATE INDEX sampleblocks_summary256
+    ON sampleblocks (blockid, summin, summax, sumrms, summary256);
+
 -- §10 requires overruns, underruns, dropped frames and stream errors counted and
 -- *persisted*: they belong to the recording, not to the process that made it.
 CREATE TABLE capture_diagnostics (

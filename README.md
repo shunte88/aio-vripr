@@ -75,6 +75,29 @@ hold and counts it, because a stalled consumer must never cost a recorded frame.
 capture path is unchanged by it: the audio callback still does three atomics and one
 memcpy.
 
+The waveform (WP-09) is the first thing to read a capture back rather than write one.
+The pyramid is built as the audio lands - the writer summarises every 250 ms block as it
+commits it - and the reader picks its own rung from the span and the width, so the
+picture is always exactly as wide as it was asked for and never costs more than the zoom
+implies.
+
+Getting there found something in the storage layer that no amount of care in the renderer
+would have fixed. A sample block at 24/192 is 192 KB of audio, so with a 64 KiB page it
+occupies pages of its own, and reading the twelve bytes of summary beside it still costs
+a page fault. A 26-minute side is 12,528 blocks: **784 MiB of reads to obtain 150 KB of
+triplets, and 3.77 seconds** for a drawing that has to feel instant. Two covering indexes
+put the coarse rungs somewhere the audio is not, for 1.4% of the file, and the same
+drawing is **17 ms**. The query names them explicitly, because SQLite left to itself
+prefers the primary key and produces the slow plan, and a test asserts on the *query
+plan* rather than on a stopwatch - the difference it guards is two hundred fold, and a
+timing test for it would still be flaky.
+
+The numbers are from a real record, not a generated signal: a 26-minute 192 kHz stereo
+side pushed through the writer onto ext4, 300,627,479 frames in 2.33 GiB, with the page
+cache evicted before every read. Whole side at 4000 columns 17 ms; an eight-minute span
+at 1920 columns 74 ms; ten seconds 5.7 ms; the individual samples 6 ms. Worst case
+anywhere in the sweep 304 ms.
+
 Capture has been confirmed bit-perfect end to end on this machine: 96 kHz / 2 ch / S32
 requested and granted in exclusive mode over a direct hardware path, cross-checked
 against what the kernel says the card is actually running. That cross-check is the
@@ -147,6 +170,28 @@ vcw soak side-a-soak.vcw --rate 192000 --format s24 --minutes 90
 That is how the storage path is measured on a machine before it is trusted with a
 record. It reports commit latency percentiles against the block budget, the peak
 write-ahead log, and whether anything was lost - and exits non-zero if it was.
+
+`waveform` draws a capture at the terminal, which is how the pyramid is checked without
+a UI:
+
+```sh
+vcw waveform side-a.vcw --pixels 160 --rows 21
+vcw waveform side-a.vcw --start 300 --end 400 --pixels 1920 --json
+```
+
+It says which rung it read and how long the read took, so the claim above is verifiable
+on any machine:
+
+```
+  capture    1, 192000 Hz, 2 ch, 1565.768 s
+  span       0.000 s to 1565.768 s, 160 column(s) of 1878921.7 frame(s)
+  level      block (48000 frame(s) a triplet), read in 17.600 ms
+  channel 0  peak 0.9332
+```
+
+Add `--rebuild` to recompute the summaries from the stored audio first. It writes only
+summaries, never samples, and only for blocks VCW recorded - an imported Audacity
+project cannot be rewritten by a redraw.
 
 Requires a Rust toolchain at 1.90 or newer and, on Linux, `libasound2-dev`. SQLite is
 compiled in, so there is no system SQLite to match.

@@ -1035,6 +1035,7 @@ dependencies = [
  "vcw-audio",
  "vcw-core",
  "vcw-project",
+ "vcw-signal",
  "vcw-types",
 ]
 
@@ -1094,6 +1095,7 @@ dependencies = [
  "rusqlite",
  "tempfile",
  "thiserror 2.0.20",
+ "vcw-signal",
  "vcw-types",
 ]
 

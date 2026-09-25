@@ -1,12 +1,13 @@
 # VCW - project status
 
 **As of:** 2026-09-25
-**Phase:** 1 is underway - WP-01 through WP-08 are built, all on Linux x86_64 only.
+**Phase:** 1 is underway - WP-01 through WP-09 are built, all on Linux x86_64 only.
 All five Phase 0 spikes returned verdicts on their primary platform; gate G0 remains
 open on hardware coverage, WP-05's soak settled D3's firmed-config run, **WP-06 closes
-milestone M1, *it records*,** WP-07 locks D8, and WP-08 adds the meters and the §10
-fan-out they read through.
-**Branch:** `main` at `051a648` (WP-07), plus WP-08 in the working tree.
+milestone M1, *it records*,** WP-07 locks D8, WP-08 adds the meters and the §10 fan-out
+they read through, and WP-09 draws the waveform - and cost the schema two covering
+indexes to do it in milliseconds rather than seconds.
+**Branch:** `main` at `75123ab` (WP-08), plus WP-09 in the working tree.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -1263,21 +1264,273 @@ the simulated source and the ALSA device on this machine, not against a converte
 for an hour - the lossy-tap behaviour under sustained real load is the WP-05-style soak
 that has not been run with meters attached.
 
+## Phase 1 - WP-09, the waveform pyramid
+
+Built 2026-09-25. `vcw-signal::waveform` renders; `vcw-project::waveform` reads;
+`vcw-types::summary` holds the triplet both of them agree on. Exit criterion met, and
+measured on a real 26-minute vinyl side rather than on a generated signal.
+
+### The split, and why the query lives in the project crate
+
+ADR-0003's rules that bite here are two: analysis must never reach a device, and only
+one crate may open the project database. So the renderer knows nothing about SQLite - it
+takes summaries and samples and returns columns - and every statement lives in
+`vcw-project`, which is therefore allowed to depend on `vcw-signal`. `vcw-signal` depends
+on `vcw-types` alone, so nothing circular is possible.
+
+The triplet moved out of `vcw-project::persistence` into `vcw-types::summary` on the way,
+because the writer computes it and the reader folds it and one definition is the only way
+those two stay in agreement.
+
+### RMS composes exactly, and Audacity's does not
+
+`Summary::merge` weights by **true sample count**:
+`sqrt((n1*r1^2 + n2*r2^2)/(n1+n2))`. That is exact, which is what makes the pyramid
+honest: a column drawn from stored triplets is the same number the samples themselves
+would have produced, so zooming out changes the resolution and not the answer.
+
+Audacity weights its 64k level by block *capacity* instead of by the count actually in
+the block, which makes its RMS slightly high on any short final block. Measured against
+`/data2/vinyl_rips/simples_test.aup3` and pinned in
+`weighting_by_capacity_instead_of_count_is_what_makes_audacity_high`, so the difference is
+recorded rather than inherited by accident when import lands.
+
+### `Summary64k` is dead weight for anything VCW records
+
+The ladder is 1 frame, 256 frames, the block, and 65,536 frames - and at D3's 250 ms
+block the last rung is *coarser* than the one below it: 65,536 frames against 12,000 at
+48 kHz and 48,000 at 192 kHz. It also needs a blob parsed to reach the same rows the
+block level already has as three scalar columns.
+
+So it is never chosen for a capture VCW wrote. It is still *written*, for AUP4
+compatibility (§49), and still readable, for imported Audacity blocks, which is the only
+place it can ever be the right rung.
+`the_64k_level_is_never_read_from_a_capture_we_wrote` is the test that keeps that true.
+
+### The finding: a 192 KB blob makes three floats expensive
+
+This is the part that was not predicted and that decided the schema.
+
+A `sampleblocks` row at 24/192 carries 192 KB of audio, so with a 64 KiB page size it
+occupies pages of its own and nothing else shares them. Reading `summin`, `summax` and
+`sumrms` - twelve bytes - still costs a page fault per block. A 26-minute side is 12,528
+blocks, so a full zoom-out is **784 MiB of page reads to obtain 150 KB of triplets**.
+Cold on ext4 that measured **3.77 s**, against a requirement of sub-second, and no amount
+of care in the renderer could have touched it.
+
+Two covering indexes fix it by putting the coarse rungs somewhere the audio is not:
+
+| Index | Columns | Size on a 2.3 GiB side |
+|---|---|---|
+| `sampleblocks_levels` | `blockid, summin, summax, sumrms` | 576 KiB, 0.02 % |
+| `sampleblocks_summary256` | the same, plus `summary256` | 28 MiB, 1.2 % |
+
+The query names them with `INDEXED BY`, which is deliberate in two ways. SQLite left to
+itself prefers the integer primary key and produces the slow plan; and `INDEXED BY` is an
+assertion rather than a hint, so if an index ever goes missing the query fails loudly
+instead of quietly reverting to three seconds in front of a user.
+
+The second index has to repeat the whole-block triplet as well - twelve bytes beside two
+kilobytes - because the reader falls back to it for a block with no summary blob. Written
+without those three columns it is a *lookup* index rather than a covering one, SQLite
+fetches the row after all, and the entire 28 MiB buys nothing. That was measured, not
+reasoned: the first version of the index made no difference at all, and
+`EXPLAIN QUERY PLAN` said `SEARCH sb USING INDEX` where it now says `USING COVERING
+INDEX`.
+
+`the_coarse_levels_never_touch_a_row_that_holds_audio` locks it down **structurally**,
+by asserting on the plan, not by timing anything. The difference it guards is two
+hundred fold, and a timing test for it would still have been flaky.
+
+There is no index for `summary64k`. Nothing VCW writes reads that rung, and the blocks
+that do need it - imported ones - have no `capture_blocks` row and never reach this
+query. If import makes it hot, that is the time to measure it.
+
+### The measurement, on real music
+
+A 26-minute 192 kHz stereo 32-bit side from `/data2/source_rips` was pushed through the
+product writer onto `/data2` (ext4, SATA SSD): **300,627,479 frames, 12,528 blocks,
+2.33 GiB**. Every read below had the page cache evicted first with
+`posix_fadvise(DONTNEED)`, so these are cold numbers, and each draws **both** channels.
+
+| Span | Width | Rung | Cold |
+|---|---|---|---|
+| whole side | 160 px | block | 21.8 ms |
+| whole side | 1920 px | block | 17.6 ms |
+| whole side | 4000 px | block | 17.0 ms |
+| whole side | 8000 px | summary256 | 303.5 ms |
+| 8 min | 1920 px | summary256 | 74.0 ms |
+| 100 s | 1920 px | summary256 | 19.9 ms |
+| 10 s | 1920 px | summary256 | 5.7 ms |
+| 1 s | 1920 px | samples | 18.7 ms |
+| 50 ms | 1920 px | samples | 6.2 ms |
+
+Before the indexes the first row was 3,767 ms, the eight-minute span 1,347 ms and the
+8000 px draw 4,170 ms. Worst case anywhere in the sweep is now 304 ms, for a whole-side
+draw at a width no display can ask for.
+
+The picture is worth having as well as the timings. At 160 columns the side shows its
+track gaps as narrow notches and its lead-out as a single tall spike, peak 0.9332 on the
+left and 0.9096 on the right - which is what a vinyl side looks like and is not what
+uniform noise looks like. The generated source the tests use draws a featureless block,
+correctly, and would have hidden any error that depended on real dynamics.
+
+### Regeneration from PCM, on the same side
+
+§19 asks for the pyramid to be regenerable from the audio, and a toy capture cannot
+really test that. So the 26-minute side had every `summary256` and `summary64k` blob set
+to `NULL` and `vcw waveform --rebuild` pointed at it: **12,528 of 12,528 blocks rebuilt
+from the stored audio in 78.7 s**, reading all 2.3 GiB of PCM to do it.
+
+The drawing that came out is **byte-identical** to the one the writer's own summaries
+produced, at the block level and at the 256-frame level alike - 1,920 columns of a 100 s
+span compared field by field. That is the claim worth making about a pyramid: it holds no
+information the audio does not, so losing it costs time and nothing else.
+
+### What §37 actually claims, restated
+
+"Render cost independent of total length" is true and is easy to overclaim. Three
+separate things, measured separately:
+
+1. **The output is always exactly `pixels` columns.** Constant by construction, whatever
+   the span.
+2. **At any zoom coarse enough to reach the block level, the read is independent of
+   sample count.** The same 10 s of audio costs 267 µs at 192 kHz and 292 µs at 48 kHz -
+   four times the samples, no extra cost, no blobs opened - and a full zoom-out costs the
+   same 17 to 22 ms at 160, 1920 and 4000 columns.
+3. **At mid zoom the read is proportional to the samples in the span, never to the length
+   of the recording the span came from.** The same 5 s drawn out of a 10 s capture and a
+   200 s capture: 18.8 ms against 19.3 ms. Twenty times the recording for 2.5 % more
+   time.
+
+What is *not* claimed: that a wider span is free. It is not, and the table above shows
+it climbing with span until the ladder steps up a rung, at which point it falls again.
+A 500 s span at 1920 px costs 8 ms while a 100 s span costs 20 ms, because the wider one
+reaches the block level and the narrower one does not.
+
+### What it cost the capture path
+
+Two more indexes to maintain on every commit. `blockid` is an autoincrement key, so both
+inserts land at the end of their b-tree and neither rebalances. A five-minute real-time
+24/192 soak: commit p50 6.2 ms, p95 17.3 ms, **p99 28.9 ms, max 42.5 ms** against the
+250 ms block budget, peak WAL 5.06 MiB, zero loss and every one of 345,657,600 bytes
+matched against what the source must have generated. File size grows 1.4 %.
+
+**The 90-minute soak was re-run against the new schema and it FAILED, and the run is not
+usable either way, because I ran the full gate on the same machine while it was going.**
+That is worth writing down rather than quietly repeating: a real-time soak needs the
+machine, and a `cargo test --workspace` beside it is not a harsher test, it is a spoiled
+one.
+
+What the run actually says, since it says something:
+
+| | This run | Reference (pre-index) |
+|---|---|---|
+| real-time factor | 0.99996 | 1.00001 |
+| commit p50 / p95 / p99 | 7.0 / 19.6 / **39.2** ms | - / - / **63.2** ms |
+| commit max | **965.1 ms** | 102.3 ms |
+| peak WAL | 5.31 MiB | 4.57 MiB |
+| overruns | 28 | 0 |
+| dropped frames | 53,760 | 0 |
+| `validate` | clean | clean |
+| byte readback | MISMATCH | every byte |
+
+The *distribution* is better than the reference at every percentile that was recorded.
+What broke it is a single 965 ms commit, and the 28 overruns all land in one burst
+between 600 s and 1200 s into the run, which is exactly the ten minutes in which the
+full workspace test suite, clippy and `cargo deny` were running. The remaining 70
+minutes added none. The 2.3 GiB database copy and the 2.3 GiB rebuild read later in the
+run added none either, which points at CPU and fsync contention rather than at disk
+bandwidth.
+
+**The byte mismatch is the drop, not corruption, and that is provable rather than
+assumed.** The verifier reported channel 0 frame 195,888,000 holding `D9 90 24` where the
+source would have produced `8D 94 7C`. Searching the generator over the following 300,000
+frames finds exactly one frame that produces `D9 90 24`: frame **195,941,760**, which is
+195,888,000 + **53,760** - precisely the reported dropped-frame count. So the writer
+stored what it was handed, in order, unaltered; the ring lost 280 ms of audio in one
+stall and everything after is shifted by it. `validate` clean says the same thing from
+the checksum side.
+
+**The genuinely new observation is about the ring, not the indexes.** The ring is
+1,000 ms and the stall was 965 ms. There is no headroom in that: the ring's job is to
+absorb the commit tail, and the current size cannot absorb a one-second one. Whether a
+one-second commit is reachable on an *unloaded* machine is the open question; if it is,
+the ring is under-sized for the tail rather than for the mean, and that is a D3 parameter
+nobody has swept against the tail.
+
+**What is still needed: one clean 90-minute run on an idle machine.** Until it exists,
+WP-05's exit soak stands on the pre-index run and the new schema is unproven over 90
+minutes. The five-minute run on a quiet machine gave p99 28.9 ms and max 42.5 ms with
+zero loss, which is evidence and not proof. The failed run is at
+`/data2/vcw-scratch/soak90.log` with its 6.04 GiB database beside it.
+
+### The CLI
+
+```sh
+vcw waveform side-a.vcw --pixels 160 --rows 21
+vcw waveform side-a.vcw --start 300 --end 400 --pixels 1920 --json
+vcw waveform side-a.vcw --rebuild
+```
+
+It reports which rung it read and how long the read took, so every number above is
+checkable on any machine without a UI. `--rebuild` recomputes the pyramid from the stored
+PCM before drawing, by default only where a summary is missing; it never writes `samples`
+and never touches a block with no `capture_blocks` row, so an imported Audacity project
+cannot be rewritten by a redraw.
+
+### Tests
+
+329 in the workspace, full gate green. 11 unit tests on the renderer, including that the
+answer has exactly as many columns as pixels were asked for, that the level chosen is the
+coarsest that still fills every pixel, that a run straddling a column boundary is split
+by how much falls each side, and that a backwards span is empty rather than enormous.
+Nine integration tests on the reader, including that every level gives the same answer
+for the same span, that the pyramid can be thrown away and rebuilt identically, and that
+an unknown capture is an error rather than an empty picture. Four on the CLI verb. Two on
+the query plan.
+
+One test needed a genuine correction rather than a fixed expectation: the span-independence
+test was reading *different audio* from its two captures, because the helper it used went
+silent at the halfway point of whichever capture it was filling. A second helper whose
+value is a function of frame index alone fixed it, and the first is now documented as
+unusable for span comparisons.
+
+### Fixed on the way past
+
+`recovery::tests::a_log_left_behind_is_visible_before_anything_opens_the_project` was
+flaky at about one run in twenty-five, and had been since WP-06 - confirmed by looping it
+40 times in a worktree at `75123ab`, before any of this work. It asserted that a
+checkpoint folds *exactly* the bytes an inspection saw, but `Project::open` stamps
+`last_written_at` on its way in and can add a frame of its own, depending on the
+checkpoint SQLite attempts when the writer's connection closes. The claim worth making is
+that the checkpoint found everything the inspection did, so it is now a floor. 40 runs
+clean.
+
+### What is not verified
+
+Linux x86_64 only, like everything above it. The measurements are from a SATA SSD with a
+64 KiB page size; the Pi 5's SD card is where the `summary256` rung is most likely to
+hurt, and that is the run to take before anyone adds a fourth rung on instinct. Nothing
+publishes a waveform event yet either - §19's progressive build exists on the *write*
+side, where the writer summarises every block as it commits, but the read side is polled
+rather than pushed, which is a WP-16 question about what the view wants.
+
 ## Next up
 
-**`WP-09`, the waveform pyramid.** Pure signal work over data the capture path already
-produces, and it needs no device: the simulated source and the 62-rip corpus at
-`/data2/source_rips` are enough to develop and verify against. It is the one S3
-identified as the real UI constraint, so the sooner it exists the sooner the rendering
-question can be measured rather than argued about. It also starts further along than it
-looks: WP-05's writer already builds and persists a summary pyramid for every block it
-commits, so WP-09 reads and renders something the project contains rather than building
-it from scratch.
+**`WP-10`, playback, and `WP-12`, metadata.** Both branch off WP-07, neither blocks the
+other, and they can be interleaved. WP-10 is the first work package that needs a device
+for *output*, which is a second reason S1's open platforms start to matter; WP-12 needs
+no device at all and is the larger of the two at weight 9.
 
-WP-08 left the plumbing in place for it. `Tee` takes any number of taps; the waveform
-worker is a second `tap()` call and a second thread, with no change to the capture path.
+The plumbing is in place for whichever comes first. `Tee` takes any number of taps, the
+meter uses one, and a playback monitor or a live waveform feed is a second `tap()` call
+and a second thread, with no change to the capture path.
 
-WP-10 and WP-12 also branch off WP-07 and can be interleaved freely.
+One thing WP-09 deliberately left undone and did not need: **the waveform is read, not
+pushed.** The writer summarises every block as it commits, so the rows are there the
+instant they land, but nothing publishes a waveform event and a UI would have to ask. It
+is a WP-16 question about what the view wants, and cheap either way.
 
 Still open on WP-03 and WP-04, and both for the same reason: **Windows and macOS.** The
 device matrix is reported on one OS, and the OS format verifier exists for Linux/ALSA
@@ -1285,7 +1538,13 @@ only. On the other two the verdict degrades to `Unconfirmed` rather than to a fa
 pass, which is the right failure, but neither work package can close on it.
 
 WP-05 and WP-06 have the same shape of gap: the 90-minute soak and the kill suite have
-both run on x86_64/ext4 and nowhere else. The Pi 5 on SD and on NVMe, and Windows, are
+both run on x86_64/ext4 and nowhere else. WP-09's two new indexes put the soak back in
+scope for a re-run on this machine as well, since they are maintained on every commit.
+**That re-run has been attempted once and failed, and the failure was mine** - the full
+gate ran on the same machine while it went. The five-minute quiet run measured p99
+28.9 ms against a 250 ms budget with zero loss; **one clean 90-minute run on an idle
+machine is the outstanding item**, and it is now the cheapest open measurement in the
+project. The Pi 5 on SD and on NVMe, and Windows, are
 the runs that would close them, and they need no new code - `vcw soak` and
 `cargo test -p vcw-cli -- --ignored` are the harnesses.
 
@@ -1300,7 +1559,9 @@ the spike harness.
   at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
   `19dd459`. WP-01 is committed at `cd8e445`, WP-02 at `acb8835`, WP-03 at `941981a`,
   WP-04 at `95f1f52`, WP-05 at `358c44a`, WP-06 at `b2a517b` and WP-07 at `051a648`.
-  **WP-08 is the current working-tree change and is uncommitted.**
+  WP-08 is committed at `75123ab`. **WP-09 is the current working-tree change and is
+  uncommitted**; it is the first change since WP-02 to touch the schema, so
+  `docs/SCHEMA.md` is regenerated in the same commit.
 - **`/data2/vcw_soak/`** holds what is left of the WP-05 soak: `wp05.log`, the run
   transcript quoted above, and `live.vcw`, the four-second hardware capture. The 5.94
   GiB `wp05.vcw` has been deleted, as have the two three-minute WAL-pair projects.
