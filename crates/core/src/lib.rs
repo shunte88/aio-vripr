@@ -40,10 +40,18 @@
 //! Tauri shell (WP-15) is one more consumer of the same commands and events, with
 //! no logic of its own. CI asserts that no crate below `app/` depends on Tauri.
 //!
-//! Concurrency follows D8: dedicated OS threads for capture, metering, waveform and
-//! detection, tokio confined to network and export I/O. No async on the RT path.
+//! Concurrency follows D8, locked by WP-07 as `docs/adr/0005-concurrency-model.md`:
+//! dedicated OS threads on the capture path, `mpsc` between them, and no async
+//! runtime anywhere near audio or SQLite. Tokio arrives with network I/O at WP-12
+//! and no sooner. The engine thread is not a preference - a `cpal` stream handle
+//! is `!Send`, so the thread that opens a device is the thread that keeps it.
 
 pub mod commands;
 pub mod engine;
 pub mod events;
 pub mod state;
+
+pub use commands::{Command, Setup};
+pub use engine::{Engine, Recorded, Recorder};
+pub use events::{Bus, Event, Events};
+pub use state::{Deck, Machine, Phase, Rehearsal};

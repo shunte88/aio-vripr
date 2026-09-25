@@ -159,6 +159,16 @@ pub struct Config {
     /// commits a second it is under 2 % of the transactions and, at
     /// `synchronous=FULL`, under 2 % of the fsyncs. Zero disables it.
     pub diagnostics_millis: u32,
+
+    /// Whether the writer begins paused rather than committing.
+    ///
+    /// §11 puts `Armed` before `Recording`: the device is open and the levels
+    /// are being set, and nothing should be written yet. Starting the writer
+    /// paused is how that is arranged - the ring is drained from the moment the
+    /// device opens, so the counters never report an overrun the transport
+    /// caused by not listening, and the first `RECORD` is a flag flip rather
+    /// than a thread spawn and a session insert.
+    pub start_paused: bool,
 }
 
 impl Default for Config {
@@ -172,6 +182,7 @@ impl Default for Config {
             summaries: true,
             poll: Duration::from_millis(5),
             diagnostics_millis: 2_000,
+            start_paused: false,
         }
     }
 }
@@ -361,6 +372,7 @@ pub struct Progress {
     worst_commit_micros: AtomicU64,
     peak_wal_bytes: AtomicU64,
     stopped: AtomicBool,
+    paused: AtomicBool,
 }
 
 impl Progress {
@@ -379,6 +391,10 @@ impl Progress {
     /// Transactions committed.
     pub fn commits(&self) -> u64 {
         self.commits.load(Ordering::Relaxed)
+    }
+    /// Whether the writer is draining the ring and committing nothing.
+    pub fn is_paused(&self) -> bool {
+        self.paused.load(Ordering::Relaxed)
     }
     /// Checkpoints issued by the writer.
     pub fn checkpoints(&self) -> u64 {
@@ -899,6 +915,7 @@ impl Writer {
 pub struct Handle {
     thread: Option<JoinHandle<Result<Outcome>>>,
     stop: Arc<AtomicBool>,
+    pause: Arc<AtomicBool>,
     progress: Arc<Progress>,
     capture_id: i64,
     result: Arc<std::sync::Mutex<(CaptureState, Diagnostics)>>,
@@ -942,6 +959,39 @@ impl Handle {
         if let Ok(mut slot) = self.result.lock() {
             slot.1 = diagnostics;
         }
+    }
+
+    /// Keeps draining the ring but stops committing (§11's `PAUSE`).
+    ///
+    /// The ring must still be emptied or it fills within milliseconds and every
+    /// callback after that counts as an overrun - the diagnostics would then
+    /// report a fault the pause invented. So the frames keep arriving and are
+    /// discarded, which is also what makes the recorded timeline *contiguous*
+    /// across a pause: the audio either side is adjacent, and the minutes spent
+    /// flipping the record are simply not in the capture.
+    ///
+    /// The writer commits whatever partial block it is holding as the pause
+    /// begins. Carrying it across would leave up to a block of audio unwritten
+    /// for as long as the operator takes, which is the one interval where
+    /// nothing else is protecting it.
+    ///
+    /// Idempotent, and safe to call from any thread.
+    pub fn pause(&self) {
+        self.pause.store(true, Ordering::Relaxed);
+    }
+
+    /// Starts committing again (§11's `RESUME`). Idempotent.
+    pub fn resume(&self) {
+        self.pause.store(false, Ordering::Relaxed);
+    }
+
+    /// Whether the writer is currently discarding what it reads.
+    ///
+    /// Reads the writer's own flag rather than the request, so it is false
+    /// until the pause has actually taken effect.
+    #[must_use]
+    pub fn is_paused(&self) -> bool {
+        self.progress.is_paused()
     }
 
     /// Asks the writer to drain what is left and stop, and waits for it.
@@ -1009,11 +1059,13 @@ pub fn spawn_on<S: PcmSource + 'static>(
     let progress = writer.progress();
     let capture_id = writer.session().id();
     let stop = Arc::new(AtomicBool::new(false));
+    let pause = Arc::new(AtomicBool::new(config.start_paused));
     let result = Arc::new(std::sync::Mutex::new((
         CaptureState::Finalised,
         Diagnostics::default(),
     )));
 
+    let thread_pause = Arc::clone(&pause);
     let thread_stop = Arc::clone(&stop);
     let thread_result = Arc::clone(&result);
     let thread_progress = Arc::clone(&progress);
@@ -1026,7 +1078,22 @@ pub fn spawn_on<S: PcmSource + 'static>(
             let mut scratch = vec![0u8; writer.block_frames() as usize * writer.frame_bytes];
             let every = Duration::from_millis(u64::from(config.diagnostics_millis));
             let mut counters_written = Instant::now();
+            let mut was_paused = config.start_paused;
+            thread_progress.paused.store(was_paused, Ordering::Relaxed);
             let outcome = loop {
+                let paused = thread_pause.load(Ordering::Relaxed);
+                if paused != was_paused {
+                    // Entering a pause: commit the partial block rather than
+                    // hold it for however long the operator takes. Leaving one:
+                    // nothing to do, the next read simply gets pushed again.
+                    if paused && let Err(e) = writer.flush() {
+                        thread_progress.stopped.store(true, Ordering::Relaxed);
+                        let _ = writer.finish(CaptureState::Interrupted);
+                        break Err(e);
+                    }
+                    was_paused = paused;
+                    thread_progress.paused.store(paused, Ordering::Relaxed);
+                }
                 if config.diagnostics_millis > 0 && counters_written.elapsed() >= every {
                     counters_written = Instant::now();
                     let latest = thread_result.lock().map(|r| r.1).unwrap_or_default();
@@ -1036,6 +1103,11 @@ pub fn spawn_on<S: PcmSource + 'static>(
                 }
                 let n = source.read(&mut scratch);
                 if n > 0 {
+                    if paused {
+                        // Read and dropped. The ring stays empty, the counters
+                        // stay honest, and the frame index does not advance.
+                        continue;
+                    }
                     if let Err(e) = writer.push(&scratch[..n]) {
                         thread_progress.stopped.store(true, Ordering::Relaxed);
                         // The session is left interrupted deliberately: the
@@ -1065,6 +1137,7 @@ pub fn spawn_on<S: PcmSource + 'static>(
     Ok(Handle {
         thread: Some(thread),
         stop,
+        pause,
         progress,
         capture_id,
         result,
@@ -1600,6 +1673,140 @@ mod tests {
         );
         assert!(outcome.duration_secs(RATE) > 0.0);
         assert_eq!(outcome.duration_secs(0), 0.0);
+    }
+
+    /// A [`PcmSource`] that keeps producing until it is switched off.
+    ///
+    /// [`Canned`] finishes when its buffer runs out, which ends the capture -
+    /// no use for testing a pause, where the whole question is what happens
+    /// while audio keeps arriving and nothing is being written.
+    struct Tap {
+        next: u8,
+        done: Arc<AtomicBool>,
+    }
+
+    impl PcmSource for Tap {
+        fn read(&mut self, dst: &mut [u8]) -> usize {
+            if self.done.load(Ordering::Relaxed) {
+                return 0;
+            }
+            // A slow trickle, so the test can pause between reads rather than
+            // racing a writer that has already swallowed the whole capture.
+            let n = dst.len().min(4_096);
+            for byte in &mut dst[..n] {
+                *byte = self.next;
+                self.next = self.next.wrapping_add(1);
+            }
+            std::thread::sleep(Duration::from_millis(1));
+            n
+        }
+
+        fn is_finished(&self) -> bool {
+            self.done.load(Ordering::Relaxed)
+        }
+    }
+
+    #[test]
+    fn a_paused_writer_drains_the_ring_and_commits_none_of_it() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let info = info();
+        let done = Arc::new(AtomicBool::new(false));
+        let source = Tap {
+            next: 0,
+            done: Arc::clone(&done),
+        };
+        let handle = spawn(
+            project(&dir),
+            &info,
+            Config {
+                // Small blocks, so a short test still crosses several commits.
+                block_millis: 20,
+                ..Config::default()
+            },
+            source,
+        )
+        .expect("spawn");
+
+        std::thread::sleep(Duration::from_millis(150));
+        let before = handle.progress().frames();
+        assert!(before > 0, "the writer committed nothing while running");
+
+        handle.pause();
+        // The flag is read at the top of the writer's loop, so give it one.
+        std::thread::sleep(Duration::from_millis(50));
+        assert!(handle.is_paused());
+        let at_pause = handle.progress().frames();
+
+        std::thread::sleep(Duration::from_millis(200));
+        assert_eq!(
+            handle.progress().frames(),
+            at_pause,
+            "the writer committed audio while paused"
+        );
+
+        handle.resume();
+        std::thread::sleep(Duration::from_millis(150));
+        assert!(!handle.is_paused());
+        assert!(
+            handle.progress().frames() > at_pause,
+            "the writer did not start again"
+        );
+
+        done.store(true, Ordering::Relaxed);
+        let outcome = handle.stop().expect("stop");
+        assert!(outcome.frames > 0);
+
+        // The point of the whole exercise: the timeline has no hole in it. The
+        // audio either side of the pause is adjacent, and the wall-clock time
+        // the operator spent paused is simply not in the capture.
+        let project = Project::open(dir.path().join("writer.vcw")).expect("reopen");
+        let report = validate(
+            &project,
+            Options {
+                verify_checksums: true,
+            },
+        )
+        .expect("validate");
+        assert!(report.is_clean(), "{:?}", report.findings);
+    }
+
+    #[test]
+    fn a_writer_that_starts_paused_writes_nothing_until_it_is_told_to() {
+        // §11's `Armed`: the device is open and the ring is being emptied, so
+        // the counters stay honest, but the project is untouched.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let info = info();
+        let done = Arc::new(AtomicBool::new(false));
+        let handle = spawn(
+            project(&dir),
+            &info,
+            Config {
+                block_millis: 20,
+                start_paused: true,
+                ..Config::default()
+            },
+            Tap {
+                next: 0,
+                done: Arc::clone(&done),
+            },
+        )
+        .expect("spawn");
+
+        std::thread::sleep(Duration::from_millis(200));
+        assert!(handle.is_paused());
+        assert_eq!(
+            handle.progress().frames(),
+            0,
+            "an armed transport wrote audio before it was asked to"
+        );
+
+        handle.resume();
+        std::thread::sleep(Duration::from_millis(150));
+        assert!(handle.progress().frames() > 0);
+
+        done.store(true, Ordering::Relaxed);
+        let outcome = handle.stop().expect("stop");
+        assert!(outcome.frames > 0);
     }
 
     #[test]

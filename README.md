@@ -48,6 +48,15 @@ and then recomputes every stored sample from the frame index in its own block: 9
 this session, every one recovered exactly, none of them losing more than the single
 250 ms block that had not been committed yet.
 
+The engine (WP-07) is built, and with it the transport: §11's state machine is a
+*typestate*, so an invalid transition is not rejected at runtime but has no method to
+call - `Idle` cannot stop, `Stopped` cannot record, and a `Paused` that has been
+resumed no longer exists. What drives it is a command in and an event out, nothing
+else, which is what lets `vcw session side-a.vcw --script "arm,record,sleep 30,stop"`
+record a side with no UI compiled at all. That is the architectural rule in §2 being
+tested rather than asserted: a core that could only be driven from the interface would
+have leaked into it.
+
 Capture has been confirmed bit-perfect end to end on this machine: 96 kHz / 2 ch / S32
 requested and granted in exclusive mode over a direct hardware path, cross-checked
 against what the kernel says the card is actually running. That cross-check is the

@@ -41,11 +41,14 @@
 //! this machine record, and through which path" (WP-03), `capture`, which
 //! answers "and what did it actually do" (WP-04), and `soak`, which is how
 //! WP-05's writer is measured on a machine before it is trusted with a side.
-//! The editing and export verbs arrive with the engine at WP-07.
+//! `session` arrives with the engine at WP-07 and is the one that matters: a
+//! whole capture, driven by transport commands, with no UI present. The
+//! editing and export verbs follow at WP-10 onwards.
 
 mod capture;
 mod devices;
 mod recover;
+mod session;
 mod soak;
 
 use clap::{Parser, Subcommand};
@@ -137,8 +140,44 @@ enum Command {
         json: bool,
     },
 
-    /// Drive the writer from a simulated source for a long time and check every
-    /// byte that lands (WP-05, D3).
+    /// Drive a whole capture session from the transport commands (§11, §35).
+    ///
+    /// Reads one verb per line from stdin, or from --script. The verbs are
+    /// arm, record, pause, resume, stop, reset, disarm, poll and quit, plus
+    /// `sleep <seconds>` for a script that wants to record for a while. Every
+    /// event the core publishes is printed as it happens.
+    ///
+    /// This is WP-07's exit criterion: a full capture, with no UI present.
+    Session {
+        /// Project to record into. Created if it does not exist.
+        project: std::path::PathBuf,
+        /// Device id, as printed by `vcw devices`. Omit for the simulated
+        /// source, which needs nothing plugged in.
+        #[arg(long)]
+        device: Option<String>,
+        /// Sample rate in Hz. Omit to take the best the device offers.
+        #[arg(long)]
+        rate: Option<u32>,
+        /// Channel count. Omit to take the best on offer.
+        #[arg(long)]
+        channels: Option<u16>,
+        /// Sample format. Omit to take the widest integer format available.
+        #[arg(long, value_enum)]
+        format: Option<Format>,
+        /// How to open the device. Only exclusive can be bit-perfect (§9).
+        #[arg(long, value_enum, default_value_t = Mode::Exclusive)]
+        mode: Mode,
+        /// Ring capacity in milliseconds. Raised to the 500 ms floor if lower.
+        #[arg(long)]
+        ring_millis: Option<u32>,
+        /// A whole session on one line: --script "arm,record,sleep 2,stop".
+        #[arg(long)]
+        script: Option<String>,
+        /// Machine-readable output: one JSON object per line.
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Find unfinished captures left by a crash and close them honestly (§15).
     ///
     /// Reports by default and writes nothing. A recording that survived a
@@ -162,6 +201,8 @@ enum Command {
         json: bool,
     },
 
+    /// Drive the writer from a simulated source for a long time and check
+    /// every byte that lands (WP-05, D3).
     Soak {
         /// Project to write. Must not already exist.
         project: std::path::PathBuf,
@@ -247,6 +288,27 @@ fn main() -> anyhow::Result<()> {
             seconds,
             ring_millis,
             project,
+            json,
+        }),
+        Command::Session {
+            project,
+            device,
+            rate,
+            channels,
+            format,
+            mode,
+            ring_millis,
+            script,
+            json,
+        } => session::run(&session::Args {
+            project,
+            device,
+            rate,
+            channels,
+            format,
+            mode,
+            ring_millis,
+            script,
             json,
         }),
         Command::Recover {

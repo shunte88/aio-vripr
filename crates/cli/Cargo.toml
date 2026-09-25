@@ -12,10 +12,8 @@ authors.workspace = true
 name = "vcw"
 path = "src/main.rs"
 
-# vcw-core arrives here at WP-07, when there is an engine to drive. Until then the
-# binary declares only what it actually links, so `cargo deny` and the dependency
-# graph both stay honest.
 [dependencies]
+vcw-core = { workspace = true }
 vcw-audio = { workspace = true }
 vcw-project = { workspace = true }
 vcw-types = { workspace = true }

@@ -15,6 +15,7 @@ proposed, so the plan may name decisions that have no record here yet.
 | [0002](0002-sqlite-binding.md) | SQLite binding (D2) | Accepted 2026-09-25 |
 | [0003](0003-workspace-layout.md) | Cargo workspace layout and crate naming | Accepted 2026-09-25 |
 | [0004](0004-licence-and-toolchain.md) | Licence posture and toolchain floor (D7, D10) | Accepted 2026-09-25 |
+| [0005](0005-concurrency-model.md) | Concurrency model: threads, message passing, and where Tokio belongs (D8) | Accepted 2026-09-25 |
 
 A superseded record is never deleted or rewritten. It is marked superseded and links
 forward, because the reasoning that turned out to be wrong is the most useful thing in

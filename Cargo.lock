@@ -1033,6 +1033,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "vcw-audio",
+ "vcw-core",
  "vcw-project",
  "vcw-types",
 ]
@@ -1043,6 +1044,7 @@ version = "0.1.0"
 dependencies = [
  "rusqlite",
  "tempfile",
+ "thiserror 2.0.20",
  "vcw-audio",
  "vcw-export",
  "vcw-fingerprint",

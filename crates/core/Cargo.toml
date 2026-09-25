@@ -17,6 +17,7 @@ vcw-export = { workspace = true }
 vcw-identify = { workspace = true }
 vcw-metadata = { workspace = true }
 vcw-fingerprint = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 rusqlite = { workspace = true }

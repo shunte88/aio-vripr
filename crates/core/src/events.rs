@@ -32,7 +32,434 @@
 
 //! The event surface the core reports through (§35).
 //!
-//! Filled by WP-07. S3 sized this: meter and waveform frames at 750 Hz crossed the
-//! IPC boundary with 12.5x headroom and zero loss, so events are not coalesced on
-//! the way out. Paints are coalesced instead, in the webview, one read of the latest
-//! state per frame.
+//! The other half of §35. Every consumer - the CLI, the Tauri shell, a log -
+//! subscribes to the same stream, so none of them can hold a different idea of
+//! what the transport is doing. A command's result is an event and not a return
+//! value for exactly that reason: a returned value is known only to whoever
+//! asked.
+//!
+//! # Not coalesced on the way out
+//!
+//! S3 measured this rather than guessed it: meter and waveform frames at 750 Hz
+//! crossed the Tauri boundary with 12.5x headroom and zero loss, and the real
+//! constraint turned out to be main-thread *rendering*, not the boundary. So
+//! events are sent as they happen and coalescing is the consumer's business -
+//! the webview reads the latest state once per paint. Coalescing here would
+//! throw away ordering that costs nothing to keep.
+//!
+//! # High-frequency PCM never appears here
+//!
+//! §35 is explicit, and the rule shapes the enum: [`Event::Position`] carries a
+//! frame count, not frames. Meter and waveform events (WP-08, WP-09) will carry
+//! *summaries* computed Rust-side. Nothing in this module will ever carry
+//! samples.
+//!
+//! # What is here and what is not
+//!
+//! §35 names `meter-update`, `waveform-update`, `recording-position`,
+//! `track-detected`, `fingerprint-match`, `capture-warning` and
+//! `export-progress`. WP-07 owns the two that describe the transport -
+//! `recording-position` and `capture-warning` - plus the phase changes and
+//! command outcomes that §35's examples imply but do not name. The rest arrive
+//! with the work packages that generate them, and [`Event`] is
+//! `#[non_exhaustive]` so they can.
+
+use std::fmt;
+use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, Mutex};
+
+use vcw_types::{CaptureState, Diagnostics};
+
+use crate::state::Phase;
+
+/// Something the core is reporting (§35).
+///
+/// `PartialEq` but not `Eq`, because [`Event::Position`] carries a `f64`. That
+/// is the right shape for the field - a consumer that would only divide frames
+/// by the rate should not have to - and comparing two positions for exact
+/// equality was never going to be meaningful anyway.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum Event {
+    /// The transport moved between phases.
+    Phase {
+        /// Where it was.
+        from: Phase,
+        /// Where it is now.
+        to: Phase,
+    },
+    /// A device and a project were opened, and this is what was negotiated.
+    ///
+    /// Carries the divergences rather than only the result, because §9's whole
+    /// point is that a capture which quietly differs from the one asked for is
+    /// worse than an error.
+    Armed {
+        /// The project being recorded into.
+        project: String,
+        /// How the device is actually running, as a line of text.
+        negotiated: String,
+        /// Every field that was asked for and not granted.
+        divergences: Vec<String>,
+        /// Whether the operating system confirmed the format independently.
+        verified: bool,
+    },
+    /// How far the recording has got. §35's `recording-position`.
+    ///
+    /// Frames, not samples, and never the samples themselves.
+    Position {
+        /// Frames committed, per channel.
+        frames: u64,
+        /// The same thing in seconds, for a consumer that would only divide.
+        seconds: f64,
+    },
+    /// Something went wrong that did not stop the capture. §35's
+    /// `capture-warning`.
+    Warning {
+        /// A short stable slug, for a consumer that wants to branch.
+        code: &'static str,
+        /// A sentence for a consumer that wants to show it.
+        detail: String,
+    },
+    /// The capture was finalised.
+    Finished {
+        /// The capture's row id in the project.
+        capture_id: i64,
+        /// Frames committed, per channel.
+        frames: u64,
+        /// How it was recorded: finalised, or interrupted if anything was lost.
+        state: CaptureState,
+        /// The ring's four counters as of the end.
+        diagnostics: Diagnostics,
+        /// Whether the capture can honestly be called bit-perfect.
+        bit_perfect: bool,
+    },
+    /// A command was legal here and the deck refused it.
+    ///
+    /// The transport did not move. Kept apart from [`Event::Rejected`] because
+    /// this is a fault and that is a mistake, and an operator needs to know
+    /// which they are looking at.
+    Refused {
+        /// The command that was refused.
+        command: &'static str,
+        /// The phase the transport is still in.
+        phase: Phase,
+        /// Why.
+        reason: String,
+    },
+    /// A command has no meaning in the phase the transport is in.
+    ///
+    /// Nothing was attempted, because there was nothing to attempt: §11's
+    /// illegal transitions have no implementation to reach. Reported rather
+    /// than ignored so a UI can grey the button out next time.
+    Rejected {
+        /// The command that does not apply.
+        command: &'static str,
+        /// The phase it does not apply in.
+        phase: Phase,
+    },
+    /// The answer to [`Command::Poll`](crate::commands::Command::Poll).
+    Status {
+        /// Where the transport is.
+        phase: Phase,
+        /// Frames committed, per channel.
+        frames: u64,
+    },
+    /// The engine has stopped and will send nothing further.
+    ///
+    /// Always the last event, and always sent - including when the engine is
+    /// shutting down because something failed. A consumer that blocks on the
+    /// stream needs a guaranteed terminator or it waits for ever.
+    Closed,
+}
+
+impl Event {
+    /// The kebab-case name §35 uses for the event.
+    ///
+    /// Stable, because it is what a UI subscribes to and what a log is grepped
+    /// for. The variant names can be refactored; these cannot.
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::Phase { .. } => "phase-change",
+            Self::Armed { .. } => "armed",
+            Self::Position { .. } => "recording-position",
+            Self::Warning { .. } => "capture-warning",
+            Self::Finished { .. } => "capture-finished",
+            Self::Refused { .. } => "command-refused",
+            Self::Rejected { .. } => "command-rejected",
+            Self::Status { .. } => "status",
+            Self::Closed => "closed",
+        }
+    }
+
+    /// Whether this is the last event the stream will carry.
+    #[must_use]
+    pub const fn is_last(&self) -> bool {
+        matches!(self, Self::Closed)
+    }
+}
+
+impl fmt::Display for Event {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Phase { from, to } => write!(f, "{from} -> {to}"),
+            Self::Armed {
+                project,
+                negotiated,
+                divergences,
+                verified,
+            } => {
+                write!(f, "armed on {negotiated} into {project}")?;
+                if *verified {
+                    write!(f, ", os-confirmed")?;
+                }
+                for divergence in divergences {
+                    write!(f, "; {divergence}")?;
+                }
+                Ok(())
+            }
+            Self::Position { frames, seconds } => write!(f, "{frames} frames, {seconds:.3} s"),
+            Self::Warning { code, detail } => write!(f, "{code}: {detail}"),
+            Self::Finished {
+                capture_id,
+                frames,
+                state,
+                diagnostics,
+                bit_perfect,
+            } => write!(
+                f,
+                "capture {capture_id} {}: {frames} frames, {} overrun(s), \
+                 {} underrun(s), {} dropped, {} error(s), bit-perfect {}",
+                state.as_str(),
+                diagnostics.overruns,
+                diagnostics.underruns,
+                diagnostics.dropped_frames,
+                diagnostics.stream_errors,
+                if *bit_perfect { "yes" } else { "no" }
+            ),
+            Self::Refused {
+                command,
+                phase,
+                reason,
+            } => write!(f, "{command} refused while {phase}: {reason}"),
+            Self::Rejected { command, phase } => {
+                write!(f, "{command} does not apply while {phase}")
+            }
+            Self::Status { phase, frames } => write!(f, "{phase}, {frames} frames"),
+            Self::Closed => f.write_str("closed"),
+        }
+    }
+}
+
+/// A fan-out event bus: every subscriber sees every event, in order.
+///
+/// Deliberately not a dependency. `std::sync::mpsc` gives one receiver per
+/// channel, so the bus holds a sender per subscriber and pushes to each; a
+/// subscriber that has been dropped is pruned on the next send. That is the
+/// whole implementation, and it is enough because S3 measured the traffic this
+/// has to carry and the boundary was not the constraint.
+///
+/// Sending is not allowed to fail the engine. A subscriber that has gone away
+/// is normal - a webview reloaded, a CLI piped into `head` - and must never
+/// take a recording down with it, which is §36's isolation applied to the one
+/// place every worker touches.
+#[derive(Clone, Default)]
+pub struct Bus {
+    subscribers: Arc<Mutex<Vec<Sender<Event>>>>,
+}
+
+impl fmt::Debug for Bus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let count = self.subscribers.lock().map_or(0, |s| s.len());
+        f.debug_struct("Bus").field("subscribers", &count).finish()
+    }
+}
+
+impl Bus {
+    /// A bus with no subscribers.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Adds a subscriber and hands back its end of the stream.
+    #[must_use]
+    pub fn subscribe(&self) -> Events {
+        let (tx, rx) = channel();
+        if let Ok(mut subscribers) = self.subscribers.lock() {
+            subscribers.push(tx);
+        }
+        Events { rx }
+    }
+
+    /// Sends to every subscriber, dropping the ones that have gone.
+    ///
+    /// Returns how many received it, which the tests use and nothing else
+    /// needs: the engine does not care and must not.
+    pub fn publish(&self, event: &Event) -> usize {
+        let Ok(mut subscribers) = self.subscribers.lock() else {
+            // A poisoned bus means a subscriber panicked while holding the
+            // lock. Losing events is bad; taking the capture down with it is
+            // worse, and this is the one place that trade-off is made.
+            return 0;
+        };
+        subscribers.retain(|tx| tx.send(event.clone()).is_ok());
+        subscribers.len()
+    }
+
+    /// How many subscribers are currently attached.
+    #[must_use]
+    pub fn subscribers(&self) -> usize {
+        self.subscribers.lock().map_or(0, |s| s.len())
+    }
+}
+
+/// One subscriber's view of the event stream.
+pub struct Events {
+    rx: Receiver<Event>,
+}
+
+impl fmt::Debug for Events {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Events")
+    }
+}
+
+impl Events {
+    /// Waits for the next event.
+    ///
+    /// `None` once the engine has gone and the stream is drained.
+    #[must_use]
+    pub fn next(&self) -> Option<Event> {
+        self.rx.recv().ok()
+    }
+
+    /// Takes the next event if one is ready, without waiting.
+    #[must_use]
+    pub fn try_next(&self) -> Option<Event> {
+        // Empty and Disconnected both give `None`: "nothing for you" and
+        // "nothing ever again" look the same to a caller that is polling, and
+        // the one that wants to tell them apart uses `collect_until_closed`,
+        // where `Closed` is the terminator rather than the channel's state.
+        self.rx.try_recv().ok()
+    }
+
+    /// Everything waiting right now.
+    #[must_use]
+    pub fn drain(&self) -> Vec<Event> {
+        std::iter::from_fn(|| self.try_next()).collect()
+    }
+
+    /// Waits until [`Event::Closed`], collecting everything on the way.
+    ///
+    /// The honest way to read a finished session: the terminator is guaranteed,
+    /// so this cannot hang on a healthy engine and cannot truncate on a busy
+    /// one.
+    #[must_use]
+    pub fn collect_until_closed(&self) -> Vec<Event> {
+        let mut seen = Vec::new();
+        while let Some(event) = self.next() {
+            let last = event.is_last();
+            seen.push(event);
+            if last {
+                break;
+            }
+        }
+        seen
+    }
+}
+
+impl Iterator for Events {
+    type Item = Event;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Self::next(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_subscriber_sees_every_event_in_order() {
+        let bus = Bus::new();
+        let first = bus.subscribe();
+        let second = bus.subscribe();
+
+        bus.publish(&Event::Phase {
+            from: Phase::Idle,
+            to: Phase::Armed,
+        });
+        bus.publish(&Event::Position {
+            frames: 48_000,
+            seconds: 1.0,
+        });
+        bus.publish(&Event::Closed);
+
+        for events in [&first, &second] {
+            let seen = events.collect_until_closed();
+            assert_eq!(seen.len(), 3);
+            assert_eq!(seen[0].name(), "phase-change");
+            assert_eq!(seen[1].name(), "recording-position");
+            assert!(seen[2].is_last());
+        }
+    }
+
+    #[test]
+    fn a_subscriber_that_goes_away_is_pruned_and_takes_nothing_with_it() {
+        let bus = Bus::new();
+        let keeper = bus.subscribe();
+        {
+            let _leaver = bus.subscribe();
+            assert_eq!(bus.subscribers(), 2);
+        }
+        // The dropped receiver is only noticed on the next send, which is the
+        // point: the engine never blocks to find out who is still listening.
+        assert_eq!(bus.publish(&Event::Closed), 1);
+        assert_eq!(bus.subscribers(), 1);
+        assert!(keeper.next().is_some_and(|e| e.is_last()));
+    }
+
+    #[test]
+    fn publishing_with_nobody_listening_is_not_an_error() {
+        let bus = Bus::new();
+        assert_eq!(bus.publish(&Event::Closed), 0);
+    }
+
+    #[test]
+    fn the_names_are_the_ones_section_35_uses() {
+        // These strings are the contract. Renaming a variant is refactoring;
+        // renaming one of these breaks every subscriber that ever shipped.
+        assert_eq!(
+            Event::Position {
+                frames: 0,
+                seconds: 0.0
+            }
+            .name(),
+            "recording-position"
+        );
+        assert_eq!(
+            Event::Warning {
+                code: "x",
+                detail: String::new()
+            }
+            .name(),
+            "capture-warning"
+        );
+    }
+
+    #[test]
+    fn an_event_says_something_useful_when_printed() {
+        let armed = Event::Armed {
+            project: "side-a.vcw".to_owned(),
+            negotiated: "192000 Hz, 2 ch, S32".to_owned(),
+            divergences: vec!["asked for 96000 Hz, got 192000 Hz".to_owned()],
+            verified: true,
+        };
+        let line = armed.to_string();
+        assert!(line.contains("side-a.vcw"), "{line}");
+        assert!(line.contains("os-confirmed"), "{line}");
+        assert!(line.contains("asked for 96000 Hz"), "{line}");
+    }
+}

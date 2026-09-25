@@ -1,11 +1,11 @@
 # VCW - project status
 
 **As of:** 2026-09-25
-**Phase:** 1 is underway - WP-01 through WP-06 are built, all on Linux x86_64 only.
+**Phase:** 1 is underway - WP-01 through WP-07 are built, all on Linux x86_64 only.
 All five Phase 0 spikes returned verdicts on their primary platform; gate G0 remains
-open on hardware coverage, WP-05's soak settled D3's firmed-config run, and **WP-06
-closes milestone M1, *it records*.**
-**Branch:** `main` at `358c44a` (WP-05), plus WP-06 in the working tree.
+open on hardware coverage, WP-05's soak settled D3's firmed-config run, **WP-06 closes
+milestone M1, *it records*,** and WP-07 locks D8.
+**Branch:** `main` at `b2a517b` (WP-06), plus WP-07 in the working tree.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -309,6 +309,12 @@ silently. `probe.py` reports `project_rate` and `track_rates` as separate fields
    clauses that are easy to get wrong: the LGPL exception in `deny.toml` stays
    commented out until `chromaprint-next` actually lands, and the MSRV is enforced by a
    pinned CI job because an untested floor is not a floor.
+6. **D8 locked** ([ADR-0005](adr/0005-concurrency-model.md)): dedicated OS threads on
+   the capture path, `mpsc` between them, no async runtime near audio or SQLite, and
+   Tokio only when network I/O arrives at WP-12. Two clauses of the original wording
+   changed on contact with WP-07 - the engine thread is *required* rather than
+   preferred, because `cpal`'s stream handle is `!Send`, and elevated thread priority
+   is not implemented, because no soak has yet needed it.
 
 ## Decisions resolved 2026-09-24
 
@@ -967,14 +973,182 @@ Also unverified: every platform except this one. The kill suite is the cheapest 
 outstanding portability runs, needing neither a sound card nor an operator - one
 `cargo test -p vcw-cli -- --ignored` per rig.
 
+## Phase 1 - WP-07, the engine
+
+**Built 2026-09-25. Exit criterion met, both halves.** `vcw-core` was a directory of
+module stubs; it is now the layer that composes `vcw-audio` and `vcw-project` into a
+transport, and `vcw session` is the operator surface that drives it. About 2,800 lines
+across four modules, plus 730 lines of integration test in two places.
+
+### §11 as a type, not a check
+
+The state machine is a **typestate**. Five concrete phase types - `Idle`, `Armed<D>`,
+`Recording<D>`, `Paused<D>`, `Stopped<D>` - and each transition *consumes* the phase it
+leaves and returns the one it enters. There is no `Phase::Recording` variant to be in
+while the deck says otherwise, and no runtime guard to forget: `Idle` has no `stop`
+method for anyone to call, `Stopped` has no `record`, and a `Paused` that has been
+resumed no longer exists to be resumed a second time.
+
+Two additions to §11's diagram, both documented as additions rather than slipped in.
+`Armed -> Idle` exists because an operator who opens a device to set a level has to be
+able to change their mind, and `Stopped -> Idle` exists because §11 says stopping does
+not close the project, which only means anything if there is a way back to record the
+second side.
+
+What the phases drive is a `Deck` trait rather than a `Recorder` directly, which is what
+lets §11 be exercised exhaustively with no device, no disk and no project. `Rehearsal`
+is the test deck and it is *public*: the compile proofs need a concrete `Deck` that does
+not need a sound card, and a UI being developed with nothing plugged in needs the same
+thing.
+
+`Refused<S, E>` is the part worth pointing at. A transition a deck declines hands the
+**phase back** - `Err(Refused { from: Recording, error })` - so a failed pause does not
+lose a capture. That is §36's "task failure shall be isolated wherever possible"
+expressed in a signature rather than in a comment.
+
+### The bus is §35's two halves and nothing else
+
+`Command` in, `Event` out. A `Command` carries a *description* of what to open, never a
+device: it crosses a process boundary at WP-15, and a `cpal` stream handle is `!Send`
+and could not cross a thread boundary let alone that one. `Bus::publish` fans out to
+any number of subscribers, prunes the ones that have gone, and **cannot fail the
+engine** - a poisoned lock returns zero rather than propagating, which is the one place
+that trade-off is made deliberately.
+
+Both enums are `#[non_exhaustive]`, so `play`, `seek` and `export` are additions at
+WP-10 onwards rather than breaking changes. Inside `vcw-core` the attribute does
+nothing, which is the useful half: the engine's `match` over `Command` is exhaustive on
+purpose, so adding a variant fails to compile until someone decides what the transport
+does with it.
+
+### Armed is a writer that is running and paused
+
+§11's `Armed` could have been "device open, writer not started". It is instead "writer
+started, and paused", and that one choice pays for three things at once: §50's *set the
+level before you drop the needle* and §11's PAUSE become the same mechanism; the ring is
+always drained by the thread built to drain it, so overrun counters stay honest while
+nothing is being committed; and §15's early session row falls out for free, because the
+capture exists in the project from the moment the device opens.
+
+It needed a small addition to WP-05's writer: `Config::start_paused`, a `pause`/`resume`
+pair on the handle, and a writer loop that reads the ring and **drops** what it reads
+while paused. Pausing flushes the part-filled block on the way in, so the audio captured
+before the pause is committed rather than held.
+
+### One thread, and it is not a matter of taste
+
+The engine is a dedicated OS thread, and the transport is a **local variable** moved
+through its loop. No `Arc<Mutex<Machine>>`, and therefore no sixth "in transition" phase:
+between any two statements the transport is exactly one of §11's five. The typestate only
+works because a single thread owns it - a shared, locked transport would have to hand out
+`&mut`, and the consuming transitions are precisely what make an illegal move
+unrepresentable.
+
+That the thread is *necessary* rather than merely tidy comes from CPAL: `Capture` is
+`!Send`, so the thread that opens a device must be the thread that keeps it and therefore
+the thread that takes every later command about it. This is D8, locked as
+[ADR-0005](adr/0005-concurrency-model.md). Two clauses of the plan's original D8 wording
+changed on contact with the work: the above, and **elevated thread priority is not
+implemented** - WP-05's 192 kHz soak showed no overruns at ordinary priority, so it stays
+available for a platform that needs it rather than applied speculatively.
+
+### Three things the build got wrong first
+
+**The finished frame count.** `Stopped` took its position from the deck *before* the
+stop, and finalising flushes the part-filled block, so the transport reported a length
+up to one block shorter than the row in the project. Fixed by giving `Deck` an
+associated `frames(&Report)` function: only the deck knows what its own report means,
+and by the time there is a report there is no deck to ask.
+
+**When a capture is finished.** `capture-finished` was published when the transport was
+*reset*, because that is where the report is yielded. An operator who stops a side and
+walks away would never have been told what was recorded. It is now published on the stop,
+and a test pins it to exactly one occurrence - the report lives in two places and
+publishing it twice would have a UI catalogue the side twice.
+
+**The terminator.** `closed` was the last statement in the thread function, which means
+it was not sent if the thread panicked, and a consumer blocked on `Events::next` would
+have waited for ever. It is now published from a **drop guard**, so it survives a panic;
+`Bus::publish` was already infallible, which is what makes that safe to do while
+unwinding.
+
+### The exit criterion, first half: the compile proofs
+
+Six `compile_fail` doctests, one per illegal move, each **paired with the legal twin that
+must still compile**. The pairing is not decoration. Measured this session: stable
+rustdoc **ignores the error code** in a ```compile_fail,E0599``` fence - a doctest
+annotated `E0599` passed while the code was actually failing with `E0308`. So
+`compile_fail` proves only "this did not compile", which a typo satisfies. The proof was
+then verified live: one illegal snippet was temporarily made legal, and the doctest
+failed as it should. It is a live proof, not a decorative one.
+
+### The exit criterion, second half: a full session from the CLI
+
+```
+$ vcw session side-a.vcw --script "arm,record,sleep 1,pause,sleep 0.3,poll,resume,sleep 0.6,stop,poll,reset,quit"
+[  0.043] armed               armed on 48000 Hz, 2 ch, S32, shared into side-a.vcw
+[  0.043] phase-change        idle -> armed
+[  0.043] phase-change        armed -> recording
+[  0.343] recording-position  12000 frames, 0.250 s
+[  0.844] recording-position  36000 frames, 0.750 s
+[  1.000] phase-change        recording -> paused
+[  1.302] status              paused, 48000 frames
+[  1.302] phase-change        paused -> recording
+[  1.602] recording-position  60000 frames, 1.250 s
+[  1.941] phase-change        recording -> stopped
+[  1.941] capture-finished    capture 1 finalised: 76800 frames, 0 overrun(s), 0 underrun(s), 0 dropped, 0 error(s), bit-perfect no
+[  1.941] status              stopped, 76800 frames
+[  1.941] phase-change        stopped -> idle
+[  1.941] closed              closed
+```
+
+One verb per line from stdin, or a whole session on one line with `--script`. Two verbs
+are the driver's rather than the core's: `sleep <seconds>`, which is what makes a script
+a session rather than a list, and `#` for a comment. `--json` emits one object per event
+per line. There is deliberately **no prompt**: events arrive on their own thread whenever
+the engine has something to say, and a prompt would be scribbled over by the next
+position report, so the session echoes each command into the transcript instead and the
+whole run reads back in order afterwards.
+
+`crates/cli/tests/session_from_cli.rs` runs six of these through the **shipped binary**,
+then re-opens the project and checks that the audio matches what the transcript claimed,
+with every checksum recomputed. Including: a script that forgets to `stop` (the shutdown
+finalises the side rather than abandoning it), a verb with a typo in it (the run fails,
+*after* the audio is safe), three commands issued out of turn (rejected, and the project
+is left as it was found), and an arm that is thought better of (no capture row at all).
+
+### What is verified, and what is not
+
+Verified: the whole of §11's diagram walked in both directions; every step that is not in
+the diagram illegal from every phase, checked exhaustively; a deck that refuses each of
+its four operations, including a stop that fails; the clock discounting paused time; two
+sides into one project; a device that cannot be opened leaving the transport idle; a
+shutdown mid-capture finalising rather than abandoning; two subscribers seeing an
+identical stream; a panicking engine still closing the stream; and a full capture driven
+through the binary with no frontend compiled. 277 tests, full gate green.
+
+**Not verified: any platform but this one.** Every claim here is Linux x86_64. The
+transport itself is platform-independent, but the simulated source is what most of the
+tests drive, so what has *not* been exercised anywhere is the engine holding a real
+`!Send` stream on Windows or macOS - which is precisely the case that motivated the
+thread. `vcw session --device <id>` is the one-line way to check it on a rig with a
+converter attached.
+
+**Not attempted: re-entering the transport from a recovered project.** A project opened
+with an unfinished capture in it is a state `vcw recover` reports and the transport knows
+nothing about. Correct for now, since §15 asks recovery to *close* a capture rather than
+resume one, but WP-16's "there is unfinished audio here" banner will have to decide what
+the transport shows while it is up.
+
 ## Next up
 
-**`WP-07`, the engine and the state machine.** The CLI already drives a capture end to
-end and now recovers one, which is most of what WP-07's exit criterion asks for
-behaviourally; what it does not have is the type-level guarantee that an invalid
-transition cannot be written down. WP-06 also hands it a new obligation: a project
-opened at launch with an unfinished capture in it is a state the machine has to model
-from the outside, not discover.
+**`WP-08` and `WP-09`, the meter and the waveform pyramid.** Both are pure signal work
+over data the capture path already produces, and neither needs a device: the simulated
+source and the 62-rip corpus at `/data2/source_rips` are enough to develop and verify
+against. WP-09 is the one S3 identified as the real UI constraint, so the sooner it
+exists the sooner the rendering question can be measured rather than argued about.
+WP-08, WP-10 and WP-12 all branch off WP-07 and can be interleaved freely now that it
+is built.
 
 Still open on WP-03 and WP-04, and both for the same reason: **Windows and macOS.** The
 device matrix is reported on one OS, and the OS format verifier exists for Linux/ALSA
@@ -996,8 +1170,8 @@ the spike harness.
 - All of Phase 0 is committed: the spikes, the CPAL 0.18 upgrade and the `.vcw` rename
   at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
   `19dd459`. WP-01 is committed at `cd8e445`, WP-02 at `acb8835`, WP-03 at `941981a`,
-  WP-04 at `95f1f52` and WP-05 at `358c44a`. **WP-06 is the current working-tree change
-  and is uncommitted.**
+  WP-04 at `95f1f52`, WP-05 at `358c44a` and WP-06 at `b2a517b`. **WP-07 is the current
+  working-tree change and is uncommitted.**
 - **`/data2/vcw_soak/`** holds what is left of the WP-05 soak: `wp05.log`, the run
   transcript quoted above, and `live.vcw`, the four-second hardware capture. The 5.94
   GiB `wp05.vcw` has been deleted, as have the two three-minute WAL-pair projects.
