@@ -129,10 +129,13 @@ pub struct Config {
     /// Stated in bytes on purpose. SQLite's `wal_autocheckpoint` counts *pages*,
     /// and VCW's page size is 64 KiB, so the stock threshold of 1000 pages is a
     /// 64 MiB log rather than the 4 MiB one S2 measured on a default-page-size
-    /// harness. Measured here at 192 kHz: the log plateaued at 62.77 MiB under
-    /// the stock threshold - bounded, and 13.7 times what the spike reported,
-    /// for no reason anyone had chosen. Expressed in bytes the policy means the
-    /// same thing whatever the page size, which is what it was always meant to.
+    /// harness. Measured as a pair on ext4 at 192 kHz: the log plateaued at
+    /// 64.71 MiB under the stock threshold against 4.50 MiB under this one, and
+    /// the commit tail went with it - p99 84.0 ms against 31.9 ms, worst 100.1 ms
+    /// against 54.3 ms - because a checkpoint folding back 4 MiB finishes inside
+    /// a block period and one folding back 64 MiB does not. Expressed in bytes
+    /// the policy means the same thing whatever the page size, which is what it
+    /// was always meant to.
     pub wal_bytes: u64,
     /// Whether to build the AUP4 waveform pyramids as blocks are written.
     ///
@@ -142,6 +145,20 @@ pub struct Config {
     pub summaries: bool,
     /// How long to wait when the source has nothing ready.
     pub poll: Duration,
+    /// How often to write the device counters out during a capture (§15).
+    ///
+    /// Without this a process killed mid-capture leaves `capture_diagnostics`
+    /// exactly as [`Session::begin`] created it - four zeros - and four zeros
+    /// is the spelling of a flawless capture. Recovery would then certify a
+    /// recording that had been overrunning for an hour. Writing them on a timer
+    /// means the row is wrong by at most this interval rather than by the whole
+    /// session, and it keeps `updated_at` meaningful, which is how recovery
+    /// reports the staleness instead of hiding it.
+    ///
+    /// The cost is one small `UPDATE` every interval: at 2 s against eight
+    /// commits a second it is under 2 % of the transactions and, at
+    /// `synchronous=FULL`, under 2 % of the fsyncs. Zero disables it.
+    pub diagnostics_millis: u32,
 }
 
 impl Default for Config {
@@ -154,6 +171,7 @@ impl Default for Config {
             wal_bytes: 4 * 1024 * 1024,
             summaries: true,
             poll: Duration::from_millis(5),
+            diagnostics_millis: 2_000,
         }
     }
 }
@@ -598,6 +616,22 @@ impl Writer {
         self.diagnostics = diagnostics;
     }
 
+    /// Writes the current counters to the project now (§15).
+    ///
+    /// Outside the block transaction on purpose: it is a one-row `UPDATE` to a
+    /// table no block touches, and putting it inside would make the commit that
+    /// carries audio wait on it. It is called on a timer by the writer thread so
+    /// that a process killed mid-capture leaves counters that are nearly true
+    /// rather than counters that are zero.
+    ///
+    /// # Errors
+    ///
+    /// If the update fails.
+    pub fn persist_diagnostics(&mut self, diagnostics: Diagnostics) -> Result<()> {
+        self.diagnostics = diagnostics;
+        self.session.record(self.project.conn(), diagnostics)
+    }
+
     /// Accepts interleaved capture bytes, committing whole blocks as they form.
     ///
     /// Partial frames are held over rather than written: a block that started
@@ -894,6 +928,22 @@ impl Handle {
         }
     }
 
+    /// Hands the writer the current device counters, mid-capture.
+    ///
+    /// The writer cannot read them for itself: the counters belong to the audio
+    /// callback and the ring, and [`PcmSource`] deliberately exposes neither, so
+    /// whoever owns the device has to pass them along. Call it from the same
+    /// loop that already polls them for a progress display; the writer persists
+    /// them on its own timer rather than on every call.
+    ///
+    /// Leaves the recorded end state alone - that is [`Handle::set_result`]'s
+    /// job, and it is not known yet.
+    pub fn note(&self, diagnostics: Diagnostics) {
+        if let Ok(mut slot) = self.result.lock() {
+            slot.1 = diagnostics;
+        }
+    }
+
     /// Asks the writer to drain what is left and stop, and waits for it.
     ///
     /// # Errors
@@ -974,7 +1024,16 @@ pub fn spawn_on<S: PcmSource + 'static>(
             // One block's worth at a time: large enough that a commit does not
             // wait on the next read, small enough to stay off the heap's radar.
             let mut scratch = vec![0u8; writer.block_frames() as usize * writer.frame_bytes];
+            let every = Duration::from_millis(u64::from(config.diagnostics_millis));
+            let mut counters_written = Instant::now();
             let outcome = loop {
+                if config.diagnostics_millis > 0 && counters_written.elapsed() >= every {
+                    counters_written = Instant::now();
+                    let latest = thread_result.lock().map(|r| r.1).unwrap_or_default();
+                    // A counter that cannot be written is not worth abandoning a
+                    // capture over; the audio is the part that cannot be redone.
+                    let _ = writer.persist_diagnostics(latest);
+                }
                 let n = source.read(&mut scratch);
                 if n > 0 {
                     if let Err(e) = writer.push(&scratch[..n]) {

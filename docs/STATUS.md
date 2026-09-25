@@ -1,11 +1,11 @@
 # VCW - project status
 
 **As of:** 2026-09-25
-**Phase:** 1 is underway - WP-01 through WP-05 are built, WP-03 and WP-04 on Linux
-x86_64 only. All five Phase 0 spikes returned verdicts on their primary platform; gate
-G0 remains open on hardware coverage, and WP-05's soak has now also settled D3's
-firmed-config run.
-**Branch:** `main` at `95f1f52` (WP-04), plus WP-05 in the working tree.
+**Phase:** 1 is underway - WP-01 through WP-06 are built, all on Linux x86_64 only.
+All five Phase 0 spikes returned verdicts on their primary platform; gate G0 remains
+open on hardware coverage, WP-05's soak settled D3's firmed-config run, and **WP-06
+closes milestone M1, *it records*.**
+**Branch:** `main` at `358c44a` (WP-05), plus WP-06 in the working tree.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -811,24 +811,180 @@ explain this one, and no mechanism has been found that does. The assertion now p
 the outcome and the device counters, so a recurrence will be diagnosable. Until then
 R9's automated proof should be read as strong but not yet unblemished.
 
+## Phase 1 - WP-06, recovery
+
+**Built 2026-09-25. Exit criterion met, and with it milestone M1.**
+
+§15 asks that the next launch detect unfinished sessions and *offer* recovery.
+`crates/project/src/recovery.rs` is that, plus the `vcw recover` verb that drives it.
+
+### What a crash actually leaves behind
+
+The audio survives and the bookkeeping does not. Every block was committed inside its
+own transaction with `synchronous=FULL`, so it is on the disk or it never existed;
+there is no half-written block. What is missing is the one write that was always going
+to come last: the `captures` row's `finished_at`, and with it the final frame count and
+state. So a crashed project is not damaged. It is *unfinished*, and the whole job is to
+finish it the way the writer would have, using only what the writer already committed.
+
+### The three decisions that shape the module
+
+**Detection is `finished_at IS NULL`, not the state column.** The state says
+`recording` because that is what it said while recording, and a crash cannot change it.
+`finished_at` is different: it is the absence of a write, which is the one thing a
+crash cannot forge. `CaptureState::is_unfinished` still exists but its documentation
+now says it is advisory - a hint for a UI, never the thing recovery branches on.
+
+**The blocks outrank the row.** `walk()` is deliberately a per-channel traversal and
+not `SELECT SUM(frame_count)`, because a sum would report that a capture with a hole in
+the middle has all its frames. It reads the blocks ordered by channel and sequence,
+takes the longest *contiguous prefix* of each channel, and the usable length is the
+shortest of those prefixes across all declared channels. Anything after a discontinuity
+is stranded, not counted.
+
+**`finished_at` is the last block's `committed_at`, never `now()`.** A capture that
+died at 14:02 and is recovered at 09:15 the next morning did not run for nineteen
+hours. Taking the timestamp from committed data is both honest and reproducible: run
+recovery twice and it gives the same answer.
+
+The state becomes a new `CaptureState::Recovered`, kept distinct from `Interrupted`
+because the two mean different things. Interrupted means the writer *observed* the
+fault and recorded it - a device unplugged, a stream error - so the counters are real
+evidence. Recovered means nothing observed anything and every figure was inferred
+afterwards. Collapsing them would throw away exactly the distinction an operator needs.
+Neither state needed a schema migration: `captures.state` is TEXT, and
+`captures.recovered_at` was considered and rejected as a column that would have to be
+migrated to store something already derivable.
+
+### D4 enforced rather than documented
+
+Recovery will not silently discard audio. If the walk finds blocks stranded past the
+recoverable end, `recover()` refuses with `Error::StrandedBlocks` and the CLI exits
+non-zero. `--repair` is how an operator says the loss is accepted, and only then are
+the rows removed - from `capture_blocks` and `sampleblocks` both, in foreign-key order,
+because deleting one and not the other leaves an orphan that `validate` will rightly
+complain about.
+
+### The sidecars, and a finding about them
+
+`Sidecars::inspect` stats the `-wal` and `-shm` **before** anything opens the project,
+because opening it is what makes the evidence disappear.
+
+That mattered more than expected. The first version of this was tested in-process, by
+dropping a `Project` and reopening it - and the log was never there. Dropping a
+`Project` runs `sqlite3_close`, and SQLite checkpoints and *deletes* the sidecars when
+the last connection to a file goes. **So an in-process drop reproduces a crash's
+database state and not its filesystem state.** Only a process that is really killed
+leaves a hot log, which is why WP-06's exit criterion had to be out-of-process. A
+second attempt, holding a keep-alive connection open, also failed: a SQLite connection
+that has never *read* does not attach to the `-wal`/`-shm` at all, so it is not a
+reference that keeps them alive. Both facts are now written into the tests that found
+them.
+
+The consequence for the operator is worth stating plainly, because it is the one thing
+about `vcw recover` that could surprise someone: **a dry run writes nothing to the
+database, but it is not side-effect-free on the filesystem.** Opening the project
+replays the log and closing it folds the log into the main file and removes the
+sidecars. That is the right behaviour - the log is committed data and folding it in is
+how it stops being at risk - but it means a dry run is a report, not a snapshot.
+Preserving the crashed state means copying the file and both sidecars together, before
+running anything. The test `recovery_reports_before_it_writes` asserts this so nobody
+starts believing otherwise.
+
+### Two gaps closed on the way
+
+**`validate` could not see the thing recovery relies on.** Recovery's whole method is
+to trust the blocks over the row, and nothing checked that the blocks agreed with the
+row or with each other. `check_coverage` adds three codes - `missing-channel`,
+`ragged-channels`, `frame-count-mismatch` - taking `validate` to 20. The middle one is
+the interesting case: a capture where one channel holds a block more than another would
+play as a widening time offset between left and right, and nothing else in the file
+would have noticed. The state check also stopped hardcoding its vocabulary and now
+calls `CaptureState::parse`, so the list cannot drift from the type.
+
+**The diagnostics were lying about killed captures.** The writer persisted its counters
+only at `finish()`, which a killed capture never reaches, so the row held four zeros -
+which is the spelling of a *flawless* capture. They are now written on a timer
+(`Config::diagnostics_millis`, default 2000) with `updated_at` kept meaningful, so
+recovery can report that the counters are, say, two seconds stale rather than quietly
+present them as final. `stale-counters` is one of the seven note codes an assessment
+can carry.
+
+### The exit criterion
+
+`crates/cli/tests/kill_and_recover.rs` spawns a real `vcw soak` child, sleeps a
+pseudorandom interval, and `SIGKILL`s it. Then, before anything opens the file, it
+asserts a hot log is present - the state the in-process tests provably cannot create.
+Then it runs `vcw recover --apply --verify` as a child process, as an operator would.
+
+The audit afterwards does not trust `captures.frames`, or `sequence`, or the order rows
+come back in. Every sample is recomputed from the frame index **stored in that block**
+and compared against the generator, which makes the claim not "a plausible frame count"
+but "exactly the audio the device delivered, at the offsets it delivered it, and not one
+invented sample". It then asserts contiguity from frame 0, equal length on every
+channel, `state = recovered`, a non-null `finished_at`, an empty `survey`, and a clean
+`validate` with checksums recomputed.
+
+**94 random kills across this session, every one recovered and audited, no failures.**
+
+A real `vcw recover` on a capture killed 3.4 seconds in:
+
+```
+/data2/vcw_soak/rec/demo.vcw
+  log         4.44 MiB left behind: the last process to hold this file did not close it
+  capture 1   156000 frames on every channel, 3.250 s, 26 block(s)
+              48000 Hz, 2 ch, Int32, started 1790356014
+              0 overrun(s), 0 underrun(s), 0 dropped frame(s), 0 stream error(s), last written 1 s before the end
+  verdict     1 capture(s) recoverable; nothing written to the project. Re-run with --apply
+```
+
+3.4 seconds of process life, 3.25 seconds recovered: one uncommitted block.
+
+### The loss is smaller than the model allowed for
+
+Across all 94 kills, every recovered length came back an **exact multiple of the 250 ms
+block**, and the shortfall never reached one whole block - with a 1000 ms ring in play
+the entire time. So the ring contributes nothing to crash loss: a writer that keeps up
+drains it before the crash matters. That confirms the correction S1 made to S2's floor,
+**crash loss = commit granularity + driver buffer, and ring size is irrelevant**, and
+the test now asserts the tight bound rather than the safe one, because a regression
+that let the ring leak into the loss would sail through the loose one.
+
+#### What is verified, and what is not
+
+Verified: detection, reconstruction, the stranded-block refusal, the sidecar lifecycle,
+the timestamp provenance, the periodic counters, the three new validate codes, and the
+byte-for-byte audit after 94 out-of-process kills. 234 tests, full gate green.
+
+**Not verified, and it is not a portability gap.** `SIGKILL` ends a process; it does
+not cut power. The page cache survives, so this exercises SQLite's crash recovery and
+not the storage stack's. `synchronous=FULL` fsyncs every commit before it returns,
+which *should* mean the two are the same, but "should" is the honest word and nothing
+here demonstrates it. Closing the gap needs real power cuts on an expendable rig or a
+fault-injecting filesystem; both are already on S2's open list.
+
+Also unverified: every platform except this one. The kill suite is the cheapest of the
+outstanding portability runs, needing neither a sound card nor an operator - one
+`cargo test -p vcw-cli -- --ignored` per rig.
+
 ## Next up
 
-**`WP-06`, recovery.** WP-05 left it everything it needs and nothing it has to guess
-at: blocks that tile each channel's timeline with no gaps, a frame count that cannot
-run ahead of the data because it moves in the same transaction, and `finished_at IS
-NULL` as the signal - the absence of a write, which is the one thing a crash cannot
-forge. `core/tests/capture_writes_audio.rs` already stages the case by dropping a
-writer mid-capture; the exit criterion turns that into a kill-at-random-point suite
-that recovers every time.
+**`WP-07`, the engine and the state machine.** The CLI already drives a capture end to
+end and now recovers one, which is most of what WP-07's exit criterion asks for
+behaviourally; what it does not have is the type-level guarantee that an invalid
+transition cannot be written down. WP-06 also hands it a new obligation: a project
+opened at launch with an unfinished capture in it is a state the machine has to model
+from the outside, not discover.
 
 Still open on WP-03 and WP-04, and both for the same reason: **Windows and macOS.** The
 device matrix is reported on one OS, and the OS format verifier exists for Linux/ALSA
 only. On the other two the verdict degrades to `Unconfirmed` rather than to a false
 pass, which is the right failure, but neither work package can close on it.
 
-WP-05's own portability gap is the same shape: the soak has run on x86_64/ext4 and
-nowhere else. The Pi 5 on SD and on NVMe, and Windows, are the runs that would close
-it, and they need no new code - `vcw soak` is the harness.
+WP-05 and WP-06 have the same shape of gap: the 90-minute soak and the kill suite have
+both run on x86_64/ext4 and nowhere else. The Pi 5 on SD and on NVMe, and Windows, are
+the runs that would close them, and they need no new code - `vcw soak` and
+`cargo test -p vcw-cli -- --ignored` are the harnesses.
 
 Two measurement jobs stay queued and can run on the machine's own time: S3's
 `cpu-matrix.sh`, and S3's two R8 isolation soaks. **D3's firmed-config soak is no
@@ -839,13 +995,14 @@ the spike harness.
 
 - All of Phase 0 is committed: the spikes, the CPAL 0.18 upgrade and the `.vcw` rename
   at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
-  `19dd459`. WP-01 is committed at `cd8e445`, WP-02 at `acb8835`, WP-03 at `941981a`
-  and WP-04 at `95f1f52`. **WP-05 is the current working-tree change and is
-  uncommitted.**
+  `19dd459`. WP-01 is committed at `cd8e445`, WP-02 at `acb8835`, WP-03 at `941981a`,
+  WP-04 at `95f1f52` and WP-05 at `358c44a`. **WP-06 is the current working-tree change
+  and is uncommitted.**
 - **`/data2/vcw_soak/`** holds what is left of the WP-05 soak: `wp05.log`, the run
   transcript quoted above, and `live.vcw`, the four-second hardware capture. The 5.94
   GiB `wp05.vcw` has been deleted, as have the two three-minute WAL-pair projects.
-  Nothing here is in the repository and all of it is disposable.
+  `rec/demo.vcw` is the killed capture quoted in the WP-06 section. Nothing here is in
+  the repository and all of it is disposable.
 - **`/data2/source_rips`** is the source-audio corpus S4 ran against: 62 real vinyl rips,
   71 GB, 48 kHz and 192 kHz 32-bit WAV plus 24-bit FLAC. Distinct from
   `/data2/vinyl_rips`, which holds the 30 *projects* S5 used - 25 AUP3 and 5 AUP4, the

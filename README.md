@@ -38,6 +38,16 @@ real-time factor of 1.00001, with zero loss, a 4.81 MiB write-ahead log, and all
 6,220,949,760 sample bytes read back and matched against what the source must have
 produced for that frame and channel.
 
+Recovery (WP-06) is built, which closes the first milestone: **it records.** A capture
+process killed outright leaves a project that `vcw recover` finishes the way the writer
+would have - the blocks decide the length rather than the row that never got updated,
+the end time comes from the last block that was actually committed rather than from the
+clock, and audio stranded past a gap is refused rather than quietly dropped. The proof
+is a suite that spawns a real capture, `SIGKILL`s it at a random point, recovers it,
+and then recomputes every stored sample from the frame index in its own block: 94 kills
+this session, every one recovered exactly, none of them losing more than the single
+250 ms block that had not been committed yet.
+
 Capture has been confirmed bit-perfect end to end on this machine: 96 kHz / 2 ch / S32
 requested and granted in exclusive mode over a direct hardware path, cross-checked
 against what the kernel says the card is actually running. That cross-check is the

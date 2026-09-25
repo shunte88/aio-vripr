@@ -1029,7 +1029,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "rusqlite",
  "serde_json",
+ "tempfile",
  "vcw-audio",
  "vcw-project",
  "vcw-types",

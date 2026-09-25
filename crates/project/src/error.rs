@@ -118,6 +118,33 @@ pub enum Error {
     #[error("the capture writer ended without reporting; the project needs recovery")]
     WriterLost,
 
+    /// A write was attempted through a read-only handle.
+    ///
+    /// Not a programming slip worth a panic: recovery is routinely offered a
+    /// project the caller opened read-only to inspect it, and "reopen it for
+    /// writing" is a better answer than a crash.
+    #[error("{path} is open read-only and cannot be written")]
+    ReadOnly {
+        /// The project in question.
+        path: PathBuf,
+    },
+
+    /// Recovery found blocks it is not allowed to remove without being asked.
+    ///
+    /// Blocks are immutable and never deleted to tidy up (D4), so recovery
+    /// refuses rather than quietly destroying captured audio. See
+    /// [`crate::recovery::Plan::Repair`].
+    #[error(
+        "capture {capture_id} has {blocks} block(s) stranded past the recoverable end; \
+         recovering would discard them, so it needs Plan::Repair"
+    )]
+    StrandedBlocks {
+        /// The capture concerned.
+        capture_id: i64,
+        /// How many blocks would be discarded.
+        blocks: usize,
+    },
+
     /// SQLite said no.
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),

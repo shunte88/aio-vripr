@@ -197,6 +197,11 @@ pub(crate) fn run(options: &Options) -> Result<()> {
     let mut next_report = Duration::from_secs(options.every);
     while started.elapsed() < run_for {
         std::thread::sleep(Duration::from_millis(200));
+        // Hand the writer the device counters so they reach the project on
+        // its own timer. Without this a soak killed mid-run leaves four
+        // zeros behind, and four zeros is how a flawless capture is
+        // spelled (§15).
+        handle.note(source.diagnostics());
         if options.every == 0 || options.json || started.elapsed() < next_report {
             continue;
         }

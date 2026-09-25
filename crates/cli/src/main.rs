@@ -45,6 +45,7 @@
 
 mod capture;
 mod devices;
+mod recover;
 mod soak;
 
 use clap::{Parser, Subcommand};
@@ -138,6 +139,29 @@ enum Command {
 
     /// Drive the writer from a simulated source for a long time and check every
     /// byte that lands (WP-05, D3).
+    /// Find unfinished captures left by a crash and close them honestly (§15).
+    ///
+    /// Reports by default and writes nothing. A recording that survived a
+    /// crash is worth more than the convenience of not typing --apply.
+    Recover {
+        /// Project to examine.
+        project: std::path::PathBuf,
+        /// Write the reconstructed frame count, state and end time.
+        #[arg(long)]
+        apply: bool,
+        /// Also delete blocks stranded past the recoverable end. Implies
+        /// --apply, and is the only way to make recovery discard audio.
+        #[arg(long)]
+        repair: bool,
+        /// Recompute every block's checksum afterwards. Reads the whole
+        /// project, which is minutes for a full side.
+        #[arg(long)]
+        verify: bool,
+        /// Machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
+
     Soak {
         /// Project to write. Must not already exist.
         project: std::path::PathBuf,
@@ -223,6 +247,19 @@ fn main() -> anyhow::Result<()> {
             seconds,
             ring_millis,
             project,
+            json,
+        }),
+        Command::Recover {
+            project,
+            apply,
+            repair,
+            verify,
+            json,
+        } => recover::run(&recover::Args {
+            project,
+            apply,
+            repair,
+            verify,
             json,
         }),
         Command::Soak {

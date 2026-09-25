@@ -551,7 +551,7 @@ sequencing, not as a forecast. Dependencies are hard unless noted.
 autocheckpoint threshold counts *pages* and VCW's are 64 KiB, so the stock 1000 would
 have meant a 64 MiB log rather than S2's 4 MiB; `Config::wal_bytes` states the ceiling
 in bytes and converts against the file's real page size. 216 tests. **Exit criterion met:** 90-min 24/192 soak on x86_64/ext4, real-time factor 1.00001, 1,036,824,960 frames in 43,202 blocks and 21,601 commits, commit p50 5.7 / p95 16.2 / p99 29.8 / max 79.4 ms against a 250 ms budget, WAL peak 4.81 MiB, all four counters zero, `validate` clean, and all 6,220,949,760 sample bytes recomputed from each block's own stored frame index and matched. **D3 is firmed by this run** - it is the firmed-config soak, run on product code. Unrun elsewhere: Pi 5 (SD and NVMe) and Windows | 
-| **06** | `project/recovery`: unfinished-session detection, reconstruction, diagnostics, WAL/SHM lifecycle | §15 | 05 | 6 | Kill-at-random-point test suite recovers every time |
+| **06** | `project/recovery`: unfinished-session detection, reconstruction, diagnostics, WAL/SHM lifecycle | §15 | 05 | 6 | **Built 2026-09-25.** `vcw-project::recovery`: `survey`/`assess` read the project without changing it, `recover`/`recover_all` write, and `Plan` (`DryRun` → `Commit` → `Repair`) is the ladder between them. Detection is `finished_at IS NULL` and not the state column, because the absence of a write is the one thing a crash cannot forge. Reconstruction believes the **blocks** over the `captures` row: `walk` is deliberately a per-channel traversal and not `SUM(frame_count)`, which would tell you a capture with a hole in it has all its frames, and the usable length is the shortest contiguous prefix across the declared channels. `finished_at` is set from the last block's `committed_at`, never `now()` - a recovered capture should say when the audio stopped, not when someone got round to recovering it - and the state becomes a new `CaptureState::Recovered`, distinct from `Interrupted` (the writer *saw* that fault; nothing saw this one). No schema migration was needed for either. D4 is enforced rather than documented: blocks stranded past the recoverable end are refused with `Error::StrandedBlocks` until `--repair` says the loss is accepted. `Sidecars::inspect` reads the `-wal`/`-shm` **before** anything opens the project, because opening it is what makes the evidence disappear. Two supporting gaps closed on the way: `validate` gained `check_coverage` (`missing-channel`, `ragged-channels`, `frame-count-mismatch`, taking it to 20 codes) because recovery's whole method is to trust the blocks and nothing previously checked that the blocks agreed with the row or with each other; and the writer now persists its counters on a 2 s timer (`Config::diagnostics_millis`) rather than only at `finish()`, because a killed capture used to leave four zeros, which is the spelling of a flawless one. `vcw recover <project> [--apply|--repair] [--verify] [--json]` is the operator surface. 234 tests. **Exit criterion met:** `crates/cli/tests/kill_and_recover.rs` spawns a real `vcw soak` child, `SIGKILL`s it at a pseudorandom point, and audits the result - out-of-process because dropping a writer in-process runs `sqlite3_close`, which checkpoints and deletes the sidecars, reproducing a crash's database state but not its filesystem state. Every recovered byte is recomputed from the frame index stored in its own block and compared against the generator, so the claim is not "a plausible frame count" but "exactly the audio the device delivered, at the offsets it delivered it, and not one invented sample". **94 random kills this session, every one recovered, audited byte-for-byte and left validating clean with checksums verified.** The measured loss is tighter than the model allowed for: every recovered length came back an exact multiple of the 250 ms block and the shortfall never reached one whole block, with a 1000 ms ring in play throughout - so **the ring is not part of the crash loss**, confirming S1's correction to S2's floor, and the test asserts the tight bound rather than the safe one. Not proven: `SIGKILL` ends a process, it does not cut power, so this exercises SQLite's crash recovery and not the storage stack's. `synchronous=FULL` should make the difference nothing, but "should" is the honest word and closing it needs real power cuts or a fault-injecting filesystem - both on S2's open list. Linux x86_64/ext4 only |
 | **07** | `core/engine`: recording state machine, command/event bus, worker supervision, **`vcw-cli`** | §11, §35, §36, §4.5 | 05 | 8 | Invalid transitions unrepresentable (type-level); full capture session driven from CLI |
 | **08** | `signal/meter`: peak, RMS, peak-hold, clip latch, snapshot generation | §17, §18 | 04 | 3 | Verified against known-level test signals |
 | **09** | `signal/waveform`: multi-resolution pyramid, progressive build during capture, persisted summaries, regeneration from PCM | §19 | 05 | 7 | Sub-second latency; render cost independent of total length (§37) |
@@ -667,6 +667,7 @@ its own right:
 | **G0** | Foundation proven | 24/192 sustained into SQLite under abuse with concurrent analysis reads and clean crash recovery; bit-perfect loopback measured; capture-mode matrix published; AUP3/AUP4 schemas documented | S1–S5 | 17 | 17 |
 | | *status 2026-09-24* | **All five spikes have returned a verdict on their primary platform.** S1 met on Linux/x86_64 on stock CPAL 0.18.2, no patches (Windows, Android, macOS, real converters outstanding) · S2 acceptance met on x86_64/SSD incl. the 90-min soak (firmed-config soak, Pi 5 + Windows outstanding) · S3 met on Linux/WebKitGTK with 12.5× headroom; **D6 rewritten rather than confirmed** - the constraint is main-thread waveform rendering, not IPC (Windows/WebView2 + Pi 5 outstanding) · S4 met on Linux/x86_64, §25 confirmed and the boundary tolerance quantified (Pi 5 + Windows outstanding) · **S5 complete** - AUP3 and AUP4 both decoded, 30/30 corpus projects parsed to the last byte, the AUP3→AUP4 audio layer proved byte-identical, and the 2026-09-22 sample-rate conclusion corrected before it reached code (`wavetrack/@rate`, not `project/@rate`). **All five spikes have delivered; G0's remaining exposure is not spike work but hardware coverage** - Windows, Pi 5, Android, macOS and real converters. D3's firmed-config soak, listed here as outstanding, ran on 2026-09-25 as WP-05's exit criterion | | | |
 | **M1** | *It records* | CLI captures to a project, survives `SIGKILL` at any point, recovers to the last committed block with checksums intact | WP-06 | 37 | 54 |
+| | *status 2026-09-25* | **Met.** `vcw capture` and `vcw soak` both record to a `.vcw` project; `crates/cli/tests/kill_and_recover.rs` kills a real capture process with `SIGKILL` at a pseudorandom point and `vcw recover --apply --verify` closes it to the last committed block, with every byte recomputed from the frame index stored in its own block and `validate` re-checksumming the lot. 94 random kills, no failures. Two honest qualifications: it is Linux x86_64/ext4 only, and `SIGKILL` is process death rather than power loss (see WP-06). Neither is a reason to hold the milestone open, because both are re-runs of a harness that now exists rather than work that does not | | | |
 | **M2** | *It plays back* | Capture → progressive waveform → playback → seek, all headless | WP-10 | 25 | 79 |
 | **M3** | *It finds tracks* | Detector parity with VRipr on the labelled corpus; markers carry provenance and confidence | WP-11 | 10 | 89 |
 | **M4** | *It delivers* (**G1**) | Whole §50 workflow end to end from the CLI, including tagged FLAC/WAV export | WP-14 | 24 | 113 |
@@ -708,21 +709,30 @@ demonstrable from CLI or UI.
 ## 12. Immediate next actions
 
 *Updated 2026-09-25. The three actions that stood here - repo groundwork, S1, S2 - are
-all done, and so are S3, S4 and S5. WP-01 through WP-05 are built.*
+all done, and so are S3, S4 and S5. WP-01 through WP-06 are built.*
 
-1. **Next** - **WP-06, recovery.** WP-05 left it everything it needs and nothing it has
-   to guess at: blocks that tile each channel's timeline with no gaps, a frame count
-   that moves inside the block transaction and therefore cannot run ahead of the data,
-   and `finished_at IS NULL` as the signal - the absence of a write, which is the one
-   thing a crash cannot forge. `core/tests/capture_writes_audio.rs` already stages the
-   case by dropping a writer mid-capture and reopening the file; the exit criterion
-   turns that into the kill-at-random-point suite. The simulated source drives it too,
-   so none of it needs a sound card.
-   **WP-03 and WP-04 both stay open on their own exit criteria** - the device matrix and
-   the OS format verifier are Linux x86_64 only, and on Windows and macOS the verifier
-   returns `Unavailable`. That is a refusal to claim rather than a false pass, which is
-   the right failure, but it is not the cross-check the criterion asks for. **WP-05 has
-   the same shape of gap:** the soak has run on x86_64/ext4 and nowhere else.
+1. **Next** - **WP-07, the engine and the state machine.** The CLI already drives a
+   capture end to end and now recovers one too, which is most of what WP-07's exit
+   criterion asks for behaviourally; what it does not yet have is the type-level
+   guarantee that an invalid transition cannot be written down. Recovery is also the
+   first caller that will want to *re-enter* a state machine from the outside - a
+   project opened at launch with an unfinished capture in it is a state WP-07 has to
+   model rather than discover - so the two fit together.
+   **WP-03, WP-04, WP-05 and now WP-06 all stay open on portability.** The device
+   matrix and the OS format verifier are Linux x86_64 only, and on Windows and macOS
+   the verifier returns `Unavailable` - a refusal to claim rather than a false pass,
+   which is the right failure, but not the cross-check the criterion asks for. The
+   90-minute soak has run on x86_64/ext4 and nowhere else, and so has the kill suite.
+   The kill suite is the cheapest of these to re-run: one `cargo test -p vcw-cli --
+   --ignored` on each rig, no sound card and no operator.
+
+   **WP-06 leaves one thing genuinely unproven, and it is not a portability gap.**
+   `SIGKILL` ends a process; it does not cut power. The page cache survives, so the
+   suite exercises SQLite's crash recovery and not the storage stack's.
+   `synchronous=FULL` fsyncs every commit before it returns, which *should* make the
+   difference nothing, but nothing in the repo demonstrates that. Closing it needs
+   either real power cuts on a rig nobody minds losing or a fault-injecting
+   filesystem; both are already on S2's open list, and neither blocks M1.
 
 2. **In parallel, on the machine's own time** - the measurement jobs still queued from
    Phase 0, none of which need attention while they run:
@@ -739,10 +749,10 @@ all done, and so are S3, S4 and S5. WP-01 through WP-05 are built.*
    **D3's firmed-config soak is no longer on this list.** WP-05's exit soak *is* that
    run, with the product code rather than the spike harness.
 
-3. **Then** - WP-07, the engine and the state machine. The CLI already drives a capture
-   end to end, which is most of what WP-07's exit criterion asks for behaviourally; what
-   it does not yet have is the type-level guarantee that an invalid transition cannot be
-   written down.
+3. **Then** - WP-08 and WP-09, the meter and the waveform pyramid. Both are pure
+   signal work over data the capture path already produces, and WP-09 is the one S3
+   identified as the real UI constraint, so the sooner it exists the sooner the
+   rendering question can be measured instead of argued about.
 
 **The remaining G0 exposure is hardware, not spikes.** Windows, Pi 5, Android, macOS
 and the real converters (HiFiBerry DAC+ADC Pro, Tascam DA-3000) are all re-runs of

@@ -41,8 +41,10 @@
 //! Both collect every problem rather than stopping at the first. A recovery tool
 //! that reports one fault at a time turns a diagnosis into a guessing game.
 
+use std::collections::BTreeMap;
+
 use rusqlite::Connection;
-use vcw_types::StorageFormat;
+use vcw_types::{CaptureState, StorageFormat};
 
 use crate::error::Result;
 use crate::schema::REQUIRED_TABLES;
@@ -113,6 +115,7 @@ pub fn validate(project: &Project, options: Options) -> Result<Report> {
     check_block_sizes(conn, &mut report)?;
     check_timeline(conn, &mut report)?;
     check_captures(conn, &mut report)?;
+    check_coverage(conn, &mut report)?;
     if options.verify_checksums {
         check_checksums(conn, &mut report)?;
     }
@@ -336,9 +339,89 @@ fn check_timeline(conn: &Connection, report: &mut Report) -> rusqlite::Result<()
     Ok(())
 }
 
-fn check_captures(conn: &Connection, report: &mut Report) -> rusqlite::Result<()> {
-    const STATES: [&str; 3] = ["recording", "finalised", "interrupted"];
+/// Whether each capture's channels hold the same audio, and whether the row
+/// agrees with them.
+///
+/// Neither question was asked before WP-06, and both have to be, because
+/// recovery's whole method is to believe the blocks over the row. A ragged
+/// capture - one channel a block longer than another - would play as a widening
+/// time offset between left and right, and nothing else here would notice: the
+/// per-channel timelines are each individually contiguous, so `timeline-gap`
+/// stays silent.
+///
+/// The frame count is compared to the *shortest* channel, which is the amount
+/// of audio that actually exists on every channel and the number recovery
+/// writes.
+fn check_coverage(conn: &Connection, report: &mut Report) -> rusqlite::Result<()> {
+    let mut stmt = conn.prepare(
+        "SELECT capture_id, channel, SUM(frame_count)
+           FROM capture_blocks GROUP BY capture_id, channel ORDER BY capture_id, channel",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, i64>(2)?,
+        ))
+    })?;
 
+    let mut per_capture: BTreeMap<i64, Vec<(i64, i64)>> = BTreeMap::new();
+    for row in rows {
+        let (capture, channel, frames) = row?;
+        per_capture
+            .entry(capture)
+            .or_default()
+            .push((channel, frames));
+    }
+
+    let mut declared = conn.prepare("SELECT capture_id, channels, frames FROM captures")?;
+    let rows = declared.query_map([], |r| {
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, i64>(2)?,
+        ))
+    })?;
+
+    for row in rows {
+        let (capture, channels, frames) = row?;
+        let Some(found) = per_capture.get(&capture) else {
+            // No blocks at all is a legitimate capture that recorded nothing.
+            continue;
+        };
+        if found.len() as i64 != channels {
+            report.findings.push(Finding {
+                code: "missing-channel",
+                detail: format!(
+                    "capture {capture} declares {channels} channel(s) but has blocks for {}",
+                    found.len()
+                ),
+            });
+        }
+        let shortest = found.iter().map(|(_, f)| *f).min().unwrap_or(0);
+        let longest = found.iter().map(|(_, f)| *f).max().unwrap_or(0);
+        if shortest != longest {
+            report.findings.push(Finding {
+                code: "ragged-channels",
+                detail: format!(
+                    "capture {capture} holds {shortest} frame(s) on its shortest channel and \
+                     {longest} on its longest"
+                ),
+            });
+        }
+        if frames != shortest {
+            report.findings.push(Finding {
+                code: "frame-count-mismatch",
+                detail: format!(
+                    "capture {capture} declares {frames} frame(s); its blocks hold {shortest}"
+                ),
+            });
+        }
+    }
+    Ok(())
+}
+
+fn check_captures(conn: &Connection, report: &mut Report) -> rusqlite::Result<()> {
     let mut stmt = conn.prepare(
         "SELECT capture_id, sample_rate, channels, storage_format, state, started_at, finished_at
          FROM captures ORDER BY capture_id",
@@ -375,7 +458,9 @@ fn check_captures(conn: &Connection, report: &mut Report) -> rusqlite::Result<()
                 detail: format!("capture {id} has storage_format 0x{format:08X}"),
             });
         }
-        if !STATES.contains(&state.as_str()) {
+        // Asked of the type rather than a literal list, so a new state cannot
+        // be added to the vocabulary and rejected by the validator.
+        if CaptureState::parse(&state).is_none() {
             report.findings.push(Finding {
                 code: "unknown-state",
                 detail: format!("capture {id} is in state {state:?}"),

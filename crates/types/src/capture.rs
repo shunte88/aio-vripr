@@ -54,9 +54,22 @@ pub enum CaptureState {
     Recording,
     /// Stopped cleanly, every block committed.
     Finalised,
-    /// Stopped by something other than a request: a stream error, a device that
-    /// went away, or a crash that recovery found afterwards.
+    /// Stopped by something other than a request: a stream error or a device
+    /// that went away. The writer was still running and shut down tidily, so
+    /// the frame count and the counters are the writer's own.
     Interrupted,
+    /// Reconstructed after the process died mid-capture (§15).
+    ///
+    /// Distinct from [`CaptureState::Interrupted`] because the difference
+    /// matters to whoever reads the row later: an interrupted capture stopped
+    /// for a reason the writer *observed and recorded*, while a recovered one
+    /// stopped without warning and everything known about it was inferred
+    /// afterwards from the blocks that had already been committed. The audio is
+    /// no less trustworthy - it was fsynced before the process died - but the
+    /// counters are only as current as the last time they were written, and
+    /// whatever the device produced after the final commit is gone and
+    /// unmeasurable.
+    Recovered,
 }
 
 impl CaptureState {
@@ -66,6 +79,7 @@ impl CaptureState {
             Self::Recording => "recording",
             Self::Finalised => "finalised",
             Self::Interrupted => "interrupted",
+            Self::Recovered => "recovered",
         }
     }
 
@@ -75,13 +89,28 @@ impl CaptureState {
             "recording" => Some(Self::Recording),
             "finalised" => Some(Self::Finalised),
             "interrupted" => Some(Self::Interrupted),
+            "recovered" => Some(Self::Recovered),
             _ => None,
         }
     }
 
-    /// Whether recovery has to look at this session on the next launch.
+    /// Whether the session's own row claims it is still going.
+    ///
+    /// Advisory only. Recovery keys on `finished_at IS NULL` instead, because
+    /// the absence of a write is the one thing a crash cannot forge, while this
+    /// column says `recording` both for a process that died and for a bug that
+    /// forgot to update it.
     pub const fn is_unfinished(self) -> bool {
         matches!(self, Self::Recording)
+    }
+
+    /// Whether the capture ran to a clean, requested stop.
+    ///
+    /// The three ways of not doing so are worth keeping apart: still running,
+    /// stopped by a fault the writer saw, and stopped by a process death nobody
+    /// saw.
+    pub const fn is_complete(self) -> bool {
+        matches!(self, Self::Finalised)
     }
 }
 
@@ -240,6 +269,7 @@ mod tests {
             CaptureState::Recording,
             CaptureState::Finalised,
             CaptureState::Interrupted,
+            CaptureState::Recovered,
         ] {
             assert_eq!(CaptureState::parse(s.as_str()), Some(s));
         }
