@@ -57,6 +57,24 @@ record a side with no UI compiled at all. That is the architectural rule in §2 
 tested rather than asserted: a core that could only be driven from the interface would
 have leaked into it.
 
+The meters (WP-08) read through that same transport. Peak, RMS, a peak-hold needle and
+a clip latch, per channel, at 50 Hz, live from the moment the transport is armed rather
+than from the moment it records - because the workflow sets the level before the needle
+goes down and there is nothing to set it against otherwise:
+
+```sh
+vcw session side-a.vcw --script "arm,sleep 10,record,sleep 1200,stop" --meters
+```
+
+Two things about that are worth stating, because both were decisions. Full scale is
+**asymmetric**: the largest positive 16-bit code decodes to 0.99997 and the most negative
+to exactly -1.0, so a clip detector comparing `abs() >= 1.0` never fires on integer audio
+at all, and VCW tests each end against its own limit. And the fan-out that feeds the
+meter is **lossy on purpose** - a meter worker that falls behind drops what it cannot
+hold and counts it, because a stalled consumer must never cost a recorded frame. The
+capture path is unchanged by it: the audio callback still does three atomics and one
+memcpy.
+
 Capture has been confirmed bit-perfect end to end on this machine: 96 kHz / 2 ch / S32
 requested and granted in exclusive mode over a direct hardware path, cross-checked
 against what the kernel says the card is actually running. That cross-check is the

@@ -68,6 +68,7 @@ use std::fmt;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
+use vcw_signal::meter::Snapshot;
 use vcw_types::{CaptureState, Diagnostics};
 
 use crate::state::Phase;
@@ -111,6 +112,19 @@ pub enum Event {
         frames: u64,
         /// The same thing in seconds, for a consumer that would only divide.
         seconds: f64,
+    },
+    /// Where the levels are now. §35's `meter-update`.
+    ///
+    /// Published from the moment the transport is armed, not from the moment
+    /// it records, because §50's "set the level" step happens before the
+    /// needle goes down and there is nothing to set it against otherwise.
+    ///
+    /// Sent at §17's refresh rate, which is faster than anything else on this
+    /// bus by an order of magnitude. A consumer that does not draw meters
+    /// should ignore it by name rather than formatting it.
+    Meter {
+        /// Peak, RMS, peak-hold and the clip latch, per channel.
+        levels: Snapshot,
     },
     /// Something went wrong that did not stop the capture. §35's
     /// `capture-warning`.
@@ -183,6 +197,7 @@ impl Event {
             Self::Phase { .. } => "phase-change",
             Self::Armed { .. } => "armed",
             Self::Position { .. } => "recording-position",
+            Self::Meter { .. } => "meter-update",
             Self::Warning { .. } => "capture-warning",
             Self::Finished { .. } => "capture-finished",
             Self::Refused { .. } => "command-refused",
@@ -219,6 +234,7 @@ impl fmt::Display for Event {
                 Ok(())
             }
             Self::Position { frames, seconds } => write!(f, "{frames} frames, {seconds:.3} s"),
+            Self::Meter { levels } => write!(f, "{levels}"),
             Self::Warning { code, detail } => write!(f, "{code}: {detail}"),
             Self::Finished {
                 capture_id,

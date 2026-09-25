@@ -49,9 +49,11 @@
 pub mod commands;
 pub mod engine;
 pub mod events;
+pub mod metering;
 pub mod state;
 
 pub use commands::{Command, Setup};
 pub use engine::{Engine, Recorded, Recorder};
 pub use events::{Bus, Event, Events};
+pub use metering::Meters;
 pub use state::{Deck, Machine, Phase, Rehearsal};

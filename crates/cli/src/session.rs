@@ -93,6 +93,10 @@ pub(crate) struct Args {
     pub(crate) script: Option<String>,
     /// Machine-readable output: one JSON object per event, one per line.
     pub(crate) json: bool,
+    /// Print `meter-update` too. Off by default: at 50 Hz it is the only
+    /// event on the bus that a person cannot read, and it would bury the
+    /// transport transcript this verb exists to show.
+    pub(crate) meters: bool,
 }
 
 impl Args {
@@ -122,10 +126,13 @@ pub(crate) fn run(args: &Args) -> Result<()> {
     // says `closed`, which the engine guarantees to send, so this thread can
     // be joined rather than detached or killed.
     let json = args.json;
+    let meters = args.meters;
     let printer = thread::spawn(move || {
         while let Some(event) = events.next() {
             let last = event.is_last();
-            print_event(&event, started, json);
+            if meters || !matches!(event, Event::Meter { .. }) {
+                print_event(&event, started, json);
+            }
             if last {
                 break;
             }
@@ -270,6 +277,22 @@ fn detail(event: &Event) -> serde_json::Value {
         }),
         Event::Position { frames, seconds } => serde_json::json!({
             "frames": frames, "seconds": seconds,
+        }),
+        Event::Meter { levels } => serde_json::json!({
+            "frames": levels.frames,
+            "channels": levels
+                .channels
+                .iter()
+                .map(|c| serde_json::json!({
+                    "peak": c.peak,
+                    "peak_db": c.peak_db(),
+                    "rms": c.rms,
+                    "rms_db": c.rms_db(),
+                    "hold_db": c.hold_db(),
+                    "clipped": c.clipped,
+                    "clipped_samples": c.clipped_samples,
+                }))
+                .collect::<Vec<_>>(),
         }),
         Event::Warning { code, detail } => serde_json::json!({
             "code": code, "detail": detail,

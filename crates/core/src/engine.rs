@@ -84,6 +84,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, channel};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use vcw_audio::buffers::Tee;
 use vcw_audio::capture::{Capture, Negotiated, Request};
 use vcw_audio::devices::{self, Direction};
 use vcw_audio::source::{Pace, Simulated, Source};
@@ -93,6 +94,7 @@ use vcw_types::{CaptureInfo, CaptureState, Diagnostics, SampleRate};
 
 use crate::commands::{Command, Setup};
 use crate::events::{Bus, Event, Events};
+use crate::metering::{self, Meters};
 use crate::state::{Deck, Machine, Phase, Reply, Step, Yield};
 
 /// How often the engine wakes when it has nothing to do but watch.
@@ -143,9 +145,14 @@ pub struct Recorded {
 /// Level" comes before "Drop Needle"), the ring is being drained so the
 /// counters cannot report an overrun the transport caused by not listening, and
 /// nothing is committed. `RECORD` is then a flag, not a thread spawn.
+///
+/// The meter worker starts with it, on a lossy tap of the same stream, which
+/// is what makes §50's "set the level" step possible before anything is being
+/// recorded.
 pub struct Recorder {
     source: Box<dyn Source>,
     writer: Option<Handle>,
+    meters: Option<Meters>,
     path: PathBuf,
     capture_id: i64,
     info: CaptureInfo,
@@ -168,7 +175,7 @@ impl Recorder {
     ///
     /// If the device cannot be opened as asked, or the project cannot be
     /// created, opened or written to.
-    pub fn open(setup: &Setup) -> Result<Self, Error> {
+    pub fn open(setup: &Setup, bus: &Bus) -> Result<Self, Error> {
         let (source, reader): (Box<dyn Source>, _) = match &setup.device {
             Some(name) => {
                 let snapshot = devices::enumerate();
@@ -210,11 +217,18 @@ impl Recorder {
             start_paused: true,
             ..persistence::Config::default()
         };
-        let writer = persistence::spawn_on(project, session, &info, config, reader)?;
+        // §10's fan-out, at the one point both source kinds pass through. The
+        // writer now reads through the tee, so the meter sees exactly the bytes
+        // that were committed, in the order they were committed, and no second
+        // reader of the device has to exist.
+        let mut tee = Tee::new(reader);
+        let meters = Meters::spawn(tee.tap(metering::tap_bytes(&info)), &info, bus.clone());
+        let writer = persistence::spawn_on(project, session, &info, config, tee)?;
 
         Ok(Self {
             source,
             writer: Some(writer),
+            meters: Some(meters),
             path: setup.project.clone(),
             capture_id,
             info,
@@ -295,6 +309,12 @@ impl Recorder {
 
     /// Stops the writer and the device and reports the result.
     fn halt(&mut self, state: CaptureState) -> Result<Outcome, Error> {
+        // The meter goes before the writer, so the last `meter-update` is on
+        // the bus before `capture-finished` is. A UI that stops drawing when
+        // the capture finishes should not then be handed one more frame.
+        if let Some(meters) = self.meters.take() {
+            meters.stop();
+        }
         let Some(writer) = self.writer.take() else {
             return Err(Error::Project(vcw_project::Error::WriterLost));
         };
@@ -564,7 +584,7 @@ fn dispatch(machine: Machine<Recorder>, command: Command, bus: &Bus) -> (Machine
     // refused transition - the transport never got as far as one - so it is
     // reported as refused *from the phase it is in*, and nothing moves.
     let step = match command {
-        Command::Arm(setup) => match Recorder::open(&setup) {
+        Command::Arm(setup) => match Recorder::open(&setup, bus) {
             Ok(recorder) => {
                 announce(&recorder, bus);
                 Step::Arm(recorder)

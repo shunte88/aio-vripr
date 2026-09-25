@@ -176,6 +176,9 @@ enum Command {
         /// Machine-readable output: one JSON object per line.
         #[arg(long)]
         json: bool,
+        /// Print the 50 Hz level meters too. Loud, and off by default.
+        #[arg(long)]
+        meters: bool,
     },
 
     /// Find unfinished captures left by a crash and close them honestly (§15).
@@ -300,6 +303,7 @@ fn main() -> anyhow::Result<()> {
             ring_millis,
             script,
             json,
+            meters,
         } => session::run(&session::Args {
             project,
             device,
@@ -310,6 +314,7 @@ fn main() -> anyhow::Result<()> {
             ring_millis,
             script,
             json,
+            meters,
         }),
         Command::Recover {
             project,

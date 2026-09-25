@@ -47,6 +47,28 @@
 //! the floor S2 settled on; making it larger is not an improvement, it is a
 //! larger window of samples to lose.
 //!
+//! # The fan-out, and where it sits
+//!
+//! §10 draws one distribution point feeding the writer, the meter, the waveform
+//! and the detector. [`Tee`] is that point, and it sits **after** the ring
+//! rather than inside the callback. The callback keeps its three atomics and one
+//! memcpy; the writer thread, which has to touch every byte anyway, copies what
+//! it read into each tap on its way past.
+//!
+//! Two reasons, one practical and one that decided it. The practical one: a tap
+//! inside the callback would have to exist before the stream is built, so every
+//! consumer would have to be known at open time. The deciding one: the
+//! simulated source has no callback and no ring at all, and a fan-out that only
+//! worked for real hardware would mean the UI could not be developed against it
+//! - which is exactly what §4.5 asks to be possible.
+//!
+//! The cost is stated rather than hidden: a writer thread that stalls freezes
+//! the meter with it. That is the right direction for the trade, because the
+//! reverse - a slow consumer costing a sample - is what §10 forbids. **Taps are
+//! lossy by design.** A tap that falls behind drops what it cannot hold and
+//! counts the bytes; the writer's ring is the only one where loss means lost
+//! audio.
+//!
 //! # Whole chunks only
 //!
 //! [`RingWriter::push`] writes all of a buffer or none of it. A partial write
@@ -54,6 +76,9 @@
 //! everything that followed - a fault that survives into the archive and is
 //! nearly impossible to diagnose later. A dropped callback is a counted, visible
 //! gap; a torn frame is corruption that looks like audio.
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -229,6 +254,140 @@ impl vcw_types::PcmSource for RingReader {
     }
 }
 
+/// A lossy second reader of the capture stream (§10).
+///
+/// Handed out by [`Tee::tap`] and read by a worker thread. Falling behind is
+/// not an error and is not reported as one: the bytes are dropped, the count is
+/// kept, and the capture never notices. A meter that misses a buffer shows a
+/// stale needle for 20 ms; a writer that misses one has lost the record.
+pub struct Tap {
+    reader: RingReader,
+    dropped: Arc<AtomicU64>,
+}
+
+impl Tap {
+    /// Takes up to `dst.len()` bytes. Never blocks.
+    pub fn read(&mut self, dst: &mut [u8]) -> usize {
+        self.reader.read(dst)
+    }
+
+    /// Bytes waiting to be read.
+    pub fn available(&self) -> usize {
+        self.reader.available()
+    }
+
+    /// Bytes this tap was not able to keep, over its whole life.
+    ///
+    /// Worth logging and not worth alarming about. A non-zero count means the
+    /// worker on this end is slower than the stream, which for a meter is
+    /// cosmetic.
+    pub fn dropped_bytes(&self) -> u64 {
+        self.dropped.load(Ordering::Relaxed)
+    }
+
+    /// Whether the [`Tee`] has gone, which is how a worker learns to stop.
+    pub fn is_abandoned(&self) -> bool {
+        self.reader.is_abandoned()
+    }
+}
+
+/// The writing end of a tap, held by the [`Tee`].
+struct TapWriter {
+    ring: RingWriter,
+    dropped: Arc<AtomicU64>,
+}
+
+impl TapWriter {
+    /// Offers bytes to the tap, dropping them if they will not fit.
+    fn offer(&mut self, bytes: &[u8]) {
+        if !self.ring.push(bytes) {
+            self.dropped
+                .fetch_add(bytes.len() as u64, Ordering::Relaxed);
+        }
+    }
+}
+
+/// One PCM stream, many readers: §10's distribution point.
+///
+/// Wraps any [`PcmSource`](vcw_types::PcmSource) - the capture ring, the
+/// simulated generator, a file in a test - and copies whatever is read into
+/// each tap. The wrapped source stays the authority: a tap sees exactly the
+/// bytes the writer saw, in the order it saw them, and nothing else.
+pub struct Tee<S> {
+    inner: S,
+    taps: Vec<TapWriter>,
+}
+
+impl<S> Tee<S> {
+    /// Wraps a source with no taps attached. Adding none costs nothing.
+    pub const fn new(inner: S) -> Self {
+        Self {
+            inner,
+            taps: Vec::new(),
+        }
+    }
+
+    /// Adds a tap of this capacity in bytes and returns the reading end.
+    ///
+    /// Size it for the worker's latency, not for the recording: a meter reading
+    /// every 20 ms needs a few times that, and a bigger ring only means a
+    /// staler needle when it does fall behind.
+    pub fn tap(&mut self, bytes: usize) -> Tap {
+        let (ring, reader) = raw_ring(bytes.max(1));
+        let dropped = Arc::new(AtomicU64::new(0));
+        self.taps.push(TapWriter {
+            ring,
+            dropped: Arc::clone(&dropped),
+        });
+        Tap { reader, dropped }
+    }
+
+    /// How many taps are attached.
+    pub fn taps(&self) -> usize {
+        self.taps.len()
+    }
+
+    /// The wrapped source.
+    pub const fn inner(&self) -> &S {
+        &self.inner
+    }
+}
+
+impl<S: vcw_types::PcmSource> vcw_types::PcmSource for Tee<S> {
+    fn read(&mut self, dst: &mut [u8]) -> usize {
+        let read = self.inner.read(dst);
+        if read > 0 {
+            for tap in &mut self.taps {
+                tap.offer(&dst[..read]);
+            }
+        }
+        read
+    }
+
+    fn is_finished(&self) -> bool {
+        self.inner.is_finished()
+    }
+}
+
+/// A ring of an exact byte capacity, with no duration or floor applied.
+///
+/// The [`MIN_MILLIS`] floor exists to stop the *capture* ring being sized into
+/// dropped samples. A tap has no such stake - dropping is what it is for - so
+/// it is sized in bytes by the worker that will read it.
+fn raw_ring(capacity: usize) -> (RingWriter, RingReader) {
+    let (producer, consumer) = RingBuffer::<u8>::new(capacity.max(1));
+    (
+        RingWriter {
+            inner: producer,
+            frame_bytes: 1,
+        },
+        RingReader {
+            inner: consumer,
+            frame_bytes: 1,
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -349,6 +508,116 @@ mod tests {
         let (mut w, r) = ring(FRAME, 48_000, MIN_MILLIS);
         assert!(w.push(&[]));
         assert_eq!(r.available(), 0);
+    }
+
+    /// A source that hands out a counting ramp and then stops.
+    struct Ramp {
+        next: u8,
+        left: usize,
+    }
+
+    impl vcw_types::PcmSource for Ramp {
+        fn read(&mut self, dst: &mut [u8]) -> usize {
+            let take = dst.len().min(self.left);
+            for slot in &mut dst[..take] {
+                *slot = self.next;
+                self.next = self.next.wrapping_add(1);
+            }
+            self.left -= take;
+            take
+        }
+
+        fn is_finished(&self) -> bool {
+            self.left == 0
+        }
+    }
+
+    #[test]
+    fn a_tap_sees_exactly_what_the_writer_saw() {
+        use vcw_types::PcmSource as _;
+
+        let mut tee = Tee::new(Ramp { next: 0, left: 300 });
+        let mut tap = tee.tap(1024);
+        assert_eq!(tee.taps(), 1);
+
+        let mut writer = Vec::new();
+        let mut buffer = [0u8; 64];
+        loop {
+            let read = tee.read(&mut buffer);
+            if read == 0 {
+                break;
+            }
+            writer.extend_from_slice(&buffer[..read]);
+        }
+
+        let mut seen = vec![0u8; writer.len()];
+        let got = tap.read(&mut seen);
+        assert_eq!(got, writer.len(), "nothing should have been dropped");
+        assert_eq!(seen, writer, "the tap must see the same bytes, in order");
+        assert_eq!(tap.dropped_bytes(), 0);
+        assert!(tee.is_finished());
+    }
+
+    #[test]
+    fn a_tap_that_falls_behind_drops_and_counts_but_costs_nothing() {
+        use vcw_types::PcmSource as _;
+
+        // A tap far too small for what is about to go past it. The capture
+        // must not notice, which is the whole point of §10's fan-out.
+        let mut tee = Tee::new(Ramp {
+            next: 0,
+            left: 1_000,
+        });
+        let mut tap = tee.tap(64);
+
+        let mut total = 0;
+        let mut buffer = [0u8; 64];
+        loop {
+            let read = tee.read(&mut buffer);
+            if read == 0 {
+                break;
+            }
+            total += read;
+        }
+        assert_eq!(total, 1_000, "the writer reads every byte regardless");
+        assert!(
+            tap.dropped_bytes() > 0,
+            "a tap this small cannot have kept up"
+        );
+
+        // What it did keep is still whole chunks, not shredded ones.
+        let mut seen = [0u8; 64];
+        assert_eq!(tap.read(&mut seen), 64);
+        assert_eq!(tap.available(), 0);
+    }
+
+    #[test]
+    fn two_taps_each_get_the_whole_stream() {
+        use vcw_types::PcmSource as _;
+
+        let mut tee = Tee::new(Ramp { next: 9, left: 96 });
+        let mut meter = tee.tap(256);
+        let mut waveform = tee.tap(256);
+        assert_eq!(tee.taps(), 2);
+
+        let mut buffer = [0u8; 96];
+        assert_eq!(tee.read(&mut buffer), 96);
+
+        let mut a = [0u8; 96];
+        let mut b = [0u8; 96];
+        assert_eq!(meter.read(&mut a), 96);
+        assert_eq!(waveform.read(&mut b), 96);
+        assert_eq!(a, buffer);
+        assert_eq!(b, buffer);
+    }
+
+    #[test]
+    fn a_tap_learns_that_the_capture_has_gone() {
+        let mut tee = Tee::new(Ramp { next: 0, left: 0 });
+        let tap = tee.tap(16);
+        assert!(!tap.is_abandoned());
+        drop(tee);
+        assert!(tap.is_abandoned());
     }
 
     #[test]

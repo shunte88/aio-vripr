@@ -46,7 +46,7 @@
 use std::time::{Duration, Instant};
 
 use vcw_core::commands::{Command, Setup};
-use vcw_core::events::{Event, Events};
+use vcw_core::events::{Bus, Event, Events};
 use vcw_core::state::Phase;
 use vcw_core::{Engine, engine};
 use vcw_project::{Options, Project, recovery, session, validate};
@@ -429,7 +429,8 @@ fn the_core_is_usable_with_no_frontend_at_all() {
     // feature flag, §2 has been eroded and this is where it shows.
     let dir = tempfile::tempdir().expect("tempdir");
     let recorder =
-        engine::Recorder::open(&Setup::simulated(dir.path().join("bare.vcw"))).expect("open");
+        engine::Recorder::open(&Setup::simulated(dir.path().join("bare.vcw")), &Bus::new())
+            .expect("open");
     assert!(recorder.capture_id() > 0);
     assert_eq!(recorder.negotiated().channels, 2);
     recorder.abandon().expect("abandon");

@@ -1,11 +1,12 @@
 # VCW - project status
 
 **As of:** 2026-09-25
-**Phase:** 1 is underway - WP-01 through WP-07 are built, all on Linux x86_64 only.
+**Phase:** 1 is underway - WP-01 through WP-08 are built, all on Linux x86_64 only.
 All five Phase 0 spikes returned verdicts on their primary platform; gate G0 remains
 open on hardware coverage, WP-05's soak settled D3's firmed-config run, **WP-06 closes
-milestone M1, *it records*,** and WP-07 locks D8.
-**Branch:** `main` at `b2a517b` (WP-06), plus WP-07 in the working tree.
+milestone M1, *it records*,** WP-07 locks D8, and WP-08 adds the meters and the §10
+fan-out they read through.
+**Branch:** `main` at `051a648` (WP-07), plus WP-08 in the working tree.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -1140,15 +1141,143 @@ nothing about. Correct for now, since §15 asks recovery to *close* a capture ra
 resume one, but WP-16's "there is unfinished audio here" banner will have to decide what
 the transport shows while it is up.
 
+## Phase 1 - WP-08, the meters
+
+Built 2026-09-25. `vcw-signal::meter` measures the levels; `vcw_audio::buffers::Tee`
+carries the audio to it; `vcw-core::metering` is the worker between them. Exit criterion
+met: verified against known-level test signals, and then verified again against a live
+engine.
+
+### Full scale is not 1.0, and that is the whole module
+
+The finding that shaped everything else. In two's complement the largest positive `i16`
+code is 32767, which decodes to 32767/32768 = **0.99997**, while the most negative is
+-32768, which decodes to exactly **-1.0**. Full scale is asymmetric, and it is asymmetric
+differently in each storage format.
+
+A clip detector written the obvious way - `if sample.abs() >= 1.0` - therefore never
+fires on integer input at all. It would be silent through an entire side pinned against
+the top of the converter, which is exactly the fault a clip light exists to show. So
+`full_scale(format)` returns a *pair*, and each sample is tested against the ceiling and
+the floor separately.
+
+One limitation is measured and documented rather than papered over: at 32 bits, `f32`'s
+24-bit mantissa rounds the top few hundred `i32` codes to exactly 1.0, so clipping there
+is detected a few codes early. That is a rounding error of about -0.00001 dB and it errs
+towards reporting a clip that was within a hair of being one.
+
+### The three measurements, and what each trades away
+
+**Peak is since the last read.** Taking a snapshot resets it, so no transient can pass
+between two polls unseen. The cost is that the number depends slightly on how often the
+UI looks. The alternative - a peak that decays on its own clock - reads the same at every
+poll rate and loses transients to do it, which is the wrong way round for a meter whose
+job is to catch the one loud moment in a side.
+
+**RMS is a true sliding window**, 16 buckets over 300 ms, advanced by sample count and
+not by the reader. A per-snapshot mean would have been simpler and would have made RMS a
+measurement of the UI's frame rate: 30 Hz and 60 Hz would read differently on identical
+audio. `rms_does_not_depend_on_how_often_the_ui_looks` pins that, and
+`the_rms_window_forgets_what_has_left_it` pins the other half - a loud passage that has
+left the window is gone from the figure.
+
+**The hold needle starts falling from the moment of the peak,** not from the moment the
+signal stops, and falls at a rate in dB/s. This cost a test a correction: the first
+expectation was out by exactly one bucket-step of 0.125 dB, because it had assumed the
+hold clock started when the tone ended.
+
+The clip latch stays lit until it is cleared, with a configurable n-consecutive-samples
+rule for anyone who wants more evidence than a single sample.
+
+### The fan-out sits after the ring, and the taps are lossy
+
+§10 draws one distribution point feeding the writer, the meter, the waveform and the
+detector. `Tee<S: PcmSource>` is that point. It wraps whatever the writer was going to
+read from, copies each read into every tap, and is inserted at exactly one place -
+`Recorder::open`, where the reader is handed to `persistence::spawn_on`.
+
+That one place was chosen over the tempting one. A tap inside the CPAL callback would
+have been closer to the source, but the simulated generator has no callback and no ring
+at all, so a device-only fan-out would have left the UI-with-nothing-plugged-in case
+unmetered - and being able to develop the whole application against it is §4.5. The
+callback also keeps its guarantee untouched: three atomics and one memcpy, still proven
+allocation-free by WP-04's counting-allocator test.
+
+**Taps drop rather than block.** A meter worker that stalls loses audio it was only going
+to average; a writer that stalls loses the record. The trade is stated in both
+directions in the module doc: a stalled writer freezes the meter, and that is the
+direction §10 requires. A tap counts the bytes it could not keep, so falling behind is
+visible rather than silent.
+
+### The meters run while armed, because §50 says so
+
+"Set Level" comes before "Drop Needle". The meters are therefore live in `Armed`, which
+cost nothing to arrange: WP-07 implemented `Armed` as a writer that is *running but
+paused*, so the ring is already being drained and everything drained already goes past
+the tap. The meter measures what the device is producing; the transport phase is not its
+business.
+
+`meter-update` publishes at 50 Hz, the middle of §17's 30-60. One refinement came out of
+watching a real transcript: a tick that finds no new audio publishes **nothing**. Reading
+a snapshot resets the peak, so a tick that woke a millisecond early was reporting silence
+the stream never contained, and the needle flicked to the floor roughly once a second.
+Genuine silence still reports correctly, because a quiet device sends zeros and zeros are
+frames.
+
+### What is verified
+
+Thirteen known-level tests in `crates/signal/tests/known_levels.rs`, all against signals
+whose level is known before the meter runs rather than recorded from it:
+
+- sines at -0.5, -6 and -20 dBFS, in all five storage formats, read back to within
+  0.02 dB, with RMS exactly 3.0103 dB below peak as a sine must be
+- a constant reading the same peak and RMS; silence reading the floor in every format
+- channels metered independently; RMS independent of poll rate; the window forgetting
+  what has left it
+- one sample at full scale latching, and staying latched; the top integer code clipping
+  although it is not 1.0; the n-consecutive rule
+- the hold needle falling at the rate it was given
+- the five formats agreeing with each other on the same signal
+
+Then the other half, which known levels cannot prove: that what reaches the meter *is*
+the capture stream. `crates/core/tests/metering_live.rs` drives the real engine and
+asserts the reported RMS is **-4.771 dBFS**. That figure is not a recorded observation -
+the deterministic source is a hash, so its output is uniform over the code range, and the
+RMS of a uniform distribution on [-1, 1) is 1/sqrt(3). A fan-out that dropped, duplicated
+or reordered a byte would move it. The same file pins the meters running before `RECORD`,
+no `meter-update` arriving after `capture-finished`, and a capture with the fan-out
+attached still reporting zero dropped frames and zero overruns.
+
+299 tests, full gate green.
+
+### Cost
+
+192 kHz stereo, the worst case the product supports: 10 s of audio metered in 0.377 s in
+a debug build and **0.033 s in release**, about a third of one percent of a core. The
+meter is not a thing to budget for.
+
+### What is not verified
+
+Linux x86_64 only, like everything above it. And the fan-out has been exercised against
+the simulated source and the ALSA device on this machine, not against a converter running
+for an hour - the lossy-tap behaviour under sustained real load is the WP-05-style soak
+that has not been run with meters attached.
+
 ## Next up
 
-**`WP-08` and `WP-09`, the meter and the waveform pyramid.** Both are pure signal work
-over data the capture path already produces, and neither needs a device: the simulated
-source and the 62-rip corpus at `/data2/source_rips` are enough to develop and verify
-against. WP-09 is the one S3 identified as the real UI constraint, so the sooner it
-exists the sooner the rendering question can be measured rather than argued about.
-WP-08, WP-10 and WP-12 all branch off WP-07 and can be interleaved freely now that it
-is built.
+**`WP-09`, the waveform pyramid.** Pure signal work over data the capture path already
+produces, and it needs no device: the simulated source and the 62-rip corpus at
+`/data2/source_rips` are enough to develop and verify against. It is the one S3
+identified as the real UI constraint, so the sooner it exists the sooner the rendering
+question can be measured rather than argued about. It also starts further along than it
+looks: WP-05's writer already builds and persists a summary pyramid for every block it
+commits, so WP-09 reads and renders something the project contains rather than building
+it from scratch.
+
+WP-08 left the plumbing in place for it. `Tee` takes any number of taps; the waveform
+worker is a second `tap()` call and a second thread, with no change to the capture path.
+
+WP-10 and WP-12 also branch off WP-07 and can be interleaved freely.
 
 Still open on WP-03 and WP-04, and both for the same reason: **Windows and macOS.** The
 device matrix is reported on one OS, and the OS format verifier exists for Linux/ALSA
@@ -1170,8 +1299,8 @@ the spike harness.
 - All of Phase 0 is committed: the spikes, the CPAL 0.18 upgrade and the `.vcw` rename
   at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
   `19dd459`. WP-01 is committed at `cd8e445`, WP-02 at `acb8835`, WP-03 at `941981a`,
-  WP-04 at `95f1f52`, WP-05 at `358c44a` and WP-06 at `b2a517b`. **WP-07 is the current
-  working-tree change and is uncommitted.**
+  WP-04 at `95f1f52`, WP-05 at `358c44a`, WP-06 at `b2a517b` and WP-07 at `051a648`.
+  **WP-08 is the current working-tree change and is uncommitted.**
 - **`/data2/vcw_soak/`** holds what is left of the WP-05 soak: `wp05.log`, the run
   transcript quoted above, and `live.vcw`, the four-second hardware capture. The 5.94
   GiB `wp05.vcw` has been deleted, as have the two three-minute WAL-pair projects.

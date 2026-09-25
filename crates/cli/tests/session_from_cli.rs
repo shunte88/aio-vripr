@@ -267,3 +267,59 @@ fn an_abandoned_arm_leaves_no_capture_in_the_project() {
     );
     project.close().expect("close");
 }
+
+/// The meters are opt-in, and when asked for they are JSON a UI could use.
+#[test]
+fn the_meters_are_quiet_unless_asked_for_and_measured_when_they_are() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("levels.vcw");
+
+    // Without the flag the transcript is the transport, and nothing else. At
+    // 50 Hz a meter line for every tick would be the whole of it.
+    let (ok, quiet) = script(&path, "arm,record,sleep 0.4,stop,reset");
+    assert!(ok, "{quiet}");
+    assert!(
+        !quiet.contains("meter-update"),
+        "meters leaked into the default transcript:\n{quiet}"
+    );
+
+    // With it, and in JSON, every reading carries a level per channel.
+    let out = Command::new(VCW)
+        .args([
+            "session",
+            &dir.path().join("levels-json.vcw").display().to_string(),
+            "--script",
+            "arm,record,sleep 0.4,stop,reset",
+            "--meters",
+            "--json",
+        ])
+        .output()
+        .expect("run vcw session");
+    assert!(out.status.success());
+    let transcript = String::from_utf8_lossy(&out.stdout);
+
+    let readings: Vec<serde_json::Value> = transcript
+        .lines()
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .filter(|value| value["event"] == "meter-update")
+        .collect();
+    assert!(
+        readings.len() > 10,
+        "400 ms at 50 Hz is about twenty readings, got {}",
+        readings.len()
+    );
+
+    let last = readings.last().expect("a reading");
+    let channels = last["channels"].as_array().expect("channels");
+    assert_eq!(channels.len(), 2);
+    for channel in channels {
+        let rms = channel["rms_db"].as_f64().expect("rms_db");
+        // The deterministic source is uniform over full scale, so its RMS is
+        // 1/sqrt(3). See `vcw-core`'s `tests/metering_live.rs`.
+        assert!(
+            (rms + 4.771).abs() < 0.5,
+            "the CLI reported {rms:.3} dBFS for a uniform source"
+        );
+        assert!(channel["peak_db"].as_f64().expect("peak_db") > -0.1);
+    }
+}
