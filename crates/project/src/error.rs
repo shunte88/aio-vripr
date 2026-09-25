@@ -93,6 +93,31 @@ pub enum Error {
         findings: Vec<String>,
     },
 
+    /// A capture cannot be written as it is described.
+    ///
+    /// Only reachable through the library, never from a device: a stream with no
+    /// channels has no frames, and a writer asked for zero-length blocks would
+    /// spin forever rather than fail. Refusing at the door is cheaper than making
+    /// every loop defend itself.
+    #[error(
+        "a capture with {channels} channel(s) at {frame_bytes} bytes per frame cannot be written"
+    )]
+    Unwritable {
+        /// The channel count asked for.
+        channels: u16,
+        /// The frame width that implies.
+        frame_bytes: usize,
+    },
+
+    /// The capture writer thread ended without reporting an outcome.
+    ///
+    /// Only reachable if it panicked. Its ordinary failure path closes the
+    /// session as interrupted and returns the error, so this variant means
+    /// something worse happened than a refused write, and the project should be
+    /// treated as needing recovery rather than as merely short.
+    #[error("the capture writer ended without reporting; the project needs recovery")]
+    WriterLost,
+
     /// SQLite said no.
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),

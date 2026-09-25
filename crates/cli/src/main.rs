@@ -38,18 +38,21 @@
 //! cannot be driven headlessly has leaked into its shell.
 //!
 //! Today it carries `doctor`, `devices` and `formats`, which answer "what can
-//! this machine record, and through which path" (WP-03), and `capture`, which
-//! answers "and what did it actually do" (WP-04). The editing and export verbs
-//! arrive with the engine at WP-07.
+//! this machine record, and through which path" (WP-03), `capture`, which
+//! answers "and what did it actually do" (WP-04), and `soak`, which is how
+//! WP-05's writer is measured on a machine before it is trusted with a side.
+//! The editing and export verbs arrive with the engine at WP-07.
 
 mod capture;
 mod devices;
+mod soak;
 
 use clap::{Parser, Subcommand};
 use vcw_types::STANDARD_RATES;
 
 use crate::capture::{Format, Mode};
 use crate::devices::Which;
+use crate::soak::Wal;
 
 #[derive(Parser)]
 #[command(name = "vcw", version, about = "VCW - The Vinyl Capture Workstation")]
@@ -102,8 +105,8 @@ enum Command {
 
     /// Record from a device and report what was really negotiated (§9).
     ///
-    /// The samples are drained and discarded: WP-05 owns the writer. What this
-    /// persists, given --project, is the capture session and its counters.
+    /// With --project the samples are written; without one there is nowhere to
+    /// put them, so they are drained, counted and discarded.
     Capture {
         /// Device id, as printed by `vcw devices`. A name works only if unique.
         device: String,
@@ -128,6 +131,57 @@ enum Command {
         /// Project file to record the session in. Created if absent.
         #[arg(long)]
         project: Option<std::path::PathBuf>,
+        /// Machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Drive the writer from a simulated source for a long time and check every
+    /// byte that lands (WP-05, D3).
+    Soak {
+        /// Project to write. Must not already exist.
+        project: std::path::PathBuf,
+        /// Sample rate in Hz.
+        #[arg(long, default_value_t = 192_000)]
+        rate: u32,
+        /// Channel count.
+        #[arg(long, default_value_t = 2)]
+        channels: u16,
+        /// Sample format.
+        #[arg(long, value_enum, default_value_t = Format::S24)]
+        format: Format,
+        /// How long to run, in minutes.
+        #[arg(long, default_value_t = 90.0)]
+        minutes: f64,
+        /// Block duration in milliseconds. D3 says 250.
+        #[arg(long, default_value_t = 250)]
+        block_millis: u32,
+        /// Blocks per transaction. D3 says 1.
+        #[arg(long, default_value_t = 1)]
+        batch_blocks: usize,
+        /// WAL policy. D3 says automatic.
+        #[arg(long, value_enum, default_value_t = Wal::Automatic)]
+        wal: Wal,
+        /// Blocks between writer-issued checkpoints, for the non-automatic
+        /// policies.
+        #[arg(long, default_value_t = 64)]
+        checkpoint_blocks: u64,
+        /// WAL ceiling in MiB, for the automatic policy. SQLite counts pages;
+        /// VCW's are 64 KiB, so the stock threshold would be a 64 MiB log.
+        #[arg(long, default_value_t = 4)]
+        wal_mib: u64,
+        /// Ring capacity in milliseconds. Raised to the 500 ms floor if lower.
+        #[arg(long, default_value_t = 1000)]
+        ring_millis: u32,
+        /// Run flat out. Fast, and worthless as a timing measurement.
+        #[arg(long)]
+        fast: bool,
+        /// Skip the byte-for-byte readback.
+        #[arg(long)]
+        no_verify: bool,
+        /// Seconds between progress lines. Zero for silence.
+        #[arg(long, default_value_t = 60)]
+        every: u64,
         /// Machine-readable output.
         #[arg(long)]
         json: bool,
@@ -169,6 +223,39 @@ fn main() -> anyhow::Result<()> {
             seconds,
             ring_millis,
             project,
+            json,
+        }),
+        Command::Soak {
+            project,
+            rate,
+            channels,
+            format,
+            minutes,
+            block_millis,
+            batch_blocks,
+            wal,
+            checkpoint_blocks,
+            wal_mib,
+            ring_millis,
+            fast,
+            no_verify,
+            every,
+            json,
+        } => soak::run(&soak::Options {
+            project,
+            rate,
+            channels,
+            format,
+            minutes,
+            block_millis,
+            batch_blocks,
+            wal,
+            checkpoint_blocks,
+            wal_mib,
+            ring_millis,
+            fast,
+            no_verify,
+            every,
             json,
         }),
     }

@@ -45,6 +45,6 @@ pub mod capture;
 pub mod format;
 pub mod rate;
 
-pub use capture::{CaptureInfo, CaptureState, Diagnostics};
+pub use capture::{CaptureInfo, CaptureState, Diagnostics, PcmSource};
 pub use format::{CaptureMode, SampleFormat, StorageFormat};
 pub use rate::{STANDARD_RATES, SampleRate};

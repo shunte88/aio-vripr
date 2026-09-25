@@ -32,6 +32,11 @@ Phase 1 has started. The workspace scaffold (WP-01) is in place: ten `vcw-*` cra
 under `crates/`, a four-target CI matrix, and the licence and toolchain gates. Schema v1
 (WP-02) is built and [documented](docs/SCHEMA.md); device enumeration (WP-03) and
 capture (WP-04) are built on Linux x86_64, with Windows and macOS still unverified.
+The persistence writer (WP-05) is built, so a capture now lands in the project as
+audio rather than only as a row - proven by a 90-minute 24/192 soak on ext4 at a
+real-time factor of 1.00001, with zero loss, a 4.81 MiB write-ahead log, and all
+6,220,949,760 sample bytes read back and matched against what the source must have
+produced for that frame and channel.
 
 Capture has been confirmed bit-perfect end to end on this machine: 96 kHz / 2 ch / S32
 requested and granted in exclusive mode over a direct hardware path, cross-checked
@@ -90,9 +95,21 @@ called bit-perfect. It refuses the claim rather than guessing:
   verdict     bit-perfect, confirmed against the OS
 ```
 
-Add `--project take1.vcw` to record the session and its diagnostics counters into a
-project file. The samples themselves are drained and discarded for now: the writer that
-commits them is WP-05.
+Add `--project take1.vcw` to write the audio, the session and its diagnostics counters
+into a project file. Without `--project` the samples are drained and discarded, because
+there is nowhere to put them.
+
+`soak` runs the same writer from a generated source for as long as you like, then reads
+every byte back and checks it against the value the source must have produced for that
+frame and channel:
+
+```sh
+vcw soak side-a-soak.vcw --rate 192000 --format s24 --minutes 90
+```
+
+That is how the storage path is measured on a machine before it is trusted with a
+record. It reports commit latency percentiles against the block budget, the peak
+write-ahead log, and whether anything was lost - and exits non-zero if it was.
 
 Requires a Rust toolchain at 1.90 or newer and, on Linux, `libasound2-dev`. SQLite is
 compiled in, so there is no system SQLite to match.

@@ -71,6 +71,7 @@ pub mod validate;
 
 pub use error::{Error, Result};
 pub use migrate::{MIGRATIONS, Migration};
+pub use persistence::{Checkpoint, Writer};
 pub use schema::{APPLICATION_ID, EXTENSION, FORMAT_VERSION, SCHEMA_VERSION};
 pub use session::Session;
 pub use sqlite::{Access, Project, block_checksum};

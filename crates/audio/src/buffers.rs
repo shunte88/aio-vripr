@@ -212,6 +212,23 @@ impl RingReader {
     }
 }
 
+/// The ring is what WP-05's writer drains.
+///
+/// The trait lives in `vcw-types` so that `vcw-project` can consume a ring
+/// without depending on this crate, and so that the same writer can be driven by
+/// a file or a generator in CI. `is_abandoned` is exactly the "producer has gone
+/// for good" signal the trait asks for: `rtrb` sets it when the writing end is
+/// dropped, which is what happens when the capture stream stops.
+impl vcw_types::PcmSource for RingReader {
+    fn read(&mut self, dst: &mut [u8]) -> usize {
+        Self::read(self, dst)
+    }
+
+    fn is_finished(&self) -> bool {
+        self.is_abandoned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

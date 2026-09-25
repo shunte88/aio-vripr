@@ -318,7 +318,7 @@ const SELECT: &str = "SELECT c.capture_id, c.sample_rate, c.channels, c.storage_
 /// roughly 1.5 million years, so the clamp is unreachable in practice, and if
 /// it ever is reached a pinned maximum reads as obviously wrong where a
 /// negative number would read as a small one.
-const fn clamp(n: u64) -> i64 {
+pub(crate) const fn clamp(n: u64) -> i64 {
     if n > i64::MAX as u64 {
         i64::MAX
     } else {
@@ -328,7 +328,7 @@ const fn clamp(n: u64) -> i64 {
 
 /// The inverse. A negative value can only come from a row VCW did not write;
 /// zero is the least misleading thing to report for it.
-const fn widen(n: i64) -> u64 {
+pub(crate) const fn widen(n: i64) -> u64 {
     if n < 0 { 0 } else { n as u64 }
 }
 

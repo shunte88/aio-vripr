@@ -238,6 +238,50 @@ impl StorageFormat {
         }
     }
 
+    /// Decodes one stored sample to a normalised `f32` in roughly -1.0..=1.0.
+    ///
+    /// `index` counts samples, not bytes. Returns `None` if the slice is too
+    /// short, because a summary computed over a truncated block would be a
+    /// plausible-looking lie about a damaged one.
+    ///
+    /// The scaling is **measured, not assumed** (2026-09-25, against
+    /// `/data2/vinyl_rips/simples_test.aup3` and `OWS20.aup3`): a padded 24-bit
+    /// sample is a little-endian `i32` holding a value in +/-2^23, *not* a
+    /// left-justified 32-bit one, and decoding it this way reproduces Audacity's
+    /// own `summin`, `summax` and `sumrms` for every block in the corpus. Get
+    /// this wrong and a waveform drawn from an imported project is 256x too
+    /// quiet, which is the kind of bug that is easy to ship and hard to see.
+    ///
+    /// Only summaries and display use this. The capture and export paths never
+    /// touch it: §9 stores and returns the bytes the converter produced, and a
+    /// round trip through `f32` is exactly the conversion D4 forbids.
+    pub fn decode_sample(self, bytes: &[u8], index: usize) -> Option<f32> {
+        let width = self.bytes_per_sample();
+        let at = index.checked_mul(width)?;
+        let raw = bytes.get(at..at.checked_add(width)?)?;
+        Some(match self {
+            Self::Int16 => f32::from(i16::from_le_bytes([raw[0], raw[1]])) / 32_768.0,
+            Self::Int24Packed => {
+                // Sign-extend 24 bits by putting them in the high three bytes of
+                // an i32 and shifting back down.
+                let v = i32::from_le_bytes([0, raw[0], raw[1], raw[2]]) >> 8;
+                v as f32 / 8_388_608.0
+            }
+            Self::Int24Padded => {
+                i32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]) as f32 / 8_388_608.0
+            }
+            Self::Int32 => {
+                i32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]) as f32 / 2_147_483_648.0
+            }
+            Self::Float32 => f32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]),
+        })
+    }
+
+    /// How many whole samples a blob of this format holds.
+    pub const fn samples_in(self, bytes: usize) -> usize {
+        bytes / self.bytes_per_sample()
+    }
+
     /// Every storage format, for exhaustive tests and schema documentation.
     pub const ALL: [Self; 5] = [
         Self::Int16,
@@ -333,6 +377,64 @@ mod tests {
             StorageFormat::native_for(SampleFormat::S24).bytes_per_sample(),
             3
         );
+    }
+
+    #[test]
+    fn full_scale_decodes_to_full_scale_in_every_format() {
+        let cases: [(StorageFormat, &[u8]); 5] = [
+            (StorageFormat::Int16, &[0x00, 0x80]),
+            (StorageFormat::Int24Packed, &[0x00, 0x00, 0x80]),
+            (StorageFormat::Int24Padded, &[0x00, 0x00, 0x80, 0xFF]),
+            (StorageFormat::Int32, &[0x00, 0x00, 0x00, 0x80]),
+            (StorageFormat::Float32, &(-1.0f32).to_le_bytes()),
+        ];
+        for (format, bytes) in cases {
+            assert_eq!(
+                format.decode_sample(bytes, 0),
+                Some(-1.0),
+                "negative full scale in {format:?}"
+            );
+        }
+        for format in StorageFormat::ALL {
+            let zero = vec![0u8; format.bytes_per_sample()];
+            assert_eq!(format.decode_sample(&zero, 0), Some(0.0));
+        }
+    }
+
+    #[test]
+    fn a_padded_24_bit_sample_is_not_left_justified() {
+        // Measured against the corpus: the stored i32 holds the sample value
+        // itself, so 0x00400000 is a half-scale positive, not 1/512th of one.
+        // Decoding it as a 32-bit sample would draw every imported waveform
+        // 256x too quiet.
+        let half: [u8; 4] = 0x0040_0000i32.to_le_bytes();
+        assert_eq!(
+            StorageFormat::Int24Padded.decode_sample(&half, 0),
+            Some(0.5)
+        );
+        assert_eq!(
+            StorageFormat::Int32.decode_sample(&half, 0),
+            Some(0.001_953_125)
+        );
+    }
+
+    #[test]
+    fn a_packed_24_bit_sample_is_sign_extended() {
+        // 0xFFFFFF is -1 in 24-bit two's complement, not 16777215.
+        let minus_one: [u8; 3] = [0xFF, 0xFF, 0xFF];
+        let decoded = StorageFormat::Int24Packed
+            .decode_sample(&minus_one, 0)
+            .expect("in range");
+        assert!(decoded < 0.0 && decoded > -0.000_001, "got {decoded}");
+    }
+
+    #[test]
+    fn a_short_blob_decodes_to_none_rather_than_to_a_plausible_number() {
+        // A truncated block is damage. Returning silence for it would let a
+        // summary describe audio that is not there.
+        assert_eq!(StorageFormat::Int32.decode_sample(&[0, 0, 0], 0), None);
+        assert_eq!(StorageFormat::Int16.decode_sample(&[0, 0], 1), None);
+        assert_eq!(StorageFormat::Int16.samples_in(5), 2);
     }
 
     #[test]

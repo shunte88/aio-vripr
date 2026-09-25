@@ -1,11 +1,11 @@
 # VCW - project status
 
 **As of:** 2026-09-25
-**Phase:** 1 is underway - WP-01 through WP-04 are built, the last two on Linux x86_64
-only. All five Phase 0 spikes returned verdicts on their primary platform; gate G0
-remains open on hardware coverage and on D3's firmed-config soak, neither of which
-blocks foundation work.
-**Branch:** `main` at `941981a` (WP-03), plus WP-04 in the working tree.
+**Phase:** 1 is underway - WP-01 through WP-05 are built, WP-03 and WP-04 on Linux
+x86_64 only. All five Phase 0 spikes returned verdicts on their primary platform; gate
+G0 remains open on hardware coverage, and WP-05's soak has now also settled D3's
+firmed-config run.
+**Branch:** `main` at `95f1f52` (WP-04), plus WP-05 in the working tree.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -79,10 +79,12 @@ S2 measured worst-case loss as exactly `block_ms × batch_blocks`, which is true
 harness* - it has no audio device. S1 Finding 4 above shows the rest of the picture on
 real hardware, and puts a floor under it that smaller commits cannot cross.
 
-One honest gap: the soak ran the harness defaults (`synchronous=NORMAL`, interleaved),
-not the D3-firmed `FULL` + per-channel. The short matrix says the firmed config should be
-no worse, but *should be* is not *measured* - **D3 should not close until the firmed
-config is soaked.**
+One honest gap, **closed 2026-09-25 by WP-05**: this soak ran the harness defaults
+(`synchronous=NORMAL`, interleaved), not the D3-firmed `FULL` + per-channel. The short
+matrix said the firmed config should be no worse, but *should be* is not *measured*.
+WP-05's exit soak is that run, with the product code rather than the harness - see the
+WP-05 section below, which also records the one thing the firmed config changed that
+nobody had predicted: the WAL ceiling has to be stated in bytes, not pages.
 
 ### S3 - the experiment was aimed at the wrong thing
 
@@ -460,10 +462,11 @@ warnings` and `cargo deny check`.
   is only as trustworthy as its parser, and a self-consistent wrong document is worse
   than none.
 
-Not verified: anything a real capture writes. Every test above builds its blocks
-synthetically. The writer thread, batching and checkpoint policy are WP-05, and the
-kill-at-random-point recovery suite is WP-06. D3's block parameters are baked into
-`schema.rs` as constants and stay **provisional** until the firmed-config soak runs.
+Not verified *at the time*: anything a real capture writes. Every test in this section
+builds its blocks synthetically. The writer thread, batching and checkpoint policy
+arrived with WP-05, which is where the schema first held bytes a capture produced; the
+kill-at-random-point recovery suite is still WP-06. D3's block parameters are baked
+into `schema.rs` as constants and WP-05's soak is what settled them.
 
 ## Phase 1 - WP-03, devices
 
@@ -638,33 +641,211 @@ One deliberate omission: `vcw capture` drains the ring and discards the samples.
 owns the writer, and a second block-committing implementation that nothing else uses
 would be worse than none.
 
+## Phase 1 - WP-05, the persistence writer
+
+Built 2026-09-25. WP-02 gave the schema a shape and WP-04 gave the capture path a
+voice; until now nothing had ever written a byte of real audio into a `.vcw` file.
+Every block in every test was synthetic. This is what closes that.
+
+| module | what it is |
+|---|---|
+| `types/format.rs` | `StorageFormat::decode_sample` - one stored sample to a normalised `f32`, with the scaling **measured against the corpus**, not assumed |
+| `types/capture.rs` | the `PcmSource` trait: `read` and `is_finished`, and nothing else |
+| `audio/buffers.rs` | `impl PcmSource for RingReader` - four lines, and the only thing joining the two halves |
+| `project/persistence.rs` | `Config`, `Checkpoint`, `Summary`, `pyramid`, `Latencies`, `Progress`, `Writer`, `Outcome`, `spawn`/`Handle` |
+| `cli/capture.rs` | `vcw capture --project` now writes the audio, not just the row |
+| `cli/soak.rs` | `vcw soak` - the long-run measurement, with a byte-for-byte readback |
+
+**The two crates still do not know about each other.** `vcw-audio` owns the ring and
+`vcw-project` owns the writer, and making one depend on the other to join them would
+have undone the layering the whole design rests on. Instead `vcw-types` gained a
+two-method trait, `vcw-audio` implements it for its own `RingReader`, and the writer
+takes `impl PcmSource`. No newtype, no orphan rule, no dependency - and the same writer
+can be driven by a generator in CI and by a turntable on the bench with nothing
+changing between them.
+
+**The frame count moves inside the block transaction.** `captures.frames` is advanced
+in the same transaction that commits the blocks. Were it a separate write, a crash
+between the two would leave a project claiming more audio than it holds, and recovery
+would have to choose which of two committed facts to believe. Written together, the
+count can never run ahead of the data.
+
+**A failed commit stops the writer.** Blocks tile each channel's timeline with no gaps;
+`validate()` enforces it and WP-06 will depend on it. Carrying on after a failed commit
+would punch a hole no later write could close, so the writer stops, the session is
+marked interrupted and the error is surfaced. A short capture that says why it is short
+beats a long one with a hole in it.
+
+**The summary pyramid was measured, not ported.** The spike's summariser scaled every
+format by `2^(8*bps-1)`, which for Audacity's padded 24-bit would have been 256 times
+too quiet - that format is a little-endian `i32` holding a value in +/-2^23, not a
+left-justified one. Reading the corpus instead of the spike also turned up two things
+worth knowing about `summary256`/`summary64k`, both confirmed against real files:
+Audacity sizes the arrays to the block's *capacity* and pads the tail with
+`(FLT_MAX, -FLT_MAX, 0)`, and it builds the 64k level from the 256 level by weighting
+every group as a full 256 samples before dividing by the true count, so its 64k rms
+runs slightly high wherever a block does not divide evenly. VCW computes each level
+from the samples with true denominators and emits exactly the groups that exist. The
+divergence is under 0.1 % and only in a final partial group; imported Audacity blocks
+keep their own summaries untouched under D4, so the two conventions coexist without
+either being rewritten.
+
+**A finding that changes D3: the WAL ceiling has to be stated in bytes.** S2 measured a
+peak write-ahead log of 4.57 MiB, on a harness using SQLite's default 4 KiB pages. VCW's
+pages are 64 KiB, and SQLite's autocheckpoint threshold counts *pages*, so the stock
+setting of 1000 is a 64 MiB log rather than a 4 MiB one. `Config::wal_bytes` now states
+the ceiling in bytes and converts to pages against the file's actual page size, and a
+unit test reads `PRAGMA wal_autocheckpoint` back to prove the conversion happened.
+
+Measured as a pair on `/data2` (ext4), three minutes at 192 kHz each, everything but
+the ceiling identical:
+
+| Ceiling | WAL peak | commit p50 | p95 | p99 | max |
+|---|---|---|---|---|---|
+| 64 MiB (the stock 1000 pages) | 64.71 MiB | 4.9 ms | 8.3 ms | 84.0 ms | 100.1 ms |
+| 4 MiB (`Config::wal_bytes`) | **4.50 MiB** | 5.1 ms | 15.8 ms | **31.9 ms** | **54.3 ms** |
+
+4.50 MiB is within 2 % of S2's 4.57 MiB, which is the point: the spike's figure was
+right and VCW was silently not reproducing it. The tail improves by 2.6x at p99 and
+1.8x at the maximum, because a checkpoint that has 4 MiB to fold back finishes inside
+a block period and one with 64 MiB does not. The trade is real and visible at p95,
+which gets *worse* (8.3 -> 15.8 ms): checkpoints are more frequent, so more commits pay
+a small share of one. That is the right way round for real-time capture, where a rare
+100 ms stall is the thing that costs audio and a common 16 ms one against a 250 ms
+budget costs nothing.
+
+An earlier version of this section quoted four figures measured on `/tmp`, which is
+tmpfs on this machine. They were RAM numbers presented as storage numbers and have been
+replaced by the table above.
+
+#### What is verified, and what is not
+
+**The exit criterion is met.** 90 minutes of 24/192 stereo on x86_64/ext4, product
+code rather than a spike harness, finished 2026-09-25 11:01:
+
+```
+ran         5400.1 s wall, 5400.1 s of audio, real-time factor 1.00001
+written     1036824960 frames, 43202 blocks, 5.79 GiB of samples in 21601 commits
+commit      p50 5.7 ms, p95 16.2 ms, p99 29.8 ms, max 79.4 ms, budget 250 ms
+prepare     p50 6.1 ms, max 18.7 ms (deinterleave, summaries, crc)
+wal         peak 4.81 MiB, 0 writer checkpoint(s)
+file        5.94 GiB
+counters    0 overruns, 0 underruns, 0 dropped frames, 0 stream errors
+validate    clean
+bytes       every one of 6220949760 matches what the source generated
+```
+
+Three things in there are worth more than the headline:
+
+- **"Every byte" means every byte.** `vcw soak` does not compare a checksum. It streams
+  `capture_blocks JOIN sampleblocks` in timeline order and recomputes
+  `Simulated::expected_sample(frame, channel)` from the frame index *stored in each
+  block*, so all 6,220,949,760 sample bytes were checked against what the generator
+  would have produced at that exact offset on that exact channel. A block written at
+  the wrong offset, on the wrong channel, or after a silent gap fails; it cannot pass on
+  its own internal consistency.
+- **The worst commit of 21,601 was 79.4 ms against a 250 ms budget**, and the ring holds
+  1000 ms. The margin that matters is not the average, it is that the single worst
+  moment in an hour and a half still left 170 ms of slack and never came close to the
+  ring. Zero overruns is the consequence, not a separate result.
+- **The WAL never grew and the writer never checkpointed.** Peak 4.81 MiB across 5.94
+  GiB of project, with SQLite's autocheckpoint doing all of it at the threshold
+  `Config::wal_bytes` computed; `Checkpoint::Automatic` needed no help. The `-wal` and
+  `-shm` sidecars were gone after close, which is what a clean shutdown looks like and
+  what WP-06 will use as its signal.
+
+The real-time factor of 1.00001 is the generator's pacing, not a performance figure.
+What it establishes is that the writer never became the bottleneck: had it fallen
+behind, the ring would have overrun and the counter would say so.
+
+**D3 is firmed by this run.** 250 ms per-channel blocks, batch 1, WAL, `synchronous=FULL`,
+a 4 MiB log ceiling and a >= 500 ms ring are now measured on the shipping code rather
+than inferred from a spike.
+
+
+Device-free, in CI:
+
+- `project/src/persistence.rs` holds 19 unit tests: block splitting at the configured
+  duration, a short final block written rather than discarded, a trailing partial frame
+  held over rather than padded, the frame count checked against the committed blocks
+  after *every* commit, per-block checksums, batch size changing the transaction count
+  and nothing else, summaries on and off, the pyramid's group count and its short final
+  group, the WAL ceiling honoured in pages derived from bytes, progress visible while
+  the writer runs rather than only after, and a zero-channel capture refused at
+  `begin` rather than spun on - the one input that would make the block loop drain
+  nothing for ever.
+- `core/tests/capture_writes_audio.rs` is the cross-crate proof, and the only place it
+  can live: the real ring on one side, the real writer on the other, joined by
+  `PcmSource`. Every sample is checked against `Simulated::expected_sample` recomputed
+  from the frame index *stored in the block*, so a block written at the wrong offset, on
+  the wrong channel, or after a gap fails rather than passing on its own internal
+  consistency. It also covers R9 with the device vanishing mid-capture, a writer dropped
+  without `finish()` leaving a project that is valid and visibly unfinished, and the
+  stored summaries matching the audio actually in each block.
+- `the_writer_keeps_up_with_a_192k_device_in_real_time` is the soak in miniature, short
+  enough for CI: three seconds at 192 kHz in a debug build, zero loss, every commit
+  inside the block budget.
+
+**R9 can now be closed outright.** WP-04 closed it for the capture path but left it open
+because "nothing is writing blocks while the device vanishes". Something is now, and the
+test asserts that everything delivered before the cut is in the file, byte-exact, with
+the session marked interrupted and the project still valid.
+
+**What is not verified.** The soak is one platform and one filesystem: x86_64 on ext4.
+The Pi 5 - on SD *and* on NVMe, which S2 expected to differ - and Windows are both
+unrun, and S2's other open questions stay open: disk-full behaviour, induced fsync
+stalls, `VACUUM` and compaction, copying a live project, a page-size sweep, and WAL2.
+The writer has also never been driven by a real converter for 90 minutes; the long run
+is simulated, deliberately, because only a generated source can be checked byte for
+byte afterwards.
+
+**One unexplained test failure, recorded rather than forgotten.**
+`a_device_that_vanishes_leaves_everything_it_did_deliver` failed once, on 2026-09-25,
+during a full-workspace run, and its message was not captured. It has not recurred in
+roughly a hundred subsequent executions, including sixteen full-workspace passes and
+four with every core saturated. A separate and genuine race in a *different* test in
+the same file was found and fixed in the same session - a delivered-frame count read
+one line before the feeder thread was joined, so a callback landing in between made
+the writer legitimately report more frames than the snapshot saw - but that cannot
+explain this one, and no mechanism has been found that does. The assertion now prints
+the outcome and the device counters, so a recurrence will be diagnosable. Until then
+R9's automated proof should be read as strong but not yet unblemished.
+
 ## Next up
 
-**`WP-05`, the persistence writer.** WP-02's schema has still never had a byte written
-into it by a capture - every block in every test today is synthetic - and this is what
-closes that. WP-04 left it what it needs: a `Source` trait with a live CPAL
-implementation *and* a simulated one behind it, so the writer can be built and soaked in
-CI on a machine with no sound card and then run unchanged against a turntable. Its exit
-criterion is the 90-minute 24/192 soak with zero loss and a bounded WAL, which is the
-last unproven claim in the storage stack.
-
-Then **`WP-06`**, recovery, against the same trait and the same `session` rows.
+**`WP-06`, recovery.** WP-05 left it everything it needs and nothing it has to guess
+at: blocks that tile each channel's timeline with no gaps, a frame count that cannot
+run ahead of the data because it moves in the same transaction, and `finished_at IS
+NULL` as the signal - the absence of a write, which is the one thing a crash cannot
+forge. `core/tests/capture_writes_audio.rs` already stages the case by dropping a
+writer mid-capture; the exit criterion turns that into a kill-at-random-point suite
+that recovers every time.
 
 Still open on WP-03 and WP-04, and both for the same reason: **Windows and macOS.** The
 device matrix is reported on one OS, and the OS format verifier exists for Linux/ALSA
 only. On the other two the verdict degrades to `Unconfirmed` rather than to a false
 pass, which is the right failure, but neither work package can close on it.
 
-Three measurement jobs stay queued and can run on the machine's own time: D3's
-firmed-config soak (**D3 does not close until it runs, and WP-02's block constants
-depend on it**), S3's `cpu-matrix.sh`, and S3's two R8 isolation soaks.
+WP-05's own portability gap is the same shape: the soak has run on x86_64/ext4 and
+nowhere else. The Pi 5 on SD and on NVMe, and Windows, are the runs that would close
+it, and they need no new code - `vcw soak` is the harness.
+
+Two measurement jobs stay queued and can run on the machine's own time: S3's
+`cpu-matrix.sh`, and S3's two R8 isolation soaks. **D3's firmed-config soak is no
+longer among them** - WP-05's exit soak is that run, with the product code rather than
+the spike harness.
 
 ## Housekeeping
 
 - All of Phase 0 is committed: the spikes, the CPAL 0.18 upgrade and the `.vcw` rename
   at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
-  `19dd459`. WP-01 is committed at `cd8e445` and WP-02 at `acb8835`; WP-03 is the
-  current working-tree change.
+  `19dd459`. WP-01 is committed at `cd8e445`, WP-02 at `acb8835`, WP-03 at `941981a`
+  and WP-04 at `95f1f52`. **WP-05 is the current working-tree change and is
+  uncommitted.**
+- **`/data2/vcw_soak/`** holds what is left of the WP-05 soak: `wp05.log`, the run
+  transcript quoted above, and `live.vcw`, the four-second hardware capture. The 5.94
+  GiB `wp05.vcw` has been deleted, as have the two three-minute WAL-pair projects.
+  Nothing here is in the repository and all of it is disposable.
 - **`/data2/source_rips`** is the source-audio corpus S4 ran against: 62 real vinyl rips,
   71 GB, 48 kHz and 192 kHz 32-bit WAV plus 24-bit FLAC. Distinct from
   `/data2/vinyl_rips`, which holds the 30 *projects* S5 used - 25 AUP3 and 5 AUP4, the

@@ -19,6 +19,7 @@ vcw-metadata = { workspace = true }
 vcw-fingerprint = { workspace = true }
 
 [dev-dependencies]
+rusqlite = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

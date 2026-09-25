@@ -197,6 +197,38 @@ impl CaptureInfo {
     }
 }
 
+/// The reading end of a live PCM stream, as the writer sees it.
+///
+/// This exists to keep a dependency from being created. `vcw-audio` owns the
+/// ring buffer and `vcw-project` owns the writer that drains it, and neither
+/// crate depends on the other - both sit on this one. Declaring the trait here
+/// lets `vcw-audio` implement it for its own ring and `vcw-project` consume it
+/// without either learning about SQLite or ALSA respectively.
+///
+/// The other thing it buys is that the writer can be driven by anything: a file,
+/// a generator, a test fixture holding a `Vec<u8>`. WP-05's soak and WP-06's
+/// kill-at-random-point suite both need that, because neither can rely on a
+/// sound card being present.
+pub trait PcmSource: Send {
+    /// Takes up to `dst.len()` bytes and returns how many were taken.
+    ///
+    /// Never blocks. Zero means "nothing ready *now*", which is not the same as
+    /// end of stream - see [`PcmSource::is_finished`]. A caller that treats zero
+    /// as the end will truncate every capture that has a quiet moment.
+    ///
+    /// Implementations must return whole samples' worth where they can; the
+    /// writer reassembles frames from the byte stream and a partial sample would
+    /// shift every channel after it.
+    fn read(&mut self, dst: &mut [u8]) -> usize;
+
+    /// Whether the producer has gone for good.
+    ///
+    /// Once this is true *and* [`PcmSource::read`] returns zero, nothing more
+    /// will ever arrive. Both conditions matter: a producer can finish with data
+    /// still in flight, and dropping it would lose the end of the side.
+    fn is_finished(&self) -> bool;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,5 +322,41 @@ mod tests {
         );
         assert!(!info.os_verified);
         assert!(info.os_report.is_none());
+    }
+
+    /// A source backed by a slice, which is all a test usually needs.
+    struct Canned {
+        bytes: Vec<u8>,
+        at: usize,
+        done: bool,
+    }
+
+    impl PcmSource for Canned {
+        fn read(&mut self, dst: &mut [u8]) -> usize {
+            let n = dst.len().min(self.bytes.len() - self.at);
+            dst[..n].copy_from_slice(&self.bytes[self.at..self.at + n]);
+            self.at += n;
+            n
+        }
+        fn is_finished(&self) -> bool {
+            self.done
+        }
+    }
+
+    #[test]
+    fn a_source_that_is_empty_now_is_not_a_source_that_has_finished() {
+        // The distinction the whole writer loop turns on. Treating a quiet
+        // moment as the end of the stream would truncate the side.
+        let mut source = Canned {
+            bytes: vec![1, 2, 3, 4],
+            at: 0,
+            done: false,
+        };
+        let mut buffer = [0u8; 8];
+        assert_eq!(source.read(&mut buffer), 4);
+        assert_eq!(source.read(&mut buffer), 0);
+        assert!(!source.is_finished(), "drained is not finished");
+        source.done = true;
+        assert!(source.is_finished());
     }
 }

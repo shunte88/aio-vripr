@@ -38,23 +38,23 @@
 //! drain the ring, ask the operating system what it really did, weigh the
 //! evidence, and persist the counters.
 //!
-//! **The samples are counted and discarded.** WP-05 owns the writer that puts
-//! them in the project; until it exists, writing them here would mean a second
-//! implementation of block committing that nothing else uses. What this verb
-//! does persist is the session row and its diagnostics, which is what WP-04's
-//! exit criteria actually ask for.
+//! **With `--project`, the samples are written.** The ring's reading end is
+//! handed to [`vcw_project::persistence`], which owns the writer thread, the
+//! block layout and the transactions. Without `--project` there is nowhere to
+//! put them, so they are drained and counted: draining still matters, because a
+//! ring nobody reads fills in milliseconds and every callback after that is an
+//! overrun, which would make the diagnostics report a problem the verb invented.
 //!
-//! The drain loop runs on the main thread beside the stream, because a
-//! [`vcw_audio::capture::Capture`] is not `Send`. That is fine at this size: the
-//! ring's reading end *is* `Send`, so WP-05 can move exactly that piece onto a
-//! writer thread without touching anything here.
+//! The stream itself stays on the main thread, because a
+//! [`vcw_audio::capture::Capture`] is not `Send`. Only the reading end moves,
+//! which is the piece that was designed to.
 
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use vcw_audio::capture::{BitPerfect, Capture, Request};
 use vcw_audio::devices::{self, Direction};
-use vcw_project::{Project, Session};
+use vcw_project::{Project, Session, persistence};
 use vcw_types::{CaptureMode, CaptureState, SampleFormat, SampleRate};
 
 /// Sample formats selectable on the command line (§8).
@@ -143,43 +143,73 @@ pub(crate) fn run(options: &Options) -> Result<()> {
         request = request.format(f.into());
     }
 
-    let (capture, mut reader) = Capture::start_on(device, &request)
+    let (capture, reader) = Capture::start_on(device, &request)
         .with_context(|| format!("opening {}", device.label()))?;
 
     // A session row before a single frame is drained, so that a capture killed
-    // in the next second still leaves evidence that it happened (§15).
-    let mut project = match &options.project {
-        Some(path) => Some(open_or_create(path)?),
-        None => None,
-    };
-    let session = match &mut project {
-        Some(p) => Some(Session::begin(p, &capture.info()).context("beginning the session")?),
-        None => None,
+    // in the next second still leaves evidence that it happened (§15). Only
+    // then does the writer take the project and the ring away.
+    let info = capture.info();
+    let config = persistence::Config::default();
+    let (mut writing, mut discarding, session) = match &options.project {
+        Some(path) => {
+            let mut project = open_or_create(path)?;
+            let session = Session::begin(&mut project, &info).context("beginning the session")?;
+            let handle = persistence::spawn_on(project, session, &info, config, reader)
+                .context("starting the capture writer")?;
+            (Some(handle), None, Some(session))
+        }
+        None => (None, Some(reader), None),
     };
 
-    let read = drain(&mut reader, Duration::from_secs_f64(options.seconds));
+    let run_for = Duration::from_secs_f64(options.seconds);
+    let read = match &mut discarding {
+        Some(reader) => drain(reader, run_for),
+        // The writer thread is doing the draining. Sleeping here is the honest
+        // spelling of "this thread has nothing to do but hold the stream open".
+        None => {
+            std::thread::sleep(run_for);
+            0
+        }
+    };
 
     let frames = capture.frames();
     let verdict = capture.verdict();
     let negotiated = capture.negotiated().clone();
     let verification = capture.verification().evidence();
     let verified = capture.verification().confirms();
+    // Drops the stream, which drops the ring's writing end, which is how the
+    // writer thread learns that no more audio is coming.
     let diagnostics = capture.stop();
+    // Interrupted, not finalised, if anything was lost. The stop was orderly
+    // either way; the capture was not.
+    let state = if diagnostics.is_clean() {
+        CaptureState::Finalised
+    } else {
+        CaptureState::Interrupted
+    };
 
-    if let (Some(p), Some(s)) = (project.as_mut(), session) {
-        // The verification only exists once the stream has run, which is after
-        // the row was written: §9's confirmation, recorded when it is known.
-        s.record_verification(p.conn(), verified, Some(verification.as_str()))
+    let outcome = match writing.take() {
+        Some(handle) => {
+            handle.set_result(state, diagnostics);
+            Some(handle.stop().context("stopping the capture writer")?)
+        }
+        None => None,
+    };
+
+    if let (Some(path), Some(s)) = (&options.project, session) {
+        if outcome.is_none() {
+            s.finish(&mut open_or_create(path)?, state, frames, diagnostics)
+                .context("finishing the session")?;
+        }
+        // The verification only exists once the stream has run, and by then the
+        // writer owns the connection, so this is a second open rather than a
+        // held one. §9's confirmation, recorded when it is actually known.
+        let project =
+            Project::open(path).with_context(|| format!("reopening {}", path.display()))?;
+        s.record_verification(project.conn(), verified, Some(verification.as_str()))
             .context("recording the verification")?;
-        // Interrupted, not finalised, if anything was lost. The stop was
-        // orderly either way; the capture was not.
-        let state = if diagnostics.is_clean() {
-            CaptureState::Finalised
-        } else {
-            CaptureState::Interrupted
-        };
-        s.finish(p, state, frames, diagnostics)
-            .context("finishing the session")?;
+        project.close().context("closing the project")?;
     }
 
     if options.json {
@@ -209,6 +239,19 @@ pub(crate) fn run(options: &Options) -> Result<()> {
             "verdict": verdict.summary(),
             "project": options.project.as_ref().map(|p| p.display().to_string()),
             "capture_id": session.map(|s| s.id()),
+            "written": outcome.as_ref().map(|o| serde_json::json!({
+                "blocks": o.blocks,
+                "frames": o.frames,
+                "bytes": o.bytes,
+                "commits": o.commits,
+                "checkpoints": o.checkpoints,
+                "peak_wal_bytes": o.peak_wal_bytes,
+                "commit_micros": o.commit.summary()
+                    .map(|(p50, p95, p99, max)| serde_json::json!({
+                        "p50": p50, "p95": p95, "p99": p99, "max": max })),
+                "within_budget": o.commits_within_budget(&config),
+                "state": o.state.as_str(),
+            })),
         });
         println!("{}", serde_json::to_string_pretty(&payload)?);
         return Ok(());
@@ -253,10 +296,45 @@ pub(crate) fn run(options: &Options) -> Result<()> {
             if n == 0 { "os says   " } else { "          " }
         );
     }
-    println!(
-        "  captured    {frames} frames, {read} bytes drained in {:.1} s",
-        options.seconds
-    );
+    if let Some(o) = &outcome {
+        println!(
+            "  captured    {frames} frames from the device in {:.1} s",
+            options.seconds
+        );
+        println!(
+            "  written     {} frames, {} blocks, {} bytes, {} commits",
+            o.frames, o.blocks, o.bytes, o.commits,
+        );
+        if let Some((p50, p95, p99, max)) = o.commit.summary() {
+            println!(
+                "  commit      p50 {:.1} ms, p95 {:.1} ms, p99 {:.1} ms, max {:.1} ms \
+                 against a {} ms budget",
+                p50 as f64 / 1_000.0,
+                p95 as f64 / 1_000.0,
+                p99 as f64 / 1_000.0,
+                max as f64 / 1_000.0,
+                config.commit_granularity_millis(),
+            );
+        }
+        println!(
+            "  wal         peak {:.2} MiB, {} checkpoint(s)",
+            o.peak_wal_bytes as f64 / (1024.0 * 1024.0),
+            o.checkpoints,
+        );
+        if o.frames < frames {
+            // Not an error, and worth saying out loud: the difference is audio
+            // the device delivered that never reached the file.
+            println!(
+                "  !           {} frame(s) the device delivered were not written",
+                frames - o.frames
+            );
+        }
+    } else {
+        println!(
+            "  captured    {frames} frames, {read} bytes drained and discarded in {:.1} s",
+            options.seconds
+        );
+    }
     println!(
         "  counters    {} overruns, {} underruns, {} dropped frames, {} stream errors",
         diagnostics.overruns,
@@ -289,10 +367,12 @@ pub(crate) fn run(options: &Options) -> Result<()> {
 
 /// Reads the ring for the requested duration and throws the bytes away.
 ///
-/// Draining matters even though the samples do not survive: a ring nobody reads
-/// fills in [`vcw_audio::buffers::MIN_MILLIS`] and every callback after that is
-/// an overrun. Timing the loop off the wall clock rather than off a frame count
-/// means a device delivering nothing still ends when it was asked to.
+/// Used only when there is no `--project` to write them into. Draining still
+/// matters: a ring nobody reads fills in [`vcw_audio::buffers::MIN_MILLIS`] and
+/// every callback after that is an overrun, so a verb that skipped this would
+/// report a fault of its own making. Timing the loop off the wall clock rather
+/// than off a frame count means a device delivering nothing still ends when it
+/// was asked to.
 fn drain(reader: &mut vcw_audio::buffers::RingReader, run_for: Duration) -> u64 {
     let mut scratch = vec![0u8; 64 * 1024];
     let deadline = Instant::now() + run_for;
