@@ -29,7 +29,9 @@ Full snapshot - what is proven, what is assumed, what is waiting on hardware or 
 decision - in [docs/STATUS.md](docs/STATUS.md).
 
 Phase 1 has started. The workspace scaffold (WP-01) is in place: ten `vcw-*` crates
-under `crates/`, a four-target CI matrix, and the licence and toolchain gates.
+under `crates/`, a four-target CI matrix, and the licence and toolchain gates. Schema v1
+(WP-02) is built and [documented](docs/SCHEMA.md), and device enumeration (WP-03) is
+built on Linux x86_64, with Windows and macOS still unverified.
 
 ## Layout
 
@@ -42,6 +44,13 @@ docs/adr/        architecture decision records
 docs/spikes/     the S1-S5 write-ups
 ```
 
+Every source file opens with a header block: the file name, the product line, the
+copyright, a one-line statement of what the file is for, and the MIT text. It is in
+whatever comment syntax the language uses - `/* */` for Rust, TypeScript and HTML, `#`
+for shell and Python, below the shebang where there is one. The purpose line repeats
+the file's own first doc line (`//!` in Rust), which is where the real explanation
+lives.
+
 ## Building
 
 ```sh
@@ -49,6 +58,19 @@ cargo build --workspace     # the product
 cargo test --workspace
 cargo run -p vcw-cli -- doctor
 ```
+
+`vcw` is the headless driver - §4.5 requires the whole workflow to be drivable without a
+UI. Today it can answer what this machine will record:
+
+```sh
+cargo run -p vcw-cli -- devices --which input --hardware
+cargo run -p vcw-cli -- formats "hw:CARD=0,DEV=0" --which input --confirm
+```
+
+`devices` lists what the host advertises; `--hardware` keeps only the direct paths that
+could be bit-perfect. `formats` shows the §8 configurations one device offers, and
+`--confirm` opens it once per configuration to find out which of them are real - an
+advertisement is not a promise, and on an ALSA plug device most of them are not.
 
 Requires a Rust toolchain at 1.90 or newer and, on Linux, `libasound2-dev`. SQLite is
 compiled in, so there is no system SQLite to match.

@@ -544,7 +544,7 @@ sequencing, not as a forecast. Dependencies are hard unless noted.
 |----|-------|-----|------|------|---------------|
 | **01** | Workspace scaffold: cargo workspace per §6, CI matrix (Linux x86_64/aarch64, Windows, macOS), clippy/fmt/deny gates, MSRV pin, licence + notices ported | §6, D7, D10 | - | 5 | **Built 2026-09-25.** Ten `vcw-*` crates under `crates/`, one per §6 group with §6's leaves as modules ([ADR-0003](docs/adr/0003-workspace-layout.md)); spikes moved to their own excluded workspace; `fmt`/`clippy -D warnings`/`test`/`cargo deny check` all clean locally on Linux x86_64. The aarch64, Windows and macOS legs are asserted by `.github/workflows/ci.yml` and **unverified until it runs on a push** - aarch64 Linux runs natively on `ubuntu-24.04-arm` rather than cross-compiled, because `alsa-sys` and bundled SQLite are what a cross-build gets wrong quietly |
 | **02** | `project`: schema v1 as an **AUP4 superset** (`sampleblocks` column-for-column, same summary pyramids, never-update-a-block), `application_id`/`user_version`, transactional migrations, create/open/validate, integrity check | §12, §16, §49 | S2, S5 | 8 | **Built 2026-09-25.** Schema v1 in `vcw-project`: create/open/read-only-open/close, transactional migrations, `validate()` with 17 finding codes, `integrity_check()`. 44 tests. Round-trip proves bytes survive across all five storage formats; `tests/migrations.rs` proves resumption from any version reaches the same schema and that a failing step leaves no trace; [`docs/SCHEMA.md`](docs/SCHEMA.md) is generated from the DDL and `tests/schema_doc.rs` fails on drift *and* cross-checks the parse against `PRAGMA table_info`; `tests/aup4_shape.rs` diffs `sampleblocks` against DDL extracted verbatim from a corpus `.aup3` **and** `.aup4`. Not yet exercised: anything a real capture writes, which is WP-05 |
-| **03** | `audio/devices`: enumeration, capability probing, independent in/out selection, persistence, hot-unplug handling | §7, §8 | S1 | 4 | Device matrix reported on 3 OS; unplug during idle/record is non-corrupting |
+| **03** | `audio/devices`: enumeration, capability probing, independent in/out selection, persistence, hot-unplug handling | §7, §8 | S1 | 4 | **Built 2026-09-25, on Linux x86_64 only.** `vcw-audio`: `DeviceKey` (`host:id`) as the one identity, transport classification (`hw:` direct / `plughw:` converting / virtual), an advertised-versus-confirmed capability matrix, in/out preferences persisted by id, and `Snapshot::diff` for hot-plug. 48 tests plus the `vcw devices` and `vcw formats` verbs. Measured live: `hw:` confirmed all 8 of its advertised combinations, while a mono webcam's `plughw:` path advertised 1536 and accepts one channel - S1's plug-layer fiction, reproduced. **Exit criteria only partly met:** the matrix is reported on *one* OS, not three - Windows and macOS are unverified; and only the *idle* unplug case is covered, because unplug during record needs WP-04's stream |
 | **04** | `audio/capture`: CPAL stream, `CaptureMode` negotiation, bounded lock-free ring, RT-safe callback, diagnostics counters, **and a per-platform format verifier** (S1 finding 1 - CPAL alone cannot detect a silent resample) | §9, §10, §38 | 03 | 9 | Callback provably allocation-free and lock-free; requested vs negotiated reported; **negotiated format cross-checked against the OS and bit-perfect never claimed without that confirmation**; counters persisted |
 | **05** | `project/persistence`: capture writer thread, batched transactions, checkpoint policy from S2 | §13, §14 | 02, 04 | 6 | 90-min 24/192 soak, zero loss, bounded WAL |
 | **06** | `project/recovery`: unfinished-session detection, reconstruction, diagnostics, WAL/SHM lifecycle | §15 | 05 | 6 | Kill-at-random-point test suite recovers every time |
@@ -704,13 +704,17 @@ demonstrable from CLI or UI.
 ## 12. Immediate next actions
 
 *Updated 2026-09-25. The three actions that stood here - repo groundwork, S1, S2 - are
-all done, and so are S3, S4 and S5. WP-01 and WP-02 are built.*
+all done, and so are S3, S4 and S5. WP-01, WP-02 and WP-03 are built.*
 
-1. **Next** - **WP-03 and WP-04, devices and capture.** With the schema in place the
-   audio side is the critical path: WP-05's writer needs WP-04, and WP-04 needs WP-03.
-   S1 has already fixed the shape of both - select by PCM id, and never claim
-   bit-perfect without OS confirmation, because CPAL cannot detect a silent resample on
-   its own.
+1. **Next** - **WP-04, capture.** WP-03 is built, so the device layer is no longer the
+   blocker: WP-05's writer needs WP-04, and WP-04 now has its devices. S1 fixed the
+   shape of it - never claim bit-perfect without OS confirmation, because CPAL cannot
+   detect a silent resample on its own - and WP-03 has already proved the weaker half of
+   that on this host, where a plug PCM advertised 1536 configurations and accepted one
+   channel's worth. WP-04 carries the verifier that catches the case the advertisement
+   cannot: a request CPAL reports as honoured while the hardware ran something else.
+   **WP-03 stays open on its own exit criteria** - the matrix is reported on Linux
+   x86_64 only, and unplug-during-record cannot be tested until WP-04 exists.
 2. **In parallel, on the machine's own time** - the three measurement jobs still queued
    from Phase 0, none of which need attention while they run:
    - **D3's firmed-config soak** (`synchronous=FULL` + per-channel blocks). **D3 does

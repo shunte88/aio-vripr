@@ -1,10 +1,11 @@
 # VCW - project status
 
 **As of:** 2026-09-25
-**Phase:** 1 is underway - WP-01 and WP-02 are built. All five Phase 0 spikes returned
-verdicts on their primary platform; gate G0 remains open on hardware coverage and on
-D3's firmed-config soak, neither of which blocks foundation work.
-**Branch:** `main` at `cd8e445` (WP-01), plus WP-02 in the working tree.
+**Phase:** 1 is underway - WP-01, WP-02 and WP-03 are built, the last of them on Linux
+x86_64 only. All five Phase 0 spikes returned verdicts on their primary platform; gate
+G0 remains open on hardware coverage and on D3's firmed-config soak, neither of which
+blocks foundation work.
+**Branch:** `main` at `acb8835` (WP-02), plus WP-03 in the working tree.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -464,13 +465,96 @@ synthetically. The writer thread, batching and checkpoint policy are WP-05, and 
 kill-at-random-point recovery suite is WP-06. D3's block parameters are baked into
 `schema.rs` as constants and stay **provisional** until the firmed-config soak runs.
 
+## Phase 1 - WP-03, devices
+
+Built 2026-09-25, **on Linux x86_64 only**. `vcw-audio` answers §7's question - what can
+this machine record, through which path, and is that path capable of being bit-perfect -
+and §8's - which rates, formats and channel counts will it really accept.
+
+| module | what it is |
+|---|---|
+| `devices.rs` | `DeviceKey`, `Transport`, `DeviceReport`, `Snapshot`, and `Snapshot::diff` for hot-plug |
+| `probe.rs` | the §8 capability matrix, and the advertised-versus-confirmed distinction |
+| `selection.rs` | independent in/out preferences, persisted by id, and `resolve()` |
+| `error.rs` | errors that name the device and say what happened, including "unplugged" |
+
+**One identity, and it is not the name.** Everything keys on `DeviceKey`, CPAL's
+`host:id` - `alsa:hw:CARD=0,DEV=0`. Selection by name is *refused when ambiguous* rather
+than resolved to the first match, because on ALSA the same card appears as `hw:` and
+`plughw:` under one name and only one of them can be bit-perfect. Picking the wrong one
+silently is the failure mode §9 exists to prevent.
+
+**Transport classification.** `hw:` is direct hardware and the only bit-perfect
+candidate; `plughw:` is converting; `default`, `pipewire`, `pulse`, `dsnoop`, the rate
+converters and the rest are virtual. `Transport::can_be_bit_perfect()` returns
+`Some(true)` for exactly one of those three, and `None` where the platform does not say -
+an honest "unknown" rather than an optimistic guess.
+
+**Advertised is not confirmed.** A `SupportedStreamConfigRange` is a claim, and S1 found
+claims that fail at stream build. The matrix therefore carries three states -
+`Advertised`, `Confirmed` (a stream was built and dropped), `Rejected` - and only
+`--confirm` promotes anything.
+
+#### What is verified, and what is not
+
+103 tests across the workspace, 48 of them in `vcw-audio`, all green, plus `fmt`,
+`clippy -D warnings` and `cargo deny check`.
+
+Measured live on this host, through the new `vcw formats`:
+
+- `hw:CARD=0,DEV=0` (ALC1150 analog in) advertised 8 configurations - 44.1/48/96/192 kHz
+  x S16/S32, 2 ch - and **confirmed all 8**. A direct hardware path tells the truth.
+- `plughw:CARD=2,DEV=0` (a mono 8 kHz webcam) advertised **1536**: every channel count
+  from 1 to 64, at all six §8 rates, in all four formats. Confirming the first two
+  channel counts shows it accepts one channel at every rate, plus a stereo fiction at
+  48/96/192 kHz that the plug layer manufactures. This is S1's plug-layer fiction,
+  reproduced and now machine-checkable.
+
+That second measurement forced a design change: `confirm` opens the device once per
+entry, so `Matrix::with_channels_at_most` bounds the sweep and `vcw formats --confirm`
+defaults to 8 channels. The *advertisement* is still reported in full - what the backend
+claimed is a fact about the backend.
+
+- `tests/hotplug.rs` drives `Snapshot::diff` over synthetic snapshots: appear, disappear,
+  reconfigure, rename, and the case that matters most - unplugging a card removes *every*
+  path to it, `hw:` and `plughw:` alike, as one event and not three.
+- `tests/preferences.rs` proves the rule with no exceptions: **an absent device resolves
+  to `Missing`, never to a substitute**, even when the platform default and a plug path
+  to the same card are both present and would work. S1 finding 3 is why - the platform
+  default here is PipeWire at 44.1 kHz F32, a desktop-audio default that would quietly
+  make an archival capture worse than the one asked for.
+- `tests/enumerate.rs` runs against whatever hardware is actually present and asserts
+  invariants rather than a device list, so it is meaningful on a Pi and on a CI runner
+  with no sound card at all.
+
+**Exit criteria only partly met**, and this is the honest position:
+
+- *"Device matrix reported on 3 OS"* - reported on **one**. Windows and macOS are
+  unverified. The code has no Linux-specific paths outside `Transport::classify`, but
+  untested is untested.
+- *"unplug during idle/record is non-corrupting"* - **idle only**. Unplug during record
+  needs a running stream, which is WP-04. R9 keeps its fault-injection obligation there.
+
+Two known warts, neither blocking. ALSA's C library writes diagnostics straight to
+stderr during enumeration (`snd_pcm_dmix_open ... supports only playback stream`);
+silencing it needs `snd_lib_error_set_handler` through `alsa-sys`. And CPAL enumerates
+the same card twice on this host, once as `CARD=PCH` and once as `CARD=0` - harmless,
+because both keys open the same PCM, but it makes the list longer than the hardware.
+
 ## Next up
 
-**`WP-03` and `WP-04`, device enumeration and capture.** The dependency chain says
-WP-05 (the persistence writer) needs WP-04, and WP-04 needs WP-03, so the audio side is
-now the critical path. WP-04 carries the S1 finding that matters most: CPAL alone cannot
-detect a silent resample, so the negotiated format has to be cross-checked against the
-OS and bit-perfection never claimed without that confirmation.
+**`WP-04`, capture.** With WP-03 built the device layer is no longer the blocker, and
+WP-05 (the persistence writer) is waiting directly on WP-04. It carries the S1 finding
+that matters most: CPAL alone cannot detect a silent resample, so the negotiated format
+has to be cross-checked against the OS - `/proc/asound/card*/pcm*c/sub*/hw_params` on
+Linux, the WASAPI exclusive-mode format on Windows - and bit-perfection never claimed
+without that confirmation. WP-03 caught the weaker case, where the backend's own
+advertisement is wrong; WP-04 has to catch the one where the backend says yes and the
+hardware did something else.
+
+Also queued from WP-04: the file-backed capture source, which the plan calls the single
+highest-leverage testing decision in it. Deterministic, device-free capture tests are
+what make WP-05's soak and WP-06's kill-at-random-point suite runnable in CI.
 
 Three measurement jobs stay queued and can run on the machine's own time: D3's
 firmed-config soak (**D3 does not close until it runs, and WP-02's block constants
@@ -480,8 +564,8 @@ depend on it**), S3's `cpu-matrix.sh`, and S3's two R8 isolation soaks.
 
 - All of Phase 0 is committed: the spikes, the CPAL 0.18 upgrade and the `.vcw` rename
   at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
-  `19dd459`. WP-01 is committed at `cd8e445`; WP-02 is the current working-tree
-  change.
+  `19dd459`. WP-01 is committed at `cd8e445` and WP-02 at `acb8835`; WP-03 is the
+  current working-tree change.
 - **`/data2/source_rips`** is the source-audio corpus S4 ran against: 62 real vinyl rips,
   71 GB, 48 kHz and 192 kHz 32-bit WAV plus 24-bit FLAC. Distinct from
   `/data2/vinyl_rips`, which holds the 30 *projects* S5 used - 25 AUP3 and 5 AUP4, the
