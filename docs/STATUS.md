@@ -1416,54 +1416,49 @@ inserts land at the end of their b-tree and neither rebalances. A five-minute re
 250 ms block budget, peak WAL 5.06 MiB, zero loss and every one of 345,657,600 bytes
 matched against what the source must have generated. File size grows 1.4 %.
 
-**The 90-minute soak was re-run against the new schema and it FAILED, and the run is not
-usable either way, because I ran the full gate on the same machine while it was going.**
-That is worth writing down rather than quietly repeating: a real-time soak needs the
-machine, and a `cargo test --workspace` beside it is not a harsher test, it is a spoiled
-one.
+**The 90-minute soak was re-run against the new schema on an idle machine and it
+passes.** The two covering indexes cost the capture path nothing measurable.
 
-What the run actually says, since it says something:
-
-| | This run | Reference (pre-index) |
+| | With the indexes | Reference (pre-index) |
 |---|---|---|
-| real-time factor | 0.99996 | 1.00001 |
-| commit p50 / p95 / p99 | 7.0 / 19.6 / **39.2** ms | - / - / **63.2** ms |
-| commit max | **965.1 ms** | 102.3 ms |
-| peak WAL | 5.31 MiB | 4.57 MiB |
-| overruns | 28 | 0 |
-| dropped frames | 53,760 | 0 |
+| real-time factor | 1.00001 | 1.00001 |
+| commit p50 / p95 / p99 | 6.9 / 18.4 / **32.8** ms | - / - / **63.2** ms |
+| commit max | **102.6 ms** | 102.3 ms |
+| prepare p50 / max | 6.0 / 12.7 ms | - |
+| peak WAL | 5.25 MiB | 4.57 MiB |
+| overruns / underruns / dropped | 0 / 0 / 0 | 0 / 0 / 0 |
 | `validate` | clean | clean |
-| byte readback | MISMATCH | every byte |
+| byte readback | all 6,220,938,240 | all of them |
 
-The *distribution* is better than the reference at every percentile that was recorded.
-What broke it is a single 965 ms commit, and the 28 overruns all land in one burst
-between 600 s and 1200 s into the run, which is exactly the ten minutes in which the
-full workspace test suite, clippy and `cargo deny` were running. The remaining 70
-minutes added none. The 2.3 GiB database copy and the 2.3 GiB rebuild read later in the
-run added none either, which points at CPU and fsync contention rather than at disk
-bandwidth.
+The two numbers to look at are the maximum commit and the write-ahead log. **The worst
+commit is 102.6 ms against the reference's 102.3 ms** - three tenths of a millisecond
+apart over 21,601 commits, which is as close to "no effect" as a measurement of this
+kind gets. The p99 is better rather than worse, at 32.8 ms against 63.2 ms, which is
+machine state rather than the indexes helping; the honest reading of both together is
+that maintaining two append-only b-trees on an autoincrement key disappears into the
+noise of the commit the writer was already doing. **Peak WAL rose 15 %,** 4.57 MiB to
+5.25 MiB, which is the indexes' own pages passing through the log and is the one cost
+that is actually visible. It stays bounded and nowhere near a ceiling.
 
-**The byte mismatch is the drop, not corruption, and that is provable rather than
-assumed.** The verifier reported channel 0 frame 195,888,000 holding `D9 90 24` where the
-source would have produced `8D 94 7C`. Searching the generator over the following 300,000
-frames finds exactly one frame that produces `D9 90 24`: frame **195,941,760**, which is
-195,888,000 + **53,760** - precisely the reported dropped-frame count. So the writer
-stored what it was handed, in order, unaltered; the ring lost 280 ms of audio in one
-stall and everything after is shifted by it. `validate` clean says the same thing from
-the checksum side.
+**The ring is not under-sized, and the earlier worry about it is closed.** A previous
+attempt at this run recorded a 965 ms commit against a 1,000 ms ring and 28 overruns,
+and raised the question of whether the ring is sized against the mean rather than the
+tail. On an idle machine the worst commit in ninety minutes is 102.6 ms: ten times the
+headroom, and the 965 ms stall was contention rather than anything the writer does.
 
-**The genuinely new observation is about the ring, not the indexes.** The ring is
-1,000 ms and the stall was 965 ms. There is no headroom in that: the ring's job is to
-absorb the commit tail, and the current size cannot absorb a one-second one. Whether a
-one-second commit is reachable on an *unloaded* machine is the open question; if it is,
-the ring is under-sized for the tail rather than for the mean, and that is a D3 parameter
-nobody has swept against the tail.
-
-**What is still needed: one clean 90-minute run on an idle machine.** Until it exists,
-WP-05's exit soak stands on the pre-index run and the new schema is unproven over 90
-minutes. The five-minute run on a quiet machine gave p99 28.9 ms and max 42.5 ms with
-zero loss, which is evidence and not proof. The failed run is at
-`/data2/vcw-scratch/soak90.log` with its 6.04 GiB database beside it.
+That earlier attempt failed, **and the failure was mine** - I ran the full gate on the
+same machine while a real-time soak was going, on the reasoning that a pass under
+contention would be a stronger result. It is not a stronger test, it is a spoiled one,
+and it cost ninety minutes and settled nothing. Kept at
+`/data2/vcw-scratch/soak90-contended.log` because one thing in it is worth keeping: the
+byte mismatch it reported was provably the dropped audio and not corruption. The
+verifier found frame 195,888,000 of channel 0 holding `D9 90 24` where the source would
+have produced `8D 94 7C`, and searching the generator over the next 300,000 frames finds
+exactly one frame producing `D9 90 24` - frame 195,941,760, which is 53,760 later and
+exactly the reported drop count. The writer stored what it was handed, in order,
+unaltered; the ring lost 280 ms and everything after was shifted by it, with `validate`
+clean saying the same from the checksum side. That is the failure mode a byte-for-byte
+verifier exists to distinguish, working.
 
 ### The CLI
 
@@ -1539,12 +1534,9 @@ pass, which is the right failure, but neither work package can close on it.
 
 WP-05 and WP-06 have the same shape of gap: the 90-minute soak and the kill suite have
 both run on x86_64/ext4 and nowhere else. WP-09's two new indexes put the soak back in
-scope for a re-run on this machine as well, since they are maintained on every commit.
-**That re-run has been attempted once and failed, and the failure was mine** - the full
-gate ran on the same machine while it went. The five-minute quiet run measured p99
-28.9 ms against a 250 ms budget with zero loss; **one clean 90-minute run on an idle
-machine is the outstanding item**, and it is now the cheapest open measurement in the
-project. The Pi 5 on SD and on NVMe, and Windows, are
+scope on this machine, and **that re-run is done and passes**: commit max 102.6 ms
+against the pre-index 102.3 ms, zero loss, every one of 6,220,938,240 bytes matched. The
+x86_64/ext4 gap is closed for the new schema; the Pi 5 and Windows runs are what remain. The Pi 5 on SD and on NVMe, and Windows, are
 the runs that would close them, and they need no new code - `vcw soak` and
 `cargo test -p vcw-cli -- --ignored` are the harnesses.
 

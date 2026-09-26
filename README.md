@@ -92,6 +92,12 @@ prefers the primary key and produces the slow plan, and a test asserts on the *q
 plan* rather than on a stopwatch - the difference it guards is two hundred fold, and a
 timing test for it would still be flaky.
 
+Both indexes are maintained on every commit, so the writer was re-measured rather than
+assumed: a 90-minute real-time 24/192 soak with the new schema gives a worst commit of
+**102.6 ms against the 102.3 ms** the schema without them gave, over 21,601 commits,
+with zero loss and all 6,220,938,240 bytes matched. The visible cost is 1.4% of the file
+and 15% more write-ahead log.
+
 The numbers are from a real record, not a generated signal: a 26-minute 192 kHz stereo
 side pushed through the writer onto ext4, 300,627,479 frames in 2.33 GiB, with the page
 cache evicted before every read. Whole side at 4000 columns 17 ms; an eight-minute span
