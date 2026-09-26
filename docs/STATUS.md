@@ -16,8 +16,7 @@ feature, and `cargo test -p vcw-metadata --no-default-features` is a gate leg, a
 and every §31 editing verb, with both halves of its exit criterion asserted by test
 rather than argued: a byte-level fingerprint over both audio tables held constant across
 15 edits, and a locked boundary surviving a real second detection pass.
-**Branch:** `main` at `35fc89d` (WP-11), pushed. WP-12 and WP-13 are in the working
-tree, gate-green, uncommitted.
+**Branch:** `main` at `96438ff` (WP-12 and WP-13), pushed.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -2270,6 +2269,12 @@ not a defect. `min_confidence`, `tolerance`, `pair_tracks` and `min_track_frames
 default) are the rest of it, and `--dry-run` reports the decision without writing, so the
 figure can be argued from a record rather than from taste.
 
+A full pass over the 2.33 GiB side takes **2 min 57 s** through the debug-built CLI,
+which is a working figure and not a performance claim - nothing in WP-13 has been timed
+in release, and the pass is WP-11's spectral extraction with a few hundred row writes
+after it. An earlier note of 12.7 s for the same pass could not be reproduced today and
+has been struck rather than explained.
+
 Adoption lives in `vcw-core`, not `vcw-project`: ADR-0003 will not let the project layer
 see `vcw-signal`. Its public functions take `&Project` rather than `&Connection` so that
 `vcw-core` still does not link `rusqlite`.
@@ -2442,9 +2447,11 @@ Phase 1, this is Linux x86_64 only.
 
 ## Next up
 
-**Where to pick up.** WP-12 and WP-13 are both finished and gate-green but **not yet
-committed** - the whole of both is in the working tree along with this file. Committing
-is the first thing the next session does, and nothing about either is half-done.
+**Where to pick up.** WP-12 and WP-13 are both finished, gate-green and **committed at
+`96438ff`**, so nothing is half-done and nothing is waiting to be saved. The last thing
+run was the full gate - `fmt / clippy / test / parity / offline / deny / doc` all green at
+**751 passing, 0 failing, 12 ignored** - and the real side re-adopted cleanly afterwards.
+`/tmp/gate.sh` is the script; the em-dash sweep over the changed files reports zero.
 
 **`WP-14`, export, is next**, at weight 9 and unblocked by WP-13: a track now has an
 extent, a number, a title and a release behind it, which is exactly what §33 asks a
@@ -2521,8 +2528,10 @@ the spike harness.
   at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
   `19dd459`. WP-01 is committed at `cd8e445`, WP-02 at `acb8835`, WP-03 at `941981a`,
   WP-04 at `95f1f52`, WP-05 at `358c44a`, WP-06 at `b2a517b` and WP-07 at `051a648`.
-  WP-08 is committed at `75123ab`, WP-09 at `ae9b6d8` and `807d097`, WP-10 at `91ba45f`
-  and WP-11 at `35fc89d`. WP-09 is the
+  WP-08 is committed at `75123ab`, WP-09 at `ae9b6d8` and `807d097`, WP-10 at `91ba45f`,
+  WP-11 at `35fc89d`, and WP-12 and WP-13 together at `96438ff`. WP-13 is the second
+  change to touch the schema - v2, the vinyl data model - so `docs/SCHEMA.md` went with
+  it. WP-09 is the
   first change since WP-02 to touch the schema, so `docs/SCHEMA.md` was regenerated with
   it; regenerate with `VCW_BLESS=1 cargo test -p vcw-project --test schema_doc` whenever
   the schema moves, or `the_committed_document_matches_the_schema` fails.
