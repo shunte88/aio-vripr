@@ -116,6 +116,7 @@ pub fn validate(project: &Project, options: Options) -> Result<Report> {
     check_timeline(conn, &mut report)?;
     check_captures(conn, &mut report)?;
     check_coverage(conn, &mut report)?;
+    check_topology(conn, &mut report)?;
     if options.verify_checksums {
         check_checksums(conn, &mut report)?;
     }
@@ -476,6 +477,96 @@ fn check_captures(conn: &Connection, report: &mut Report) -> rusqlite::Result<()
                 ),
             });
         }
+    }
+    Ok(())
+}
+
+/// Whether the vinyl topology holds together (§29/§31).
+///
+/// The schema stops most of what could go wrong here - a track *is* its two
+/// boundaries, and `UNIQUE` handles the rest - so this asks the three questions
+/// SQLite cannot. A track whose end is not after its start would export as an
+/// empty file; two tracks that overlap would export the same audio twice; a gap in
+/// the numbering means a renumber was interrupted, and §29's positions would skip.
+///
+/// Boundaries that bound no track are *not* a finding. They are the normal state
+/// of a side that has been analysed and not yet edited, and of a side where an
+/// operator locked a boundary they were not ready to use.
+fn check_topology(conn: &Connection, report: &mut Report) -> rusqlite::Result<()> {
+    let mut stmt = conn.prepare(
+        "SELECT t.side_id, t.track_id, t.number, s.at_frame, e.at_frame
+           FROM tracks t
+           JOIN track_boundaries s ON s.boundary_id = t.start_boundary
+           JOIN track_boundaries e ON e.boundary_id = t.end_boundary
+          ORDER BY t.side_id, s.at_frame",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, i64>(0)?,
+            r.get::<_, i64>(1)?,
+            r.get::<_, i64>(2)?,
+            r.get::<_, i64>(3)?,
+            r.get::<_, i64>(4)?,
+        ))
+    })?;
+
+    // Per side: the previous track's end and its id, and the numbers seen.
+    let mut previous: Option<(i64, i64, i64)> = None;
+    let mut numbers: BTreeMap<i64, Vec<i64>> = BTreeMap::new();
+    for row in rows {
+        let (side, track, number, start, end) = row?;
+        numbers.entry(side).or_default().push(number);
+        if end <= start {
+            report.findings.push(Finding {
+                code: "empty-track",
+                detail: format!("track {track} runs from frame {start} to {end}"),
+            });
+        }
+        if let Some((previous_side, previous_track, previous_end)) = previous
+            && previous_side == side
+            && start < previous_end
+        {
+            report.findings.push(Finding {
+                code: "overlapping-tracks",
+                detail: format!(
+                    "track {track} starts at frame {start}, before track {previous_track} ends \
+                     at {previous_end}"
+                ),
+            });
+        }
+        previous = Some((side, track, end));
+    }
+
+    for (side, mut seen) in numbers {
+        seen.sort_unstable();
+        let expected: Vec<i64> = (1..=seen.len() as i64).collect();
+        if seen != expected {
+            report.findings.push(Finding {
+                code: "track-numbering",
+                detail: format!(
+                    "side {side} is numbered {seen:?}, expected {expected:?} - a renumber did \
+                     not finish"
+                ),
+            });
+        }
+    }
+
+    // A side that points at no capture has nothing for its boundaries to be
+    // frames into, which is a topology fault rather than a missing recording.
+    let mut stmt = conn.prepare(
+        "SELECT s.side_index, COUNT(b.boundary_id)
+           FROM sides s JOIN track_boundaries b ON b.side_id = s.side_id
+          WHERE s.capture_id IS NULL GROUP BY s.side_id",
+    )?;
+    let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))?;
+    for row in rows {
+        let (index, boundaries) = row?;
+        report.findings.push(Finding {
+            code: "boundaries-without-audio",
+            detail: format!(
+                "side index {index} has {boundaries} boundaries but no capture attached"
+            ),
+        });
     }
     Ok(())
 }

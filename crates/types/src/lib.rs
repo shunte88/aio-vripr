@@ -47,6 +47,7 @@ pub mod observation;
 pub mod rate;
 pub mod span;
 pub mod summary;
+pub mod vinyl;
 
 pub use capture::{CaptureInfo, CaptureState, Diagnostics, PcmSource};
 pub use format::{CaptureMode, SampleFormat, StorageFormat};
@@ -54,3 +55,4 @@ pub use observation::{AudioObservation, BoundaryObservation, Edge, Evidence, Pro
 pub use rate::{STANDARD_RATES, SampleRate};
 pub use span::Span;
 pub use summary::{Summary, TRIPLET_BYTES};
+pub use vinyl::{Face, Numbering, Position, Side};

@@ -46,6 +46,7 @@
 //! and no sooner. The engine thread is not a preference - a `cpal` stream handle
 //! is `!Send`, so the thread that opens a device is the thread that keeps it.
 
+pub mod adopt;
 pub mod commands;
 pub mod detection;
 pub mod engine;
@@ -54,6 +55,7 @@ pub mod metering;
 pub mod playback;
 pub mod state;
 
+pub use adopt::{Adopted, Policy};
 pub use commands::{Command, Setup};
 pub use detection::{Detectors, Refined};
 pub use engine::{Engine, Recorded, Recorder};

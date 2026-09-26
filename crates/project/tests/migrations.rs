@@ -230,16 +230,18 @@ fn a_failure_can_be_retried_once_the_migration_is_fixed() {
 }
 
 /// A fresh project is a migration run against an empty database, so the create
-/// path and the upgrade path cannot drift apart. This is what proves it.
+/// path and the upgrade path cannot drift apart. This is what proves it: the
+/// migrations' own bookkeeping aside, running them must leave the same objects as
+/// executing their DDL straight through.
 #[test]
 fn the_real_migration_set_builds_the_real_schema() {
     let mut migrated = db();
     migrate::apply(&mut migrated, vcw_project::MIGRATIONS).unwrap();
 
     let direct = db();
-    direct
-        .execute_batch(vcw_project::schema::SCHEMA_V1)
-        .unwrap();
+    for m in vcw_project::MIGRATIONS {
+        direct.execute_batch(m.sql).unwrap();
+    }
 
     let mut from_migration = fingerprint(&migrated);
     // The migration run inserts its own audit row; the fingerprint is structural,

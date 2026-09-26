@@ -348,9 +348,8 @@ impl Recorder {
         // The device's counters are the audio side's evidence, and the writer
         // persists them; it cannot read them for itself.
         writer.set_result(state, self.source.diagnostics());
-        // The writer stops when the ring's writing end goes, which happens when
-        // the source is dropped - but `stop` also asks it directly, so the
-        // order here only affects how long the join waits.
+        // The writer stops when it is asked to, not when the ring's writing end
+        // goes, so the order here only affects how long the join waits.
         let outcome = writer.stop()?;
         Ok(outcome)
     }

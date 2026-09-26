@@ -16,6 +16,7 @@ path = "src/main.rs"
 vcw-core = { workspace = true }
 vcw-signal = { workspace = true }
 vcw-audio = { workspace = true }
+vcw-metadata = { workspace = true }
 vcw-project = { workspace = true }
 vcw-types = { workspace = true }
 anyhow = { workspace = true }

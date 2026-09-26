@@ -1,0 +1,644 @@
+# genre sanitation list via database dump 04/10/2019
+# we should only need to include the exceptions, but
+# for coverage a full list is developed here
+# for safety values pass-thru if not defined here
+
+Mn|Minimal
+DT|Dub Techno
+Gamelan|Gamelan
+UH|Euro House
+In|Industrial
+IR|Indie Rock
+Dn|Downtempo
+Folk Pop|Folk Pop;Folk;Pop
+Avant-Pop|Avant-Pop;Pop
+Downtemp|Downtempo
+Southern Rock|Southern Rock;Rock
+IndieRock|Indie Rock;Indie
+HH|Hip-Hop;Hip Hop
+J|Jazz
+CJ|Contemporary Jazz
+Ju|Jungle
+E|Electronic
+Ac|Acid
+Am|Ambient
+Ab|Abstract
+X|Experimental
+Ex|Experimental
+D|Dub
+R|Reggae
+H|House
+T|Techno
+Ro|Rock
+HR|Heavy Rock;Rock
+I|Industrial
+DH|Deep House;House
+EAT|Electronic;Ambient;Techno
+EAX|Electronic;Ambient;Experimental
+Reggaeton|Reggaeton
+J-pop|J-pop
+J-Pop|J-pop
+JPop|J-pop
+Jpop|J-pop
+JP|J-pop
+Ragtime|Ragtime
+Neo Soul|Neo Soul
+Cape Jazz|Cape Jazz;Jazz
+Synthpo|Synthpop
+Modern Classsical|Modern Classical;Contemporary;Classical
+Freakbeat|Freakbeat;Mod
+Traditional|Traditional
+HeavyRock|Heavy Rock;Rock
+HardRock|Hard Rock;Rock
+Alternative & Indie|Alternative & Indie;Alternative;Indie
+World Beat|World Beat
+African|African
+BluesRock|Blues Rock;Rock
+Rebetiko|Rebetiko
+Post-Metal|Post-Metal
+Glitch Dub|Dub;Glitch;Glitch Dub
+Speed Metal|Speed Metal;Metal
+Heavy Rock|Heavy Rock;Heavy Metal;Metal;Rock
+Jangle Pop|Jangle Pop
+Children's|Children's
+Popo|Pop
+Reggae Pop|Reggae;Pop;Reggae-Pop
+Reggae-Pop|Reggae;Pop;Reggae-Pop
+House, Techno, Tech House|Electronic;House;Techno;Tech House
+Indue|Indie
+ClassicRock|Classic Rock;Rock
+Boogaloo|Boogaloo
+Latin Jazz|Latin Jazz
+Salsa|Salsa
+Bleep|Bleep
+Horror|Horror
+Hauntology|Hauntology
+TECHNO|Techno
+Trchno|Techno
+HOUSE|House
+Classica|Classical
+Beatdown|Beatdown
+Jazz Fusion|Jazz Fusion
+Jazz/Funk|Jazz/Funk
+Afro|Afro
+Religious|Religious
+lectronic|Electronic
+No Wave|No Wave
+Electronic, |Electronic
+Electronica, |Electronica
+Downtempo, |Downtempo
+Classical, |Classical
+Ambient, |Ambient
+Experimental, |Experimental
+Modern Classical, |Modern Classical;Contemporary;Classical
+Generative Synthesis|Generative Synthesis
+ndustrial|Industrial
+Electric|Electronic
+Glitch, Breaks|Glitch;Breaks
+Electroacoustic|Electroacoustic
+Electro-acoustic|Electroacoustic
+AcousticElectronic|Acoustic;Electronic;Electroacoustic
+Deep Dance|Deep Dance
+Home Recording|Home Recording
+Lockdown|Lockdown
+Sound Art|Sound Art
+Halftime|Halftime
+Folk, World And Country|Folk, World & Country
+Blue-grass|Bluegrass
+Club House|Club House
+Roots Regga|Roots Reggae
+Political|Political
+Dark Ambientl|Dark Ambient
+Industrial:Wave|Industrial;Wave
+Field Recordings|Field Recording
+Electronic'Ambient|Electronic;Ambient
+Electyronic|Electronic
+Industriasl|Industrial
+Hard Techno|Hard Techno
+Americana|Americana
+Folk, World, And Country|Folk, World, & Country
+Lo-FiNoise|Lo-Fi;Noise
+Non-music|Non-music
+Radioplay|Radioplay
+Experimerntal|Experimental
+Psychede|Psychedelic Rock
+Avant-Funk|Avant-Funk
+lpop|Pop
+lPop|Pop
+LPop|Pop
+Progressive|Progressive
+Abstract|Abstract
+Acid|Acid
+Acid House|Electronic;Acid House;House
+Acid Jazz|Electronic;Acid Jazz
+Acid Punk|Electronic;Acid Punk
+Acid Rock|Electronic;Acid Rock
+Acid Techno|Electronic;Acid Techno;Techno
+Acoustic|Acoustic
+Acoustic Alternative|Acoustic Alternative;Acoustic;Alternative
+Acoustic Rock|Acoustic Rock;Acoustic;Rock
+Adult Contemporary|Adult Contemporary
+Afro-Beat|Afrobeat
+Afro-Cuban|Afro-Cuban
+Afrobeat|Afrobeat
+Agit-pop|Agit-pop
+Alt-Country|Alt-Country;Alt. Country
+Alt.Country|Alt-Country;Alt. Country
+Alt. Pop|Alt. Pop;Alternative
+Alt. Pop/Rock|Alt. Pop;Alt. Rock;Alternative
+Alt. Rock|Alt. Rock;Alternative
+Alt Rock|Alt. Rock;Alternative
+Alt.Rock|Alt. Rock;Alternative
+Alt. Rock, Britpop|Alt. Rock;Alternative;Britpop
+Alte|Alternative
+Alternate Rock|Alt. Rock;Alternative
+Alternative|Alternative
+Alternative Folk|Alternative;Alternative Folk
+Alternative Musik|Alternative;Indie
+Alternative Pop|Alt. Pop;Alternative
+Alternative Pop/Rock|Alt. Pop;Alt. Rock;Alternative
+Alternative, Post-rock|Post-Rock;Alternative;Indie
+Alternative & Punk|Punk;Punk Rock;Alternative
+Alternative Roc|Alt. Rock;Alternative
+Alternative Rock|Alt. Pop;Alt. Rock;Alternative
+Alternative Rock/Pop|Alt. Pop;Alt. Rock;Alternative
+Alternatives|Alternative
+Alternrock|Alt. Rock;Alternative
+AlternRock|Alt. Rock;Alternative
+Alterntive Rock|Alt. Rock;Alternative
+Ambient|Ambient
+Ambient : Classical|Ambient;Modern Classical;Classical;Contemporary
+Ambient Dub|Ambient;Dub
+Ambient Industrial|Ambient;Electronic;Industrial
+Ambient Pop, Dream Pop|Ambient Pop;Dream Pop
+AmbientExperimental|Ambient;Experimental
+Ambiet|Ambient
+Anthemic Pop|Pop;Rock;Anthemic Pop
+AOR|AOR;Rock
+Art Rock|Rock;Art Rock
+Astral Jazz|Electronic;Astral Jazz
+Audiobook|Spoken Word;Audiobook
+Avant Garde|Avant-garde
+Avant-Garde|Avant-garde
+Avant-garde Jazz|Jazz;Avant-garde
+Avant Pop|Pop;Avant-garde
+Avant Rock|Rock;Avant-garde
+Avant-Rock|Rock;Avant-garde
+Avantgarde|Avant-garde
+Avantgardge|Avant-garde
+Avant-garde|Avant-garde
+Techno, Experimental, Ambient|Electronic;Techno;Experimental;Ambient
+Baggy|Dance;Baggy;Britpop
+Balearic|Electronic;Dance;Balearic
+Ballad|Ballad
+Ballard|Ballad
+Baroque|Baroque;Classical
+Bass|Electronic;Bass;Bass Music
+Bass Music|Electronic;Bass;Bass Music
+Bassline|Electronic;Bass;Bass Music
+Beat|Electronic;Beats;Beat Music
+Beats|Electronic;Beats;Beat Music
+Bebob|Jazz;Bebop
+Berlin-School|Electronic;Berlin School;Krautrock
+Berlin-school|Electronic;Berlin School;Krautrock
+Berlin School|Electronic;Berlin School;Krautrock
+Bhangra|Bhangra;Dance
+Big Band|Big Band;Jazz
+Big Beat|Electronic;Big Beat
+Big Beats|Electronic;Big Beat
+Experimenta|Experimental
+Bluegrass|Bluegrass
+Blues|Blues
+Blues Rock|Blues Rock
+Blues-Rock|Blues Rock
+Boogie|Jazz;Boogie
+Bop|Bop
+Bossa Nova|Bossa Nova
+Brass & Military|Brass & Military
+Break Beat|Electronic;Break Beat
+Breakbeat|Electronic;Break Beat
+Breakcore|Breakcore
+Breaks|Electronic;Breaks
+Brit Pop|Britpop
+Brit-Pop|Britpop
+Brit-pop|Britpop
+Brit Pop Rock|Britpop;Rock
+Brit Rock|Britpop;Rock
+BritPop|Britpop
+Britpop|Britpop
+Broken Beat|Electronic;Broken Beat
+Cabaret|Cabaret
+Calypso|Calypso;Reggae
+Canterbury Scene|Rock;Canterbury Scene
+Cha-Cha|Latin;Jazz;Cha-Cha
+Chamber Music|Classical;Chamber Music
+Chamber Rock|Chamber Rock;Rock
+Chanson|Chanson
+Chetto House|Ghetto House;House
+Chicago Blues|Chicago Blues
+Chill|Electronic;Ambient;Chill
+Chill Out|Electronic;Ambient;Chill;Chillout
+Chillout|Electronic;Ambient;Chill;Chillout
+Chillwave|Electronic;Ambient;Chill;Chillwave
+Chiptune|Electronic;Chiptune
+Choral|Choral
+Cinematic|Cinematic
+Classic Rock|Classic Rock
+Classical|Classical
+Clicks / Glitch|Clicks;Glitch
+Club|Club;Dance
+Club-House|Club-House;Dance
+Coldwave|Coldwave
+Collage|Collage
+Comedy|Comedy
+Contemporary|Contemporary
+Contemporary Classical|Contemporary Classical
+Contemporary Jazz|Contemporary Jazz
+Contemporary R&B|Contemporary R&B
+Contemporary RnB|Contemporary R&B
+Cool Jazz|Cool Jazz
+Cool-Jazz|Cool Jazz
+Country|Country
+Country Blues|Country Blues
+Country Rock|Country Rock
+Crossover|Crossover
+Crunk|Crunk
+Dance|Dance
+Dance Hall|Dance Hall
+Dance-pop|Dance-pop
+Dance Pop|Dance-Pop
+Dance Punk|Dance-Punk
+Dance-Punk|Dance-Punk
+Dance Rock|Dance-Rock
+Dance-Rock|Dance-Rock
+Dancefloor|Dancefloor
+Dancehall|Dancehall
+Dancehall-Reggae|Dancehall;Reggae
+Dancehall Reggae|Dancehall;Reggae
+Dark Ambient|Dark Ambient
+Dark Lo-Fi|Dark Lo-Fi
+Dark Techno|Dark Techno
+Dark Wave|Darkwave
+Darkwave|Darkwave
+Death Metal|Death Metal
+Deep House|Deep House
+Deep Techno|Deep Techno
+DeepHouse|Deep House
+Delta Blues|Delta Blues
+Disco|Disco
+Disco Punk|Disco Punk
+DnB|DnB
+Doom Metal|Doom Metal
+Dowentempo|Downtempo
+Downbeat|Downbeat
+Downtempo|Downtempo
+Downtempo, Tribal, New Age|Downtempo;Tribal;New Age
+Dream Pop|Dream Pop;Dreampop
+Dreampop|Dream Pop;Dreampop
+Drone|Drone
+Drone Metal|Drone Metal
+Drum|Drum & Bass;DnB;Drum And Bass
+Drum And Bass|Drum & Bass;DnB;Drum And Bass
+Drum & Bass|Drum & Bass;DnB;Drum And Bass
+Drum n Bass|Drum & Bass;DnB;Drum And Bass
+Dub|Dub
+Dub Disco|Dub Disco
+Dub House|Dub House
+Dub Poetry|Dub Poetry
+Dub Reggae|Dub Reggae
+Dub Techno|Dub Techno
+DubTechno|Dub Techno
+Dubstep|Dubstep
+Dungeon Synth|Dungeon Synth
+Early Electronic|Early Electronic;Electronic
+East Coast Blues|East Coast Blues
+Easy Listening|Easy Listening
+EBM|EBM
+Eclectic|Eclectic
+Electric Blues|Electric Blues
+Electro|Electro
+Electro-Acoustic|Electro-Acoustic
+Electro Acoustic|Electro-Acoustic
+Electro House|Electro House
+Electro-Pop|Electro-Pop;Electropop
+Electro Rock|Electro Rock
+Electro Swing|Electro Swing
+Electroclash|Electroclash
+Electronic|Electronic
+ELECTRONIC|Electronic
+Electronic Anarchy|Electronic Anarchy
+Electronica|Electronica
+Electronica/Dance|Electronic;Electronica;Dance
+Electronica & Dance|Electronic;Electronica;Dance
+Electronica, Trip-Hop|Electronic;Electronica;Trip-Hop
+Electropop|Electropop
+Elektro|Electro
+Eletronic|Electronic
+English Rock|English Rock
+Ethereal|Ethereal
+Etherial|Ethereal
+Ethnic|Ethnic
+Euro-Disco|Euro-Disco
+Euro-House|Euro-House
+Euro House|Euro-House
+Euro-Pop|Euro-Pop
+Eurodance|Euro-Dance
+Europop|Euro-Pop
+Experimental|Experimental
+Experimental, Ambient, Future Jazz, Minimal|Experimental;Ambient;Future Jazz;Minimal
+Experimental Electronic|Experimental;Electronic
+Experimental House|Experimental;House
+Experimental Jazz|Experimental;Jazz
+Experimental Rock|Experimental;Rock
+Experimental Techno|Experimental;Techno
+Field Recording|Field Recording
+Flamenco|Flamenco
+Folk|Folk
+Folk Metal|Folk Metal
+Folk Rock|Folk Rock
+Folk/Rock|Folk Rock
+Folk-Rock|Folk Rock
+Folk, World, & Country|Folk, World, & Country
+Folk, World & Country|Folk, World, & Country
+Footwork|Footwork
+Free Funk|Free Funk
+Free Improvisation|Free Improvisation
+Free Jazz|Free Jazz
+Free-Jazz|Free Jazz
+Freestyle|Freestyle
+French House|French House
+Funk|Funk
+Funk Metal|Funk Metal
+Funk/Soul|Funk / Soul
+Funk / Soul|Funk / Soul
+Nu-Disco|Nu-Disco
+Funky|Funk
+Fusion|Fusion
+Future Jazz|Future Jazz
+Gabba|Gabba
+Gabber|Gabba
+Gangsta|Gangsta
+Garage|Garage
+Garage House|Garage House
+Garage Pop|Garage Pop
+Garage Rock|Garage Rock
+Garage Rock/Alternative|Garage Rock;Alternative
+Ghetto|Ghetto
+Ghetto House|Ghetto House
+Glam|Glam
+Glam Rock|Glam Rock
+Glitch|Glitch
+Glitch Hop|Glitch Hop
+Goa|Goa;Trance
+Goth|Goth
+Goth Rock|Goth Rock
+Goth Rock, New Wave|Goth Rock;New Wave
+Gothic|Gothic
+Gothic Rock|Gothic Rock
+Grebo|Grebo
+Grime|Grime
+Grunge|Grunge
+Gypsy Jazz|Gypsy Jazz
+Happy Hardcore|Happy Hardcore
+Hard Bop|Hard Bop
+Hard House|Hard House
+Hard Rock|Hard Rock
+Hard Trance|Hard Trance
+Hardcore|Hardcore
+Hardcore Hip-Hop|Hardcore Hip-Hop
+Hardrock|Hard Rock
+Hardstyle|Hardstyle
+Heavy Metal|Heavy Metal
+Hi NRG|Hi-NRG
+Hip Hop|Hip Hop;Hip-Hop
+Hip-Hop|Hip Hop;Hip-Hop
+Hip Hop, Pop|Hip Hop;Hip-Hop;Pop
+Hip-Hop/Rap|Hip Hop;Hip-Hop;Rap
+Hip-Hop, Trip-Hop|Hip Hop;Hip-Hop;Trip-Hop;Trip Hop
+Hip-House|Hip-House
+Hippie Rock|Hippie Rock
+House|House
+House Music|House
+IDM|IDM
+Illbient|Illbient
+Impressionist|Impressionist
+Indie|Indie
+Indie Dance|Indie Dance
+Indie Pop|Indie Pop
+Indie-pop|Indie Pop
+Indie-Pop|Indie Pop
+Indie Rock|Indie Rock;Indie
+Indie-Rock|Indie Rock;Indie
+Indie Rock, Folk|Indie Rock;Folk
+Indiepop|Indie Pop
+Industrial|Industrial
+INDUSTRIAL|Industrial
+Industrial Metal|Industrial Metal
+Industrial, Minimal Synth|Industrial;Minimal Synth
+Industrial/Techno|Industrial;Techno
+Instrumental|Instrumental
+Instrumental Hip-Hop|Instrumental Hip-Hop
+Instrumental Rock|Instrumental Rock
+Irish Folk|Irish Folk
+Italo-Disco|Italo-Disco
+J-Pop|J-Pop
+Jazz|Jazz
+Jazz Blues|Jazz Blues
+Jazz-Blues|Jazz Blues
+Jazz/Blues/Folk|Jazz;Blues;Folk
+Jazz Funk|Jazz Funk
+Jazz-Funk|Jazz Funk
+Jazz Rock|Jazz Rock
+Jazz-Rock|Jazz Rock
+Jazz Vocal|Jazz Vocal;Jazz;Vocal
+Jazzy Hip-Hop|Jazzy Hip-Hop;Jazzy Hip Hop
+Jazzy Hip Hop|Jazzy Hip-Hop;Jazzy Hip Hop
+JPop|J-Pop
+Juke|Juke
+Jump Blues|Jump Blues
+Jumpstyle|Jumpstyle
+Jungle|Jungle
+Kosmische|Kosmische;Krautrock
+Krautrock|Krautrock
+Latin|Latin
+Latin Jazz|Latin Jazz
+Leftfield|Leftfield
+Lo-Fi|Lo-Fi
+Lo Fi|Lo-Fi
+Lounge|Lounge
+Lovers Rock|Lovers Rock
+Madchester|Madchester
+Mambo|Mambo
+Math Rock|Math Rock
+Metal|Metal
+Minimal|Minimal
+Minimal House|Minimal House
+Minimal Synth|Minimal Synth
+Minimal Techno|Minimal Techno
+Minimal Wave|Minimal Wave
+Minimalism|Minimalism
+Modal|Modal
+Modern Classical|Modern Classical
+Moog|Moog
+Motorik|Motorik;Krautrock
+Musique Concrete|Musique Concrete
+Neo-Classical|Neo-Classical
+Neo-classical|Neo-Classical
+Neo Classical|Neo-Classical
+Neoclassical|Neo-Classical
+Neofolk|Neo-Folk
+New Age|New Age
+New Beat|New Beat
+New Romantic|New Romantic
+New Wave|New Wave
+New-Wave|New Wave
+New Wave / New Romantic|New Wave;New Romantic
+New Wave; Synth-pop|New Wave;Synth-pop
+No-Wave|No-Wave
+Noise|Noise
+Noise Rock|Noise Rock
+Noisepop|Noise Pop
+Non-Music|Non-Music
+Northern Soul|Northern Soul
+Nu Disco|Nu-Disco
+Nu Metal|Nu-Metal
+NuDisco|Nu-Disco
+Oi|Oi
+Opera|Opera
+Orchestral Pop|Orchestral Pop
+Orchestral Techno|Orchestral Techno
+OST|Stage & Screen;Score;Soundtrack
+Pop|Pop
+Pop Alternative|Pop;Alternative
+Pop Punk|Pop Punk
+Pop Rap|Pop Rap
+Pop Rock|Pop Rock
+Pop/Rock|Pop/Rock
+Pop-Rock|Pop Rock
+Pop Soul|Pop Soul
+Post Bop|Post Bop
+Post-Dubstep|Post Dubstep
+Post Punk|Post-Punk
+Post-Punk|Post-Punk
+POST-PUNK|Post-Punk
+Post-punk|Post-Punk
+Post Rock|Post-Rock
+Post-Rock|Post-Rock
+Post-rock|Post-Rock
+Power Electronics|Power Electronics
+Power Pop|Power Pop
+Prog Rock|Prog Rock;Prog-Rock;Progressive Rock;Progressive
+Prog-Rock|Prog Rock;Prog-Rock;Progressive Rock;Progressive
+Progressive Rock|Prog Rock;Prog-Rock;Progressive Rock;Progressive
+Progressive Electronic|Progressive Electronic
+Progressive House|Progressive House
+Progressive Trance|Progressive Trance
+Proto-Punk|Proto-Punk
+Psy-Trance|Psy-Trance
+Psychadelic|Psychedelic;Psychedelia
+Psychedelia|Psychedelic;Psychedelia
+Psychedelic|Psychedelic;Psychedelia
+Psychedelic Punk|Psychedelic Punk
+Psychedelic Rock|Psychedelic Rock
+Psychobilly|Psychobilly
+Pub Rock|Pub Rock
+Punk|Punk
+PUNK|Punk
+Punk Pop|Punk Pop
+Punk Rock|Punk-Rock
+Punk-Rock|Punk-Rock
+R&B|R&B
+Ragga|Ragga
+Rap|Rap
+Rap & Hip Hop|Rap;Hip Hop;Hip-Hop
+Rap & Hip-Hop|Rap;Hip Hop;Hip-Hop
+Rave|Rave
+Regenerative Synthesis|Regenerative Synthesis
+Reggae|Reggae
+Reggae Dub|Reggae;Dub;Dub Reggae
+Reggae, Dub|Reggae;Dub;Dub Reggae
+Reggae & Dub|Reggae;Dub;Dub Reggae
+Reggae-Pop|Reggae Pop
+Reggea|Reggae
+Remixes|Remixes
+Rhythm & Blues|Rhythm & Blues;R&B;RnB
+RnB|Rhythm & Blues;R&B;RnB
+RnB/Swing|Rhythm & Blues;R&B;RnB;Swing
+Rock|Rock
+Rockabilly|Rock-a-billy;Rockabilly
+Rocksteady|Rocksteady
+Rock & Roll|Rock & Roll;Rock And Roll
+Romantic|Romantic
+Roots|Roots;Roots Reggae
+Roots Reggae|Roots;Roots Reggae
+Rumba|Rumba
+Salsa|Salsa
+Samba|Samba
+Score|Score
+Shoegaze|Shoegaze
+Shoegazer|Shoegaze
+Singer-songwriter|Singer Songwriter
+Singer Songwriter|Singer Songwriter
+Singer/Songwriter|Singer Songwriter
+Ska|Ska
+Slow Rock|Slow Rock
+Smooth Jazz|Smooth Jazz
+Soca|Soca
+Soft Rock|Soft Rock
+Soul|Soul
+Soul-Jazz|Soul-Jazz
+Sound Collage|Sound Collage
+Soundscape|Soundscape
+Soundtrack|Soundtrack;Stage & Screen;Score
+Space|Space
+Space-Age|Space-Age
+Space Rock|Space Rock
+Spoken|Spoken
+Spoken Word|Spoken Word
+Stage & Screen|Soundtrack;Stage & Screen;Score
+Stoner Rock|Stoner Rock
+Swing|Swing
+Symphonic Rock|Symphonic Rock
+Synth|Synth
+Synth-pop|Synth-pop
+Synth-Pop|Synth-pop
+Synth Pop|Synth-pop
+Synth-pop, New Wave, Pop|Synth-pop;New Wave;Pop
+Synth-wave|Synth-wave;Synthwave
+Synthie-Pop|Synth-pop
+Synthiepop|Synth-pop
+Synthpop|Synth-pop
+SynthPop|Synth-pop
+Synthpunk|Synth-punk;Punk
+Synthwave|Synth-wave;Synthwave
+Tech House|Tech House
+Techno|Techno
+TECHNO|Techno
+Techno, Experimental|Techno;Experimental
+Techno, Experimental, Ambient|Techno;Experimental;Ambient
+Techno House|Techno House
+Techno-Industrial|Techno-Industrial;Techno Industrial;Techno;Industrial
+Techno-pop|Techno-pop;Technopop
+Techno/Rock|Techno;Rock
+Technopop|Techno-pop;Technopop
+Texas Blues|Texas Blues
+Trance|Trance
+Trap|Trap
+Tribal|Tribal
+Tribal House|Tribal House
+Trip Hop|Trip Hop;Trip-Hop
+Trip-Hop|Trip Hop;Trip-Hop
+Tropical House|Tropical House
+Turntablism|Turntablism;DJ
+Twee Pop|Twee Pop
+UK Bass|UK Bass;Bass;Bass Music
+UK Garage|UK Garage
+UK Garage, Dubstep, Techno|UK Garage;Dubstep;Techno
+Unclassifiable|Unclassifiable
+Vocal|Vocal
+Wave|Wave
+Witch House|Witch House
+World|World
+World Music|World Music
+Bebop|Bebop;Jazz
+Modern Folk / Indie|Modern Folk;Indie

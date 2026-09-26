@@ -16,7 +16,7 @@ no rewriting, and everything else is what Audacity has nowhere to put. See
 |---|---|
 | extension | `.vcw` |
 | `application_id` | `0x56435700` (ASCII `VCW\0`) - Audacity's is `0x41554459`, `AUDY`, for *both* AUP3 and AUP4 |
-| `user_version` | 1 - the schema version, a plain ascending integer |
+| `user_version` | 2 - the schema version, a plain ascending integer |
 | format version | 1 - the *meaning* of the schema, in `meta` |
 | page size | 65536 bytes, set at creation |
 | journal mode | WAL, `synchronous=FULL` (D3) |
@@ -127,6 +127,96 @@ What has been applied, when, and by which build. §16 requires transactional mig
 | `applied_at` | `INTEGER NOT NULL` | Unix seconds. |
 | `applied_by` | `TEXT NOT NULL` | Crate name and version of the build that applied it. |
 
+### `releases`
+
+The release being captured (§29, §32). One per project: §29's topology is Project -> Release -> Disc -> Side -> Track, and a project is one record. The CHECK enforces it rather than a convention doing so, because every query below would otherwise have to decide what two releases in one project mean. Relaxing it later is a table rebuild, which is what migrations are for.
+
+| column | declaration | notes |
+|---|---|---|
+| `release_id` | `INTEGER PRIMARY KEY CHECK (release_id = 1)` | Always 1. See above. |
+| `album` | `TEXT NOT NULL DEFAULT ''` | The release title. Empty string rather than NULL for the text a person types, so a caller never has to distinguish "not set" from "set to nothing". |
+| `album_artist` | `TEXT NOT NULL DEFAULT ''` | The credited artist for the release. A track carries its own only when it differs, which is how a compilation is told from an album. |
+| `year` | `INTEGER` | Release year. NULL is unknown, and unknown is common on a reissue. |
+| `genres` | `TEXT NOT NULL DEFAULT ''` | Normalised genres (§32), '; '-separated in order. The same spelling `vcw metadata genres` prints, and the order a tagger writes them in. |
+| `label` | `TEXT NOT NULL DEFAULT ''` | The record label, as the provider or the person spells it. Discogs and MusicBrainz disagree about this more often than about anything else. |
+| `catalog` | `TEXT NOT NULL DEFAULT ''` | The catalogue number off the label: the one identifier a vinyl pressing reliably carries, and the one a person searches by. |
+| `country` | `TEXT NOT NULL DEFAULT ''` | Country of the pressing. Part of telling two pressings apart (§28). |
+| `barcode` | `TEXT` | Barcode, where a sleeve has one. NULL on anything old enough not to. |
+| `composer` | `TEXT NOT NULL DEFAULT ''` | Composer (§32), for the classical and soundtrack cases where it is the field that matters. |
+| `comments` | `TEXT NOT NULL DEFAULT ''` | Free text a person added about this copy: the pressing, the condition, the shop. Exported as a comment tag. |
+| `discs` | `INTEGER NOT NULL DEFAULT 1` | How many discs the release has. The sides follow from it (§29), and it is stored because a project may hold fewer sides than the release has. |
+| `numbering` | `TEXT NOT NULL DEFAULT 'alpha'` | 'alpha' (A1, B2) or 'numeric' (6). Numbering's two spellings; alpha is VRipr's and the one printed on the label. |
+| `musicbrainz_id` | `TEXT` | MusicBrainz release id, where identification found one (§32). |
+| `discogs_id` | `TEXT` | Discogs release id, likewise. Both are kept rather than the search that found them, because the id is what a later lookup can use again. |
+| `confirmed` | `INTEGER NOT NULL DEFAULT 0` | §26: automatic identification shall never silently replace what a person confirmed. 1 once a person has accepted this metadata. |
+| `updated_at` | `INTEGER NOT NULL` | Unix seconds of the last change to this row. |
+
+### `release_artwork`
+
+Cover art (§32), stored in the project because §12 makes the file self-contained: a project that referenced an image on disk would export differently on a different machine.
+
+| column | declaration | notes |
+|---|---|---|
+| `artwork_id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Surrogate key. A release may hold several images. |
+| `release_id` | `INTEGER NOT NULL REFERENCES releases(release_id)` | The release it belongs to, which is always release 1. |
+| `role` | `TEXT NOT NULL DEFAULT 'front'` | 'front', 'back', 'label' or 'other'. Front is what a tagger embeds. |
+| `mime` | `TEXT NOT NULL` | The sniffed type, not the one the server claimed: vcw-metadata refuses a download whose bytes do not start with an image it recognises. |
+| `width` | `INTEGER` | Pixel width, where the provider stated one. NULL is "not known", never 0. |
+| `height` | `INTEGER` | Pixel height, likewise. |
+| `source_url` | `TEXT` | Where it came from, for provenance. Never carries a credential (§39) because vcw-metadata puts those in headers and not in URLs. |
+| `fetched_at` | `INTEGER NOT NULL` | Unix seconds at download. |
+| `bytes` | `BLOB NOT NULL` | The image itself. Last in the row, so reading the columns above does not fault in the image. |
+
+### `sides`
+
+One side of one disc (§29), and the capture that produced it. A side is the natural unit of vinyl capture, which is why the recording attaches here and not to the release.
+
+| column | declaration | notes |
+|---|---|---|
+| `side_id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Surrogate key, referenced by boundaries and tracks. |
+| `release_id` | `INTEGER NOT NULL REFERENCES releases(release_id)` | The release this side belongs to, which is always release 1. |
+| `side_index` | `INTEGER NOT NULL` | Zero-based side index: A is 0, D is 3. The disc is index / 2 + 1 and the letter is 'A' + index, so neither is stored - a stored letter cannot say that C follows B. See vcw_types::vinyl::Side. |
+| `capture_id` | `INTEGER REFERENCES captures(capture_id)` | The capture holding this side's audio, or NULL for a side not yet recorded. Two sides may share one capture: recording both faces in a single take is a real thing people do, and then the frames tell them apart. |
+| `title` | `TEXT` | A side title where the label prints one. Rare, and not the same as a track. |
+| `created_at` | `INTEGER NOT NULL` | Unix seconds at creation. |
+
+### `track_boundaries`
+
+Track boundaries, with the evidence behind them (§23, §24). A boundary is a record in its own right, not a column on a track: §24 requires position, confidence, provenance and supporting evidence, and §31 requires locking one.
+
+| column | declaration | notes |
+|---|---|---|
+| `boundary_id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Surrogate key. Referenced by the track it bounds, if any. |
+| `side_id` | `INTEGER NOT NULL REFERENCES sides(side_id)` | The side it is on. |
+| `at_frame` | `INTEGER NOT NULL` | Frames from the start of the side's capture. Frames, not seconds: a rate is a property of the capture, and a boundary in seconds would drift with it. |
+| `edge` | `TEXT NOT NULL` | 'start' or 'end'. Edge's two spellings. A track's end is not the next track's start - on vinyl there is a gap between them, and it belongs to neither. |
+| `confidence` | `REAL NOT NULL DEFAULT 1.0` | 0..=1, as the resolver decided it. Never a product of agreeing detectors: see vcw_signal::resolve, rule 3. |
+| `provenance` | `TEXT NOT NULL` | Provenance's kebab-case name: what decided the position. |
+| `sources` | `TEXT NOT NULL DEFAULT ''` | Every provenance that reported this boundary, '+'-joined, so "three detectors agree" survives into the project. The resolver's sources list. |
+| `evidence` | `TEXT NOT NULL DEFAULT ''` | The measurements behind it (§24), as 'name=value;name=value'. Names are the resolver's, provenance-prefixed, so silence.contrast-db and hmm.posterior sit side by side. Text rather than a table because it is read whole, by a person and never queried by name. |
+| `locked` | `INTEGER NOT NULL DEFAULT 0` | 1 if automatic analysis may not move it (§24). Set by confirming a boundary and the reason re-analysis is safe to re-run over a side someone has edited. |
+| `created_at` | `INTEGER NOT NULL` | Unix seconds at creation. |
+| `updated_at` | `INTEGER NOT NULL` | Unix seconds at the last move, lock or unlock. |
+
+### `tracks`
+
+A track: two boundaries, and the metadata naming what is between them (§29, §31, §32).
+
+| column | declaration | notes |
+|---|---|---|
+| `track_id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Surrogate key. Stable across renumbering, which is why the number is not it. |
+| `side_id` | `INTEGER NOT NULL REFERENCES sides(side_id)` | The side it is on. Changing it moves the track, boundaries and all. |
+| `number` | `INTEGER NOT NULL` | One-based within the side: the 1 of A1. Contiguous after any edit, which is what renumbering maintains. |
+| `start_boundary` | `INTEGER NOT NULL REFERENCES track_boundaries(boundary_id)` | Where the track begins. The track *is* its boundaries and holds no frame positions of its own, so there is nothing that can disagree with them. |
+| `end_boundary` | `INTEGER NOT NULL REFERENCES track_boundaries(boundary_id)` | Where it ends. |
+| `title` | `TEXT NOT NULL DEFAULT ''` | The track title. Empty until something names it. |
+| `artist` | `TEXT` | NULL means the release's album artist, which is the common case. Set only where the track credits someone else. |
+| `composer` | `TEXT` | Composer, where it differs from the release's or matters per track. |
+| `comments` | `TEXT` | Free text a person added about this track. |
+| `musicbrainz_id` | `TEXT` | MusicBrainz recording id, where identification found one (§32). |
+| `confirmed` | `INTEGER NOT NULL DEFAULT 0` | 1 once a person has accepted this track's metadata (§26). |
+| `updated_at` | `INTEGER NOT NULL` | Unix seconds of the last change to this row. |
+
 ## Indices
 
 - `capture_blocks_timeline`
@@ -135,7 +225,11 @@ What has been applied, when, and by which build. §16 requires transactional mig
   Ours, not Audacity's, and the difference between a zoomed-out waveform drawing in milliseconds and in seconds (§37).  A sampleblocks row carries a 192 KB samples blob at 24/192, so it occupies several 64 KiB pages. Reading nothing but summin/summax/sumrms still costs one page fault per block, and a 26-minute side is 12,528 blocks: 784 MiB of page reads to obtain 150 KB of triplets. Measured cold on ext4, that is 3.77 s. This index holds the three values beside the key, so the block level is served entirely from it: 9 pages, 576 KiB against a 2.3 GiB project, and 14 ms.
 - `sampleblocks_summary256`
   The same trick one rung finer, and it is not free: this one duplicates the 256-frame triplets rather than three floats, which on a 24/192 side is 28 MiB against 2.3 GiB - 1.2%. It buys the zoom an editor actually works at. An eight-minute span at 1920 px is 1,916 blocks per channel, and reaching their summary256 through the row costs 594 ms per channel cold; through this index, 29 ms. Without it that drawing takes 1.35 s, and §37 asks for sub-second.  It repeats the whole-block triplet as well, twelve bytes beside two kilobytes, because the reader falls back to it when a block has no summary blob. Leaving those three columns out makes the index a lookup rather than a covering one, SQLite fetches the row after all, and the whole 28 MiB buys nothing - measured.  There is no matching index for summary64k. Nothing VCW writes ever reads that rung - it is coarser than a 250 ms block and exists for AUP4 compatibility (§49) - and the blocks that do need it, imported from Audacity, have no `capture_blocks` row and so never reach this query. If import ever makes it hot, measure it then.
+- `track_boundaries_timeline`
+  Every read of a side walks it in time order: drawing it, playing it, splitting it.
 
 ## What is not here yet
 
-Schema v1 covers capture: blocks, sessions, diagnostics and versioning - everything milestone M1, *it records*, depends on. The vinyl data model (releases, discs, sides, tracks, boundaries), metadata, identification evidence, artwork and export settings arrive as later migrations, at WP-13 and beyond. That is what the migration machinery is for, and writing those tables now would be guessing at shapes three work packages away.
+Schema v1 covers capture - blocks, sessions, diagnostics and versioning, everything milestone M1, *it records*, depends on - and v2 adds the vinyl data model: the release, its artwork, its sides, their track boundaries and the tracks between them. Identification evidence, export settings and imported-project provenance arrive as later migrations, at WP-14, WP-20 and WP-26. That is what the migration machinery is for, and writing those tables now would be guessing at shapes several work packages away.
+
+There is no `discs` table, deliberately. A disc carries no fact a side does not already imply: side index 2 is disc 2's first face, by arithmetic, and a disc row would be a second place to store the same thing.

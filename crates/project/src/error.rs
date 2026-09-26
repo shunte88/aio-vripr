@@ -176,6 +176,115 @@ pub enum Error {
         why: String,
     },
 
+    /// A side letter this project has no row for.
+    ///
+    /// Sides are created deliberately, by [`crate::side::ensure`], because a side
+    /// row is the thing a capture attaches to and conjuring one on demand would
+    /// hide a mislabelled recording rather than report it.
+    #[error("side {side} is not in this project")]
+    NoSuchSide {
+        /// The letter that was asked for.
+        side: char,
+    },
+
+    /// A side letter that is already taken.
+    #[error("side {side} already exists in this project")]
+    SideOccupied {
+        /// The letter that was asked for.
+        side: char,
+    },
+
+    /// A side that still holds tracks or boundaries.
+    ///
+    /// Deleting it would take them with it, and §4.1 does not let this layer decide
+    /// that on a caller's behalf.
+    #[error("side {side} still holds {tracks} track(s) and {boundaries} boundary/ies")]
+    SideNotEmpty {
+        /// The letter concerned.
+        side: char,
+        /// Tracks still on it.
+        tracks: usize,
+        /// Boundaries still on it.
+        boundaries: usize,
+    },
+
+    /// A track id that is not in this project.
+    #[error("track {track_id} is not in this project")]
+    NoSuchTrack {
+        /// The id that was asked for.
+        track_id: i64,
+    },
+
+    /// A boundary id that is not in this project.
+    #[error("boundary {boundary_id} is not in this project")]
+    NoSuchBoundary {
+        /// The id that was asked for.
+        boundary_id: i64,
+    },
+
+    /// A locked boundary was asked to move or to go (§24).
+    ///
+    /// The one rule in the editing model that is not advisory: a boundary a person
+    /// placed or confirmed is not moved by anything except that person unlocking it.
+    /// Re-analysis relies on this, so it is enforced here rather than in each caller.
+    #[error("boundary {boundary_id} at frame {at_frame} is locked, so analysis may not move it")]
+    BoundaryLocked {
+        /// The boundary concerned.
+        boundary_id: i64,
+        /// Where it is.
+        at_frame: u64,
+    },
+
+    /// A boundary that bounds a track was asked to go.
+    ///
+    /// Deleting it would leave the track with one end, so the track is what has to
+    /// be edited: merge it with its neighbour, or delete it.
+    #[error("boundary {boundary_id} bounds track {track_id} and cannot be deleted on its own")]
+    BoundaryInUse {
+        /// The boundary concerned.
+        boundary_id: i64,
+        /// The track that needs it.
+        track_id: i64,
+    },
+
+    /// Two tracks that cannot be merged because something sits between them.
+    #[error("tracks {left} and {right} are not adjacent, so merging them would swallow a track")]
+    NotAdjacent {
+        /// The earlier track.
+        left: i64,
+        /// The later track.
+        right: i64,
+    },
+
+    /// A split point that is not inside the track being split.
+    #[error("frame {at} is not inside track {track_id} ({start}..{end})")]
+    OutsideTrack {
+        /// The track concerned.
+        track_id: i64,
+        /// The frame asked for.
+        at: u64,
+        /// Where the track starts.
+        start: u64,
+        /// Where it ends.
+        end: u64,
+    },
+
+    /// A track was asked to move to a side holding different audio.
+    ///
+    /// A track's boundaries are frames into its side's capture, so moving it to a
+    /// side recorded separately would point them at audio that is not the track.
+    /// Moving between two sides that share one capture - both faces in a single
+    /// take - is the case this allows.
+    #[error("track {track_id} cannot move from side {from} to side {to}: different captures")]
+    DifferentCapture {
+        /// The track concerned.
+        track_id: i64,
+        /// The side it is on.
+        from: char,
+        /// The side asked for.
+        to: char,
+    },
+
     /// SQLite said no.
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),

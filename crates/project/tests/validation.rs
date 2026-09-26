@@ -36,8 +36,11 @@
 //! validator tested only against sound projects is a function that returns
 //! "clean".
 
-use vcw_project::{Options, Project, validate};
+use vcw_project::track::{NewBoundary, Update};
+use vcw_project::{Options, Project, side, track, validate};
 use vcw_types::StorageFormat;
+use vcw_types::observation::{Edge, Provenance};
+use vcw_types::vinyl::Side;
 
 mod common;
 use common::{Blocks, insert_capture};
@@ -238,4 +241,105 @@ fn every_finding_names_the_rows_involved() {
             finding.detail
         );
     }
+}
+
+/// A side attached to the project's one capture, with two tracks on it.
+///
+/// The topology checks need a side to look at, and the capture matters: a side
+/// with boundaries and no audio is itself a finding.
+fn a_side_with_two_tracks(project: &mut Project) -> (i64, i64) {
+    let capture: i64 = project
+        .conn()
+        .query_row("SELECT MIN(capture_id) FROM captures", [], |r| r.get(0))
+        .unwrap();
+    side::attach(project, Side::A, capture).unwrap();
+    (
+        track::add_track(project, Side::A, 0, 4_000).unwrap(),
+        track::add_track(project, Side::A, 4_000, 8_000).unwrap(),
+    )
+}
+
+#[test]
+fn a_side_with_tracks_on_it_is_clean() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut p = project(&dir);
+    let (first, _) = a_side_with_two_tracks(&mut p);
+    track::update(&mut p, first, &Update::title("Opener")).unwrap();
+    assert_eq!(findings(&p), Vec::<&str>::new());
+}
+
+#[test]
+fn boundaries_nothing_uses_are_not_a_finding() {
+    // The normal state of an analysed, unedited side.
+    let dir = tempfile::tempdir().unwrap();
+    let mut p = project(&dir);
+    let capture: i64 = p
+        .conn()
+        .query_row("SELECT MIN(capture_id) FROM captures", [], |r| r.get(0))
+        .unwrap();
+    side::attach(&mut p, Side::A, capture).unwrap();
+    for at in [0, 1_000, 2_000] {
+        track::add_boundary(
+            &mut p,
+            Side::A,
+            &NewBoundary::detected(at, Edge::Start, 0.8, Provenance::Silence),
+        )
+        .unwrap();
+    }
+    assert_eq!(findings(&p), Vec::<&str>::new());
+}
+
+#[test]
+fn a_track_that_runs_backwards_is_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut p = project(&dir);
+    let (first, _) = a_side_with_two_tracks(&mut p);
+    let boundary = track::track(p.conn(), first).unwrap().unwrap().end_boundary;
+    // The verbs refuse this, so reach past them: a project a third-party tool or
+    // a bad migration touched is exactly what validation exists for.
+    p.conn()
+        .execute(
+            "UPDATE track_boundaries SET at_frame = 0 WHERE boundary_id = ?1",
+            [boundary],
+        )
+        .unwrap();
+    assert!(findings(&p).contains(&"empty-track"));
+}
+
+#[test]
+fn overlapping_tracks_are_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut p = project(&dir);
+    let (_, second) = a_side_with_two_tracks(&mut p);
+    let boundary = track::track(p.conn(), second)
+        .unwrap()
+        .unwrap()
+        .start_boundary;
+    p.conn()
+        .execute(
+            "UPDATE track_boundaries SET at_frame = 1_000 WHERE boundary_id = ?1",
+            [boundary],
+        )
+        .unwrap();
+    assert!(findings(&p).contains(&"overlapping-tracks"));
+}
+
+#[test]
+fn a_gap_in_the_numbering_is_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut p = project(&dir);
+    let (_, second) = a_side_with_two_tracks(&mut p);
+    p.conn()
+        .execute("UPDATE tracks SET number = 7 WHERE track_id = ?1", [second])
+        .unwrap();
+    assert!(findings(&p).contains(&"track-numbering"));
+}
+
+#[test]
+fn boundaries_on_a_side_with_no_audio_are_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut p = project(&dir);
+    a_side_with_two_tracks(&mut p);
+    side::detach(&mut p, Side::A).unwrap();
+    assert!(findings(&p).contains(&"boundaries-without-audio"));
 }

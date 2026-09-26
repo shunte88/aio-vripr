@@ -44,7 +44,7 @@
 use rusqlite::Connection;
 
 use crate::error::{Error, Result};
-use crate::schema::SCHEMA_V1;
+use crate::schema::{SCHEMA_V1, SCHEMA_V2};
 
 /// One step from schema version `version - 1` to `version`.
 #[derive(Debug, Clone, Copy)]
@@ -61,11 +61,18 @@ pub struct Migration {
 ///
 /// Migration 1 *is* the schema: a fresh project is a migration run against an empty
 /// database, so the create path and the upgrade path cannot drift apart.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    description: "initial capture schema",
-    sql: SCHEMA_V1,
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        description: "initial capture schema",
+        sql: SCHEMA_V1,
+    },
+    Migration {
+        version: 2,
+        description: "vinyl data model: releases, artwork, sides, boundaries, tracks",
+        sql: SCHEMA_V2,
+    },
+];
 
 /// Identifies the build that applied a migration, for the audit row.
 pub const APPLIED_BY: &str = concat!("vcw-project ", env!("CARGO_PKG_VERSION"));
@@ -142,6 +149,21 @@ mod tests {
     #[test]
     fn the_migration_set_reaches_the_declared_schema_version() {
         assert_eq!(target_version(MIGRATIONS), crate::schema::SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn the_vinyl_migration_only_adds_tables() {
+        // §16 allows a newer build to upgrade an older project, and the thing that
+        // makes that safe is that migration 2 creates rows nobody had rather than
+        // rewriting rows somebody did. A project captured at v1 keeps every byte of
+        // its audio, so the check is on the DDL itself: no ALTER, no UPDATE, no DROP.
+        let sql = SCHEMA_V2.to_ascii_uppercase();
+        for forbidden in ["ALTER ", "UPDATE ", "DROP ", "DELETE ", "INSERT "] {
+            assert!(
+                !sql.contains(forbidden),
+                "migration 2 contains {forbidden}, so it is not purely additive"
+            );
+        }
     }
 
     #[test]

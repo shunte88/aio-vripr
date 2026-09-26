@@ -885,6 +885,12 @@ impl Handle {
     /// audio side, not from the writer: a capture whose device vanished is
     /// interrupted even though the writer shut down tidily, and the overrun
     /// count belongs to the ring rather than to anything this thread did.
+    ///
+    /// May be called either side of releasing the device. The writer does not
+    /// decide how the capture ended until it is told to stop, so a result set
+    /// after the ring's writing end has gone is still the one that reaches the
+    /// row - which matters because the device's final counters are only final
+    /// once the device has been released.
     pub fn set_result(&self, state: CaptureState, diagnostics: Diagnostics) {
         if let Ok(mut slot) = self.result.lock() {
             *slot = (state, diagnostics);
@@ -1066,6 +1072,26 @@ pub fn spawn_on<S: PcmSource + 'static>(
                 // Nothing ready. Stop only when the producer has also gone, so a
                 // quiet moment is not mistaken for the end of the side.
                 if thread_stop.load(Ordering::Relaxed) || source.is_finished() {
+                    if !thread_stop.load(Ordering::Relaxed) {
+                        // The producer going away is not the same thing as the
+                        // owner having said how the capture ended, and a caller
+                        // that reads the device's final counters has to release
+                        // the device to get them - so the result usually arrives
+                        // in the moment *after* the ring's writing end is gone.
+                        // Finalising here would race that and record a vanished
+                        // device as a clean capture. Commit what is held, so the
+                        // wait costs nothing that a crash could take, and then
+                        // wait for the stop that `Handle::stop` and `Handle::drop`
+                        // both guarantee.
+                        if let Err(e) = writer.flush() {
+                            thread_progress.stopped.store(true, Ordering::Relaxed);
+                            let _ = writer.finish(CaptureState::Interrupted);
+                            break Err(e);
+                        }
+                        while !thread_stop.load(Ordering::Relaxed) {
+                            std::thread::sleep(config.poll);
+                        }
+                    }
                     let (state, diagnostics) = thread_result
                         .lock()
                         .map(|r| *r)
@@ -1538,6 +1564,49 @@ mod tests {
         assert_eq!(record.diagnostics, lost);
         // Interrupted, but finished: recovery is for captures nobody closed.
         assert!(!record.needs_recovery());
+    }
+
+    #[test]
+    fn a_result_set_after_the_source_went_quiet_is_still_the_one_recorded() {
+        // R9, and the one ordering that is easy to get wrong: the caller cannot
+        // read a device's final counters until it has released the device, and
+        // releasing it takes the ring's writing end with it. The writer must not
+        // have decided the capture was clean by then.
+        let dir = tempfile::tempdir().expect("tempdir");
+        let info = info();
+        let done = Arc::new(AtomicBool::new(false));
+        let source = Tap {
+            next: 0,
+            done: Arc::clone(&done),
+        };
+        let handle = spawn(project(&dir), &info, Config::default(), source).expect("spawn");
+        std::thread::sleep(Duration::from_millis(50));
+
+        // The device is gone: nothing more will be read and `is_finished` is true.
+        done.store(true, Ordering::Relaxed);
+        std::thread::sleep(Duration::from_millis(150));
+
+        let lost = Diagnostics {
+            overruns: 0,
+            underruns: 0,
+            dropped_frames: 1_440,
+            stream_errors: 1,
+        };
+        handle.set_result(CaptureState::Interrupted, lost);
+        let outcome = handle.stop().expect("stop");
+        assert_eq!(outcome.state, CaptureState::Interrupted);
+
+        let p = Project::open(dir.path().join("writer.vcw")).expect("reopen");
+        let record = crate::session::load(p.conn(), outcome.capture_id)
+            .expect("load")
+            .expect("row");
+        assert_eq!(record.state, CaptureState::Interrupted);
+        assert_eq!(record.diagnostics, lost);
+        assert!(
+            validate(&p, Options::default())
+                .expect("validate")
+                .is_clean()
+        );
     }
 
     #[test]

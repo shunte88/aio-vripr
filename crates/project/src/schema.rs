@@ -47,7 +47,10 @@ pub const APPLICATION_ID: u32 = 0x5643_5700;
 /// Stored in SQLite's `user_version`. A plain ascending integer, deliberately not
 /// Audacity's packed dotted quad - we have one number to express and no reason to
 /// pack four into it.
-pub const SCHEMA_VERSION: u32 = 1;
+///
+/// v1 is capture; v2 adds the §29 vinyl data model. [`FORMAT_VERSION`] did not move
+/// with it, because nothing v1 wrote means anything different now.
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// The project-format version: the *meaning* of the schema, as opposed to its shape.
 ///
@@ -260,13 +263,222 @@ CREATE TABLE schema_migrations (
 );
 "#;
 
-/// Tables schema v1 must contain. Checked on open, so a truncated or
+/// Schema v2: the §29 vinyl data model, and §31's non-destructive edits.
+///
+/// Nothing here touches the capture half, and that is the point. §4.1 and §31 make
+/// every edit a record *about* the audio rather than a change to it: a split writes
+/// two boundary rows, a merge deletes two, and `sampleblocks` is not read, let alone
+/// written, by any of it. `tests/editing.rs` asserts that as a property rather than
+/// as an intention.
+///
+/// # Why a track has no frame columns
+///
+/// A track *is* its two boundaries, so it holds their ids and no positions of its
+/// own. The alternative - `start_frame` and `end_frame` on the track, beside an
+/// `at_frame` on the boundary - is two places to store one fact, and the first edit
+/// that updates one and not the other leaves a project that disagrees with itself.
+/// Moving a boundary therefore moves whichever tracks it bounds, which is not a
+/// consequence to work around: it is what moving a boundary means.
+pub const SCHEMA_V2: &str = r#"
+-- The release being captured (§29, §32). One per project: §29's topology is
+-- Project -> Release -> Disc -> Side -> Track, and a project is one record. The
+-- CHECK enforces it rather than a convention doing so, because every query below
+-- would otherwise have to decide what two releases in one project mean. Relaxing
+-- it later is a table rebuild, which is what migrations are for.
+CREATE TABLE releases (
+    -- Always 1. See above.
+    release_id     INTEGER PRIMARY KEY CHECK (release_id = 1),
+    -- The release title. Empty string rather than NULL for the text a person
+    -- types, so a caller never has to distinguish "not set" from "set to nothing".
+    album          TEXT    NOT NULL DEFAULT '',
+    -- The credited artist for the release. A track carries its own only when it
+    -- differs, which is how a compilation is told from an album.
+    album_artist   TEXT    NOT NULL DEFAULT '',
+    -- Release year. NULL is unknown, and unknown is common on a reissue.
+    year           INTEGER,
+    -- Normalised genres (§32), '; '-separated in order. The same spelling
+    -- `vcw metadata genres` prints, and the order a tagger writes them in.
+    genres         TEXT    NOT NULL DEFAULT '',
+    -- The record label, as the provider or the person spells it. Discogs and
+    -- MusicBrainz disagree about this more often than about anything else.
+    label          TEXT    NOT NULL DEFAULT '',
+    -- The catalogue number off the label: the one identifier a vinyl pressing
+    -- reliably carries, and the one a person searches by.
+    catalog        TEXT    NOT NULL DEFAULT '',
+    -- Country of the pressing. Part of telling two pressings apart (§28).
+    country        TEXT    NOT NULL DEFAULT '',
+    -- Barcode, where a sleeve has one. NULL on anything old enough not to.
+    barcode        TEXT,
+    -- Composer (§32), for the classical and soundtrack cases where it is the
+    -- field that matters.
+    composer       TEXT    NOT NULL DEFAULT '',
+    -- Free text a person added about this copy: the pressing, the condition, the
+    -- shop. Exported as a comment tag.
+    comments       TEXT    NOT NULL DEFAULT '',
+    -- How many discs the release has. The sides follow from it (§29), and it is
+    -- stored because a project may hold fewer sides than the release has.
+    discs          INTEGER NOT NULL DEFAULT 1,
+    -- 'alpha' (A1, B2) or 'numeric' (6). Numbering's two spellings; alpha is
+    -- VRipr's and the one printed on the label.
+    numbering      TEXT    NOT NULL DEFAULT 'alpha',
+    -- MusicBrainz release id, where identification found one (§32).
+    musicbrainz_id TEXT,
+    -- Discogs release id, likewise. Both are kept rather than the search that
+    -- found them, because the id is what a later lookup can use again.
+    discogs_id     TEXT,
+    -- §26: automatic identification shall never silently replace what a person
+    -- confirmed. 1 once a person has accepted this metadata.
+    confirmed      INTEGER NOT NULL DEFAULT 0,
+    -- Unix seconds of the last change to this row.
+    updated_at     INTEGER NOT NULL
+);
+
+-- Cover art (§32), stored in the project because §12 makes the file
+-- self-contained: a project that referenced an image on disk would export
+-- differently on a different machine.
+CREATE TABLE release_artwork (
+    -- Surrogate key. A release may hold several images.
+    artwork_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- The release it belongs to, which is always release 1.
+    release_id INTEGER NOT NULL REFERENCES releases(release_id),
+    -- 'front', 'back', 'label' or 'other'. Front is what a tagger embeds.
+    role       TEXT    NOT NULL DEFAULT 'front',
+    -- The sniffed type, not the one the server claimed: vcw-metadata refuses a
+    -- download whose bytes do not start with an image it recognises.
+    mime       TEXT    NOT NULL,
+    -- Pixel width, where the provider stated one. NULL is "not known", never 0.
+    width      INTEGER,
+    -- Pixel height, likewise.
+    height     INTEGER,
+    -- Where it came from, for provenance. Never carries a credential (§39),
+    -- because vcw-metadata puts those in headers and not in URLs.
+    source_url TEXT,
+    -- Unix seconds at download.
+    fetched_at INTEGER NOT NULL,
+    -- The image itself. Last in the row, so reading the columns above does not
+    -- fault in the image.
+    bytes      BLOB    NOT NULL
+);
+
+-- One side of one disc (§29), and the capture that produced it. A side is the
+-- natural unit of vinyl capture, which is why the recording attaches here and not
+-- to the release.
+CREATE TABLE sides (
+    -- Surrogate key, referenced by boundaries and tracks.
+    side_id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- The release this side belongs to, which is always release 1.
+    release_id INTEGER NOT NULL REFERENCES releases(release_id),
+    -- Zero-based side index: A is 0, D is 3. The disc is index / 2 + 1 and the
+    -- letter is 'A' + index, so neither is stored - a stored letter cannot say
+    -- that C follows B. See vcw_types::vinyl::Side.
+    side_index INTEGER NOT NULL,
+    -- The capture holding this side's audio, or NULL for a side not yet recorded.
+    -- Two sides may share one capture: recording both faces in a single take is a
+    -- real thing people do, and then the frames tell them apart.
+    capture_id INTEGER REFERENCES captures(capture_id),
+    -- A side title where the label prints one. Rare, and not the same as a track.
+    title      TEXT,
+    -- Unix seconds at creation.
+    created_at INTEGER NOT NULL,
+    -- A side letter appears once per release.
+    UNIQUE (release_id, side_index)
+);
+
+-- Track boundaries, with the evidence behind them (§23, §24). A boundary is a
+-- record in its own right, not a column on a track: §24 requires position,
+-- confidence, provenance and supporting evidence, and §31 requires locking one.
+CREATE TABLE track_boundaries (
+    -- Surrogate key. Referenced by the track it bounds, if any.
+    boundary_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- The side it is on.
+    side_id     INTEGER NOT NULL REFERENCES sides(side_id),
+    -- Frames from the start of the side's capture. Frames, not seconds: a rate is
+    -- a property of the capture, and a boundary in seconds would drift with it.
+    at_frame    INTEGER NOT NULL,
+    -- 'start' or 'end'. Edge's two spellings. A track's end is not the next
+    -- track's start - on vinyl there is a gap between them, and it belongs to
+    -- neither.
+    edge        TEXT    NOT NULL,
+    -- 0..=1, as the resolver decided it. Never a product of agreeing detectors:
+    -- see vcw_signal::resolve, rule 3.
+    confidence  REAL    NOT NULL DEFAULT 1.0,
+    -- Provenance's kebab-case name: what decided the position.
+    provenance  TEXT    NOT NULL,
+    -- Every provenance that reported this boundary, '+'-joined, so "three
+    -- detectors agree" survives into the project. The resolver's sources list.
+    sources     TEXT    NOT NULL DEFAULT '',
+    -- The measurements behind it (§24), as 'name=value;name=value'. Names are the
+    -- resolver's, provenance-prefixed, so silence.contrast-db and hmm.posterior sit
+    -- side by side. Text rather than a table because it is read whole, by a person,
+    -- and never queried by name.
+    evidence    TEXT    NOT NULL DEFAULT '',
+    -- 1 if automatic analysis may not move it (§24). Set by confirming a boundary,
+    -- and the reason re-analysis is safe to re-run over a side someone has edited.
+    locked      INTEGER NOT NULL DEFAULT 0,
+    -- Unix seconds at creation.
+    created_at  INTEGER NOT NULL,
+    -- Unix seconds at the last move, lock or unlock.
+    updated_at  INTEGER NOT NULL,
+    -- One boundary per frame per edge. Two detectors landing on the same frame is
+    -- one boundary, which the resolver already decided before this row was written.
+    UNIQUE (side_id, at_frame, edge)
+);
+
+-- Every read of a side walks it in time order: drawing it, playing it, splitting it.
+CREATE INDEX track_boundaries_timeline
+    ON track_boundaries (side_id, at_frame);
+
+-- A track: two boundaries, and the metadata naming what is between them (§29,
+-- §31, §32).
+CREATE TABLE tracks (
+    -- Surrogate key. Stable across renumbering, which is why the number is not it.
+    track_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    -- The side it is on. Changing it moves the track, boundaries and all.
+    side_id        INTEGER NOT NULL REFERENCES sides(side_id),
+    -- One-based within the side: the 1 of A1. Contiguous after any edit, which is
+    -- what renumbering maintains.
+    number         INTEGER NOT NULL,
+    -- Where the track begins. The track *is* its boundaries and holds no frame
+    -- positions of its own, so there is nothing that can disagree with them.
+    start_boundary INTEGER NOT NULL REFERENCES track_boundaries(boundary_id),
+    -- Where it ends.
+    end_boundary   INTEGER NOT NULL REFERENCES track_boundaries(boundary_id),
+    -- The track title. Empty until something names it.
+    title          TEXT    NOT NULL DEFAULT '',
+    -- NULL means the release's album artist, which is the common case. Set only
+    -- where the track credits someone else.
+    artist         TEXT,
+    -- Composer, where it differs from the release's or matters per track.
+    composer       TEXT,
+    -- Free text a person added about this track.
+    comments       TEXT,
+    -- MusicBrainz recording id, where identification found one (§32).
+    musicbrainz_id TEXT,
+    -- 1 once a person has accepted this track's metadata (§26).
+    confirmed      INTEGER NOT NULL DEFAULT 0,
+    -- Unix seconds of the last change to this row.
+    updated_at     INTEGER NOT NULL,
+    -- Numbering is contiguous and unique within a side.
+    UNIQUE (side_id, number),
+    -- A boundary bounds at most one track, and a second one claiming it is a bug
+    -- worth failing on rather than validating after the fact.
+    UNIQUE (start_boundary),
+    UNIQUE (end_boundary)
+);
+"#;
+
+/// Tables the current schema must contain. Checked on open, so a truncated or
 /// partially-migrated file is refused rather than half-read.
-pub const REQUIRED_TABLES: [&str; 6] = [
+pub const REQUIRED_TABLES: &[&str] = &[
     "capture_blocks",
     "capture_diagnostics",
     "captures",
     "meta",
+    "release_artwork",
+    "releases",
     "sampleblocks",
     "schema_migrations",
+    "sides",
+    "track_boundaries",
+    "tracks",
 ];

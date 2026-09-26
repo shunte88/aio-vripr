@@ -42,7 +42,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use vcw_project::doc;
-use vcw_project::schema::{REQUIRED_TABLES, SCHEMA_V1};
+use vcw_project::schema::REQUIRED_TABLES;
 use vcw_project::{Access, Project};
 
 fn schema_md() -> PathBuf {
@@ -112,7 +112,7 @@ fn the_parser_finds_every_table_the_database_has() {
     // declare it, so it is correctly absent from the document.
     in_db.remove("sqlite_sequence");
 
-    let parsed: BTreeSet<String> = doc::parse(SCHEMA_V1)
+    let parsed: BTreeSet<String> = doc::objects()
         .into_iter()
         .filter(|o| o.kind == "TABLE")
         .map(|o| o.name)
@@ -122,7 +122,7 @@ fn the_parser_finds_every_table_the_database_has() {
         parsed, in_db,
         "the parser and the database disagree about which tables exist"
     );
-    for required in REQUIRED_TABLES {
+    for &required in REQUIRED_TABLES {
         assert!(
             parsed.contains(required),
             "{required} is required but not documented"
@@ -134,7 +134,7 @@ fn the_parser_finds_every_table_the_database_has() {
 fn every_documented_column_exists_with_the_type_it_claims() {
     let (_dir, project) = a_real_project();
 
-    for object in doc::parse(SCHEMA_V1) {
+    for object in doc::objects() {
         if object.kind != "TABLE" {
             continue;
         }
@@ -192,7 +192,7 @@ fn every_index_the_document_lists_is_really_there() {
             .unwrap()
     };
 
-    let parsed: BTreeSet<String> = doc::parse(SCHEMA_V1)
+    let parsed: BTreeSet<String> = doc::objects()
         .into_iter()
         .filter(|o| o.kind == "INDEX")
         .map(|o| o.name)
@@ -208,7 +208,7 @@ fn every_index_the_document_lists_is_really_there() {
 /// a hole in §49's promise, not a style preference.
 #[test]
 fn nothing_is_documented_by_its_name_alone() {
-    for object in doc::parse(SCHEMA_V1) {
+    for object in doc::objects() {
         assert!(
             !object.comment.trim().is_empty(),
             "`{}` has no comment above it, so the schema document would explain nothing",

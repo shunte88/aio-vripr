@@ -1,7 +1,7 @@
 # VCW - project status
 
 **As of:** 2026-09-26
-**Phase:** 1 is underway - WP-01 through WP-11 are built, all on Linux x86_64 only.
+**Phase:** 1 is underway - WP-01 through WP-13 are built, all on Linux x86_64 only.
 All five Phase 0 spikes returned verdicts on their primary platform; gate G0 remains
 open on hardware coverage, WP-05's soak settled D3's firmed-config run, **WP-06 closes
 milestone M1, *it records*,** WP-07 locks D8, WP-08 adds the meters and the §10 fan-out
@@ -9,9 +9,15 @@ they read through, WP-09 draws the waveform - and cost the schema two covering
 indexes to do it in milliseconds rather than seconds - **WP-10 closes milestone M2,
 *it plays back*,** with a seek that joins in a median 19.8 ms on hardware and byte-exactly
 in CI, and **WP-11 closes milestone M3, *it finds tracks*,** at 97.6% to 99.7% parity
-with VRipr over 595 labelled snippets, exact to the frame.
-**Branch:** `main` at `91ba45f` (WP-10), pushed. WP-11 is in the working tree,
-gate-green, uncommitted.
+with VRipr over 595 labelled snippets, exact to the frame, and **WP-12 makes §40's
+offline promise a property of the build** rather than a flag - the HTTP agent is behind a
+feature, and `cargo test -p vcw-metadata --no-default-features` is a gate leg, and
+**WP-13 turns a detection into a record** - schema v2, the release/side/track topology
+and every §31 editing verb, with both halves of its exit criterion asserted by test
+rather than argued: a byte-level fingerprint over both audio tables held constant across
+15 edits, and a locked boundary surviving a real second detection pass.
+**Branch:** `main` at `35fc89d` (WP-11), pushed. WP-12 and WP-13 are in the working
+tree, gate-green, uncommitted.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -1951,55 +1957,557 @@ is reproduced rather than solved: the resolver makes it harmless, but §22's gui
 detection - expected track count, release durations, side topology - is what would
 actually fix it, and that is WP-12 and WP-13 work.
 
+## Phase 1 - WP-12, metadata
+
+Built 2026-09-26. `vcw-metadata`: a provider trait with Discogs and MusicBrainz behind
+it, §32's genre normalisation ported from VRipr, artwork fetching, an on-disk cache,
+per-service rate limits, timeouts and cancellation - and, the part that shaped everything
+else, §40's promise that the application stays fully usable with networking disabled.
+**Exit criterion met on both halves:** the tests are fixture-backed and offline, and the
+offline *build* is a gate leg.
+
+```sh
+vcw metadata search --artist Autechre --album Amber --provider musicbrainz --limit 5
+```
+
+```
+  musicbrainz  2 candidate(s)
+     1  Autechre - Amber   1994  Warp  WARPLP25   GB  2LP  [bd5b1270-...]
+     2  Autechre - Amber   2014  Warp  WARPLP25R  GB  2LP  [1a9f1c33-...]
+```
+
+### Three layers, and the order between them is the design
+
+```text
+  Provider  (discogs::Discogs, musicbrainz::MusicBrainz)
+     |  builds URLs, parses bodies, knows one service's grammar
+     v
+  Client    cache -> rate limit -> retry -> timeout -> cancel
+     |
+     v
+  Transport (Offline | Recorded | Agent)   <- the only thing that can do I/O
+```
+
+A `Provider` knows one service and nothing about time, retries or the network. A
+`Client` is the request path and owns all of that. A `Transport` is the only thing in the
+crate that can perform I/O, which is what makes the offline promise checkable rather
+than merely intended.
+
+**Cache before rate limit**, and it is worth saying why, because the other order looks
+just as reasonable: reading something already downloaded does not involve the service, so
+a cached answer must not spend a slot. Spend one and a warm cache is *slower* than a cold
+one, which is the opposite of a cache.
+
+### Offline is a property of the build, not a flag
+
+`Offline` is the default transport and refusing is an ordinary answer with an ordinary
+message - `networking is disabled, so MusicBrainz was not contacted` - not an exception
+for a caller to handle specially. The HTTP agent lives behind a `net` feature, so:
+
+```sh
+cargo test -p vcw-metadata --no-default-features   # 148 lib tests, no HTTP code compiled
+```
+
+That is a gate leg now. A build that cannot reach the network is not a mode the
+application can be put into by mistake; it is a build in which the code that would do it
+does not exist.
+
+Two smaller decisions follow from the same instinct. **The clock is a trait**, so no test
+in the crate sleeps: `TestClock` advances virtual time and the limiter's spacing and the
+retry backoff are asserted as numbers rather than waited out. And `Recorded` replays real
+captured payloads, so the parsers are tested against what the services actually sent
+rather than against what I think they send.
+
+### Rate limits are promises, and cancellation is honest about its granularity
+
+Discogs allows 60 requests a minute authenticated, MusicBrainz one a second sustained,
+and both ask for a self-identifying User-Agent. `Limiter::reserve` claims a slot so
+concurrent callers queue rather than collide, and a caller that gives up calls `release`
+so the slot is not wasted. Retries are conservative - 429, 5xx, timeout and unreachable
+only - with geometric backoff, obeying `Retry-After` unless it asks for longer than
+`max_backoff`.
+
+Cancellation is cooperative, because there is no runtime here to cancel into. The token
+is checked before each attempt and every 50 ms of any wait, so waiting is interruptible
+immediately; a request already on the wire is bounded by its timeout instead. That is the
+true behaviour and the docs say so rather than implying something tidier.
+
+### §39: the token goes in a header, because the URL is the cache key
+
+VRipr put `&token=` in the Discogs query string. VCW puts it in an `Authorization`
+header, and the reason is not stylistic: the URL is the cache key, the log line and the
+thing a person pastes into a bug report. `Token` has no `Serialize`, no `Display` and a
+`Debug` that prints a character count, credentials come from the environment only, and
+`no_url_anywhere_in_a_discogs_exchange_carries_the_token` asserts it as a property of the
+traffic rather than of the code that generates it.
+
+One behaviour worth recording because both answers are defensible: an offline build with
+no token configured reports the *networking*, not the missing credential. It is the one
+of the two that would change the outcome, and a build that cannot reach the network has
+no business reading a credential at all.
+
+### The genre port is held to VRipr's output, not to my reading of its code
+
+`assets/genre.dat` is VRipr's file byte for byte: 639 mapping rows, 632 distinct keys.
+The algorithm was reimplemented, so the way to know it is right is to compare answers,
+not code. `tests/fixtures/vripr_genres.jsonl` is 1,819 answers recorded from a *verbatim*
+copy of VRipr's `genre.rs` running out of tree at `/data2/vcw-scratch/genreparity`, and
+every one is reproduced. Nothing in this repository carries a second implementation.
+
+**That comparison found a latent nondeterminism VRipr shipped.** 22 keys collide under
+case folding, and 5 of those collisions have *differing* answers. VRipr resolved them
+with `HashMap::iter().find()`, so which answer `HARDROCK` got depended on the hash seed
+for that run. VCW resolves by first spelling in file order, deterministically, with a
+32-iteration stability test - and those 5 folds are excluded from the parity fixture,
+because VRipr's answer there is not a fact about anything.
+
+A related detail that only shows up on real data: a repeated key means whatever the
+*last* row says, which is how a file appends a correction, and a fold has to be built in
+a second pass because it must resolve to whatever that spelling *finally* means.
+
+### Two findings that only a live query could produce
+
+This is the entire reason eight `#[ignore]`d live tests exist. A fixture captured from a
+wrong query is a wrong answer that passes forever.
+
+**MusicBrainz `format:` matches the exact medium format name.** `format:vinyl` looks
+obviously correct and returns nothing. MusicBrainz holds four distinct values - `Vinyl`
+(37,643 releases), `12" Vinyl` (408,724), `7" Vinyl` (159,636) and `10" Vinyl` (10,888) -
+so the filter has to name all four:
+
+```text
+artist:"Autechre" AND release:"Amber" AND (format:"Vinyl" OR format:"12\" Vinyl" OR format:"7\" Vinyl" OR format:"10\" Vinyl")
+```
+
+**A release's `genres` can be empty while its release-group's are populated**, so genre
+extraction falls back to the group. MusicBrainz tags are lowercase by convention where
+Discogs' are not, so the MB path title-cases before the §32 lookup - provider-local
+presentation, deliberately not pushed down into `Genres::normalise`, which stays
+VRipr-compatible for the parity fixture. And MusicBrainz returns no artwork URLs at all:
+`cover-art-archive.front == true` means one exists at
+`coverartarchive.org/release/<mbid>/front`, which the client then fetches uncached.
+
+### Positions are guesses about a label, so nothing there may fail
+
+`vcw_types::Position::from_str` takes the unambiguous form, `A1`, and nothing else, which
+is right for a project file. A provider tracklist is not a project file: it carries
+whatever the person who catalogued the record typed off the label. So the grammars live
+in `vcw-metadata::positions`, out of `vcw-types`, and handle the letter-run convention
+(`AA` is A2, not side AA), separators people add, heading rows that are not tracks at
+all, and a wholly numeric tracklist split A/B at the medium's halfway point with the odd
+extra on the first side. An unreadable position yields nothing and the track keeps its
+title; a tracklist with one odd row is still worth showing.
+
+The two services also disagree about letters: Discogs restarts at A on every medium,
+MusicBrainz runs them straight through. `side_for` takes a letter at face value when it
+is already at or past the medium's first side and offsets it otherwise.
+
+Discogs has a related quirk worth naming: it reports the disc count in `formats[0].qty`
+and then prints one flat tracklist. When the tracklist names more sides than `qty`
+claims, `media_of` grows the list - believe the tracklist, it came off the label.
+
+### The CLI
+
+```sh
+vcw metadata credentials                   # what is configured, never what it is
+vcw metadata genres "HH; ambient techno; Mn"
+vcw metadata search --artist Autechre --album Amber [--provider musicbrainz] [--json]
+vcw metadata fetch bd5b1270-7468-47f0-9c9a-928199f9e4ad
+vcw metadata search --offline --artist Autechre   # and see what refusing looks like
+```
+
+`fetch` guesses the provider from the shape of the id, an MBID being recognisable. The
+offline report prints the per-provider detail and the JSON document either way, and only
+then fails - an error line on its own loses the thing the caller asked for.
+
+### Tests
+
+153 lib, 3 genre-parity, 11 offline, 9 doc (one of them a `compile_fail` proving `Token`
+cannot be serialised), and 8 live tests ignored by default. Workspace total is now
+**681 passing, 0 failing, 12 ignored**, gate-green including `fmt`, `clippy -D warnings`,
+`cargo deny`, the rustdoc leg and the new offline-build leg.
+
+The live ones were run once, all 8 passing in 6.90 s, and the CLI read *Amber* back
+correctly: 2 records, sides A to D, 11 tracks, side totals 18:50 / 20:36 / 13:47 / 21:10.
+
+### Fixed on the way past
+
+A race in the capture writer, found by the workspace gate rather than by anything in this
+work package: `a_device_that_vanishes_leaves_everything_it_did_deliver` failed once under
+load, recording a `Finalised` state for a capture whose device had been unplugged. The
+writer thread finished the moment the ring's writing end went away and read whatever end
+state had been set by then - but a caller cannot read a device's *final* counters until
+it has released the device, and releasing it is what takes the ring's writing end with
+it. So the correct result was routinely set just after the writer had already decided.
+The window is microseconds on an idle machine and the gate found it on a busy one. The
+writer now commits what it holds when the producer disappears and then waits for the
+stop it is guaranteed to get, so the recorded end state is always the one the owner set;
+`crates/cli/src/capture.rs` and `soak.rs` both had the vulnerable order, and both are now
+correct without changing. `a_result_set_after_the_source_went_quiet_is_still_the_one_recorded`
+pins it, and fails on the old code.
+
+Also on the way past: three broken rustdoc links in `vcw-metadata` and a redundant one in
+`vcw-types`, all found by the doc leg and none visible to clippy.
+
+### What is not verified
+
+Discogs' two live tests have never run, because `VCW_DISCOGS_TOKEN` is not set on this
+machine; the Discogs parser is exercised against recorded fixtures only. AcoustId has a
+rate limit configured and no provider behind it - that is WP-26. Nothing has been fetched
+through a proxy, no artwork has been downloaded from Cover Art Archive outside a fixture,
+and the cache has never been pointed at a filesystem that ran out of space. And, as
+everywhere else in Phase 1, this is Linux x86_64 only.
+
+## Phase 1 - WP-13, the vinyl data model and editing
+
+Built 2026-09-26. Schema v2 and the whole editing surface: a release with its artwork,
+sides with the captures behind them, track boundaries with the case for each one, and
+tracks as the spans between them. Every §31 verb - add, move, delete, split, merge,
+lock, renumber, reassign - plus adoption, which is the bridge from WP-11's detections to
+rows. **Exit criterion met on both halves, each asserted by its own test file:** edits
+never touch a committed block, and a locked boundary survives a second analysis pass.
+
+```sh
+vcw tracks side-a.vcw adopt --side A --min-sources 2 --dry-run
+vcw tracks side-a.vcw list
+```
+
+```
+  270 decision(s), 6 accepted, 264 turned down, 0 already settled (dry run)
+
+  release    1 disc(s) claimed, 2 side(s) present, numbering alpha
+
+  side A (disc 1, first face)  capture 1
+    A1        0.000 -   282.800 s  (282.800 s)  The Rainbow [confirmed]
+    A2      283.800 -   686.000 s  (402.200 s)  (untitled)
+
+  side B (disc 1, second face)  capture 1
+    B1      687.200 -  1561.400 s  (874.200 s)  (untitled)
+```
+
+That is the real 2.33 GiB side, and the three tracks are the three tracks on the record.
+
+### A track is its two boundaries
+
+`tracks` carries `start_boundary` and `end_boundary` and **no frame columns at all**.
+The extent comes from the join, which is why moving a boundary moves whichever tracks it
+bounds with nothing to cascade: there is no second copy of the position to update, and
+therefore no second copy to be wrong. `tracks_have_no_frames_of_their_own` reads the
+table's column names and fails if any of them contains *frame*, because caching the
+extent is the obvious optimisation and it is also the bug.
+
+It decides the shape of everything above it. `split` writes two boundaries rather than
+one shared one - `UNIQUE (start_boundary)` and `UNIQUE (end_boundary)` would forbid
+sharing, and §33's export padding differs at the end of one track and the start of the
+next anyway - and `merge` has to delete the right-hand row *before* the left claims its
+end boundary, or that same constraint fires mid-statement.
+
+### There is no `discs` table, and there should not be
+
+`Side::disc()` is `index / 2 + 1`. A disc row would store a fact the side already
+implies, and two places to store one fact is how they come to disagree, so
+`crates/project/src/disc.rs` is an arithmetic view over `sides`: `Disc { number, first,
+second }`, assembled on demand. `releases.discs` is the operator's *claim* and the side
+rows are the reality, which makes `disc::missing()` the gap between them - the answer to
+*what still needs recording*, in playing order, rather than a validation failure. A
+two-disc release with three sides recorded is a normal Tuesday, not a broken project.
+
+### A side is created on purpose, never implied
+
+`side::ensure` is explicit. A capture arriving does not conjure side A, because inventing
+one for an unnamed recording would quietly relabel a *mislabelled* recording instead of
+leaving the question open, and the operator is the only one who knows which face went
+under the needle. `sides.capture_id` is pointedly **not** unique: both faces may share
+one take, which is what a single unattended recording of a whole record looks like, and
+it is the case that makes `track::move_to_side` meaningful at all. A move to a side
+holding *different* audio is refused with `DifferentCapture`, since a track's boundaries
+are frames into its own side's capture and would otherwise point at audio that is not
+the track.
+
+### §24: what a lock binds, and what it does not
+
+`Provenance::is_locked()` is true only for `User`. `move_boundary` and `delete_boundary`
+refuse a locked row with `Error::BoundaryLocked`, and `move_boundary_forced` is the
+operator's override - it moves the row *and* claims it as `User`, because a person who
+overrides a lock is the new author of that position.
+
+**`merge` is not blocked by a lock, and that is a decision.** A lock binds *analysis*,
+not the person who set it, so joining two tracks across a locked boundary leaves the
+boundary in place as a marker of where the join was rather than refusing the edit. The
+doc comment and a test name both claimed refusal until the CLI exercise showed otherwise;
+the behaviour is right and the words were wrong, so
+`merging_across_a_locked_boundary_keeps_the_boundary` now says what happens.
+
+One consequence had to be paid for elsewhere. A boundary left inside a merged track would
+be picked up by the next adoption pass and paired with the following free end, quietly
+re-splitting what the operator had just joined, so `adopt::pair` excludes boundaries
+*inside* an existing track as well as the two that bound it.
+
+### The upsert had to be taught about attribution
+
+A boundary write is an upsert on `(side_id, at_frame, edge)`, and the first version of it
+let a detector landing on a locked frame overwrite that row's `provenance` and
+`confidence`. §24 reserves the position *and* the credit:
+
+```sql
+confidence = CASE WHEN locked THEN confidence ELSE excluded.confidence END,
+provenance = CASE WHEN locked THEN provenance ELSE excluded.provenance END,
+sources    = excluded.sources,
+evidence   = excluded.evidence,
+locked     = locked OR excluded.locked,
+```
+
+`sources` and `evidence` update either way, because a detector agreeing with the operator
+is worth recording; what it may not do is turn their boundary into a silence one.
+
+### Promotion is a policy, and 2 is the number WP-11 chose
+
+`adopt::Policy` is the judgement WP-11 deliberately declined to make: `min_sources`
+defaults to **2**, so a boundary only one detector saw is kept as a row and never becomes
+a track. On the real side that is the difference between 270 candidate boundaries and 6,
+because the HMM fires at every quiet bar - which is VRipr's behaviour faithfully ported,
+not a defect. `min_confidence`, `tolerance`, `pair_tracks` and `min_track_frames` (2 s by
+default) are the rest of it, and `--dry-run` reports the decision without writing, so the
+figure can be argued from a record rather than from taste.
+
+Adoption lives in `vcw-core`, not `vcw-project`: ADR-0003 will not let the project layer
+see `vcw-signal`. Its public functions take `&Project` rather than `&Connection` so that
+`vcw-core` still does not link `rusqlite`.
+
+### `already_locked` is zero, and that is the system working
+
+The re-analysis loop is `adopt::observations` into `detection::refine` into
+`adopt::adopt`, and `a_locked_boundary_survives_a_second_analysis_pass` runs all of it
+with the second pass configured 6 dB more sensitive than the first, on purpose, so the
+detectors genuinely disagree with what is stored.
+
+The operator's boundary survives, and adoption's `already_locked` counter reports **zero**
+skips while it does. That looked like a hole and is not: the resolver sees the operator's
+boundary alongside the detectors' - `observations` is what hands it over - and merges
+them into one decision that `Provenance::User` wins, so there was never a separate
+detector decision for adoption to skip. §24 is honoured one layer earlier than the
+counter measures. `a_detector_landing_beside_a_locked_boundary_is_skipped` covers the
+path that *does* increment it, with the observation withheld.
+
+### Re-analysis must not grow the rows either
+
+Found by reading the real side's evidence dump rather than by any test. Positions settle
+after one pass because every write is an upsert, but the *case* for a boundary settled
+only if handing a stored row back to the resolver is reversible, and it was not: the row
+holds a decision, so each measurement in it already carries the name of the detector that
+took it, while `resolve::attach` prefixes an observation's evidence with its provenance as
+it absorbs it. Pass two therefore stored `hmm.hmm.at`, pass three
+`hmm.hmm.hmm.at`, and one boundary on the real side was carrying 40-odd
+measurements, most of them the same number under a longer name. Nothing was wrong with
+the numbers and nothing downstream had broken; the column was simply growing with each
+press of a button an operator is expected to press repeatedly while tuning a threshold.
+
+`adopt::as_observation` now strips the row's own provenance back off on the way in and
+drops exact duplicates, and the write deduplicates too, so the round trip is idempotent.
+A reading that has *changed* between passes is still kept, because `resolve::attach` is
+right that the pair of them is the only record that the boundary moved.
+`re_analysis_does_not_grow_the_evidence_column` runs three identical passes, requires the
+second and third to agree, and fails on any name that repeats a detector - it fails on
+the old code at the third pass. Stripping *one* prefix would not have been enough:
+peeling a single copy is a no-op on a name the old code had already doubled, so a project
+analysed before the fix would have kept `hmm.hmm.at` at a fixed depth forever. It peels
+the whole run, and the real side's rows healed on the next pass: the boundary that was
+carrying 40 measurements now carries 24, and the second pass over it wrote 8 boundaries
+and created no tracks, which is idempotence on a real record rather than on a fixture.
+
+One level of nesting survives on purpose, because it is not growth:
+`spectral-change.silence.contrast_db` is the detector chain's own layering - the
+spectral-change detector reports what the level detector saw underneath it - and it is a
+fixed point under any number of passes.
+
+### A side has no extent, and one take of both faces exposes it
+
+Found by pointing the CLI at the real side rather than at a fixture. `sides.capture_id`
+is not unique on purpose, so both faces can share one capture - a single unattended rip
+of a whole record - but a side row stores no start or end frame. Detection runs on the
+*capture*, so `adopt --side A` against a shared capture writes every boundary in the
+whole take onto side A and pairs them into tracks there, including in the region the
+operator means as side B. Side B then holds its own rows at the same frames, and the
+listing looks like duplicated tracks.
+
+No function is doing the wrong thing, and no test sees it, because the tests attach one
+capture per side. Until a side carries a frame range the workaround is to adopt only the
+side a shared capture is really about, or to record the faces separately. The fix is a
+migration adding that range, with adoption clipping to it - and it is the same fact §21's
+skip and §33's export will need when they have to know where a face ends. It is on no
+work package's exit criterion, which is why it is written down here.
+
+### Topology validation reports what is wrong, not what is unfinished
+
+`validate` grew `check_topology`: `empty-track`, `overlapping-tracks`, `track-numbering`
+and `boundaries-without-audio`. It deliberately does **not** report a boundary that
+bounds no track. That is the normal state of a side which has been analysed and not yet
+edited - 264 of the real side's boundaries are exactly that - and a validator that cries
+about the ordinary case trains people to ignore it.
+
+### Two constraints that shaped an algorithm each
+
+`UNIQUE (side_id, number)` means `renumber` cannot walk a side assigning 1, 2, 3 in
+place: the first write collides with the row that already holds that number. It writes
+negative numbers in one pass and the real ones in a second. And boundary order at a
+shared frame - a track ending where the next begins - was relying on `'end'` sorting
+before `'start'` by accident of collation, so it is now explicit:
+
+```sql
+ORDER BY at_frame, CASE edge WHEN 'end' THEN 0 ELSE 1 END
+```
+
+### Nullable means inherited
+
+`tracks.artist`, `composer` and `comments` are nullable, and NULL means *take the
+release's*. So `Update` has to distinguish three things, not two: `None` leaves a field
+alone, `Some("...")` sets it, and `Some("")` clears it back to inherited.
+`Record::artist_or(&release_artist)` is what readers use, so no caller has to remember
+the rule.
+
+### The CLI
+
+```sh
+vcw tracks side-a.vcw list [--boundaries] [--json]
+vcw tracks side-a.vcw attach --side A --capture 1
+vcw tracks side-a.vcw adopt --side A [--min-sources 2] [--dry-run]
+vcw tracks side-a.vcw add --side A --start 0 --end 282.8
+vcw tracks side-a.vcw split 1 --at 140.0
+vcw tracks side-a.vcw merge 1 2
+vcw tracks side-a.vcw set 1 --title "The Rainbow" --confirmed
+vcw tracks side-a.vcw move 4 --to 283.9 [--force]
+vcw tracks side-a.vcw lock 4 [--off]
+vcw tracks side-a.vcw reassign 3 --to B
+vcw release side-a.vcw set --artist "Talk Talk" --title "Spirit of Eden" --discs 1
+vcw release side-a.vcw artwork front cover.jpg
+vcw release side-a.vcw show [--json]
+```
+
+Times are seconds everywhere and rounded rather than truncated, because a boundary typed
+as `282.8` should land on the frame the listing printed. Every verb above was run against
+the real side, in sequence, and the project validated clean afterwards.
+
+### Tests
+
+46 new lib tests - 12 in `side`, 8 in `disc`, 21 in `track` and 5 in `release` - 6 more in
+`tests/validation.rs`, 3 in `tests/edits_are_nondestructive.rs` and 5 in
+`tests/reanalysis.rs`. Workspace total is **751 passing, 0 failing, 12 ignored**,
+gate-green on `fmt`, `clippy -D warnings`, `cargo deny`, the rustdoc leg, the
+offline-build leg and the parity leg.
+
+The two exit-criterion files are worth describing, because they are the criterion rather
+than a proxy for it:
+
+- **`edits_are_nondestructive.rs`** fingerprints every byte of `sampleblocks` and
+  `capture_blocks` - blob contents included, each of the six nullable summary columns
+  with them - then runs 15 editing verbs through `unchanged()` and requires the
+  fingerprint identical after each: add, split, merge, remove, update, lock, move,
+  forced move, delete, renumber, reassign, relabel, detach, remove side. A clean
+  `validate` with `verify_checksums: true` follows. A companion test mutates one block's
+  samples with `zeroblob(length(samples))` and requires the fingerprint to **change**,
+  because a hash that never moves proves nothing.
+- **`reanalysis.rs`** is the loop above, and also pins idempotence - the same pass twice
+  produces the same boundaries, the same tracks and now the same evidence.
+
+### Fixed on the way past
+
+- **The boundary upsert let a detector steal a locked row's attribution.** Described
+  above; it was a §24 hole, found by writing the `ON CONFLICT` clause out and asking what
+  each column should do.
+- **`adopt::pair` deleted boundaries it had just written.** It created a track to mark a
+  pair consumed and removed it again when the pair was too short, which took the
+  boundaries with it. Rewritten as a single non-destructive timeline pass. A policy test
+  that should have passed is what exposed it.
+- **`release_artwork.width` and `height` were always NULL.** WP-12 wrote the rows and
+  left the columns, so `put_artwork` now reads the dimensions out of the image header:
+  PNG at a fixed offset, JPEG by walking the segment chain and skipping the three markers
+  that are not frames, bounded against truncated input and against a zero segment length
+  that would loop. Five tests.
+- **`Error::DifferentCapture` had a run of stray spaces in its message**, and `Soak`'s
+  doc comment in the CLI had been cut in half by `Metadata` being inserted into the
+  middle of it. Both are the sort of thing only reading the output catches.
+
+### What is not verified
+
+No UI: every verb is reachable through `vcw tracks` and `vcw release` and nowhere else,
+which is WP-15 and WP-16. The transport still skips a fixed 10 s - the boundaries to
+skip to exist as rows now, but `vcw-core::playback` has not been taught to ask, which is
+deliberate, since WP-16 decides whether a skip lands on a boundary or on the padded
+track start §33 exports. Nothing has been exported, so the claim that a track's two
+boundaries are enough for a splitter is WP-14's to test. §22's guided detection - using
+an identified release's track count and durations to steer the detectors - is still not
+built, and it is what would actually fix the hard cases. Alpha numbering is asserted on
+synthetic sides up to disc 3 and has never met a real box set. And, as everywhere in
+Phase 1, this is Linux x86_64 only.
+
 ## Next up
 
-**Where to pick up.** WP-11 is finished and gate-green but **not yet committed** - the
-whole of it is in the working tree along with this file. Committing is the first thing
-the next session does, and nothing about the work is half-done.
+**Where to pick up.** WP-12 and WP-13 are both finished and gate-green but **not yet
+committed** - the whole of both is in the working tree along with this file. Committing
+is the first thing the next session does, and nothing about either is half-done.
 
-**`WP-12`, metadata, is next** and needs no device at all: a provider trait, Discogs,
-MusicBrainz, genre normalisation, artwork, caching, rate limits, timeouts and
-cancellation, at weight 9. Its exit criterion is that the application stays fully usable
-with networking disabled, so the tests are fixture-backed and offline by construction,
-and §39's rule that no credential is ever written into a project file is a constraint on
-the design rather than a check at the end.
+**`WP-14`, export, is next**, at weight 9 and unblocked by WP-13: a track now has an
+extent, a number, a title and a release behind it, which is exactly what §33 asks a
+splitter for. It reads committed blocks and edit instructions and writes WAV and FLAC
+with tags, artwork and a naming template, all ported from VRipr. Two pieces are already
+on disk and should not be rewritten: `pcm::read`, WP-10's block reassembly, which is the
+only correct way to get samples back out of a project - the blocks are per channel and
+interleaving them is its job - and `track::positions`, which hands a naming template its
+`A1`/`1` strings without the template needing to know what a side is.
 
-**`WP-13`, the vinyl data model and editing, is the alternative, and WP-11 just
-unblocked it.** Detection publishes boundaries and deliberately writes no tracks, per
-§23, so WP-13 is where a boundary becomes one - and where §24's locking, which `resolve`
-already honours for any observation handed to it, finally has something to lock. It is
-also what turns `SKIP FORWARD` and `SKIP BACK` from a fixed ten seconds into what §21
-actually wants, the next boundary either way: the boundaries now exist, but nothing
-stores them, so the transport has nothing to ask.
+Its exit criterion splits the way WP-10's did. *Bit-exact WAV extraction verified against
+source blocks* needs no hardware and no third party: read the blocks, write the file, read
+it back, compare. *Tags validated by third-party readers* needs software outside the repo,
+and picking which readers count is the first decision of that work package.
 
-Two things WP-11 leaves on the table for whoever takes WP-13. The HMM's
-over-segmentation is real and faithful, so **a boundary with `agreement() == 1` should
-not become a track** without a person saying so; `vcw detect --min-sources 2` is the
-same rule at the command line. And §22's guided detection - expected track count,
-release durations, fingerprints, side topology - is the part of the requirement that is
-*not* built, and it is what would actually fix the hard cases the corpus is full of. The
-resolver takes such a boundary already; something has to produce one.
+**What WP-13 leaves for the transport.** `SKIP FORWARD` and `SKIP BACK` are still a fixed
+10 s. The boundaries to skip to now exist as rows and `track::boundaries` returns them in
+timeline order, so the remaining work is entirely in `vcw-core::playback` - ask the
+project for the next boundary past the cursor instead of adding ten seconds. It was left
+undone rather than smuggled in, because §21's verb belongs to the transport and WP-16 is
+what decides whether a skip lands on the boundary or on the padded track start §33
+exports.
 
-The plumbing is in place for whichever comes first. `Tee` takes any number of taps, the
-meter uses one, and a playback monitor or a live waveform feed is a second `tap()` call
-and a second thread, with no change to the capture path.
+**The promotion floor is a policy, and policies get tuned.** `Policy::min_sources` is 2,
+which is WP-11's over-segmentation finding turned into code, and on the real side it is
+the difference between 270 candidate boundaries and 6. It is still a blunt rule: a genuine
+quiet passage only the level detector catches is turned down by the same arithmetic that
+turns down the HMM's noise. Every boundary keeps its `confidence` and `sources` precisely
+so a UI can show what was rejected, and `vcw tracks ... adopt --dry-run` is how the
+number gets argued from a record rather than from taste.
+
+**§22's guided detection is the piece of the requirement that is genuinely missing.**
+Expected track count, release durations, fingerprints and side topology are all available
+now - WP-12 fetches them, WP-13 stores them - and nothing uses them to steer a detector.
+The resolver already accepts such a boundary; something has to produce one. It is the
+highest-value unbuilt thing in the detection path, and it is not on any work package's
+exit criterion.
+
+**A side still has no extent**, which only matters when both faces share one capture -
+and that is exactly what an unattended rip of a whole record produces. Adoption then
+writes the whole take's boundaries onto whichever side it was pointed at. The workaround
+is to adopt one side or to record the faces separately; the fix is a frame range on
+`sides`, which §21's skip and §33's export will both want anyway. Detail in the WP-13
+section above.
 
 One thing WP-09 deliberately left undone and did not need: **the waveform is read, not
 pushed.** The writer summarises every block as it commits, so the rows are there the
 instant they land, but nothing publishes a waveform event and a UI would have to ask. It
 is a WP-16 question about what the view wants, and cheap either way.
 
-Still open on WP-03, WP-04 and now WP-10, and all for the same reason: **Windows and
+Still open on WP-03, WP-04 and WP-10, and all for the same reason: **Windows and
 macOS.** The device matrix is reported on one OS, the OS format verifier exists for
-Linux/ALSA only, and playback's buffer negotiation has only ever met one backend. On the other two the verdict degrades to `Unconfirmed` rather than to a false
-pass, which is the right failure, but neither work package can close on it.
+Linux/ALSA only, and playback's buffer negotiation has only ever met one backend. On the
+other two the verdict degrades to `Unconfirmed` rather than to a false pass, which is the
+right failure, but neither work package can close on it. WP-05 through WP-13 inherit the
+same gap by being untried there at all.
 
 WP-05 and WP-06 have the same shape of gap: the 90-minute soak and the kill suite have
 both run on x86_64/ext4 and nowhere else. WP-09's two new indexes put the soak back in
 scope on this machine, and **that re-run is done and passes**: commit max 102.6 ms
 against the pre-index 102.3 ms, zero loss, every one of 6,220,938,240 bytes matched. The
-x86_64/ext4 gap is closed for the new schema; the Pi 5 and Windows runs are what remain. The Pi 5 on SD and on NVMe, and Windows, are
-the runs that would close them, and they need no new code - `vcw soak` and
+x86_64/ext4 gap is closed for the new schema; the Pi 5 on SD and on NVMe, and Windows,
+are the runs that remain, and they need no new code - `vcw soak` and
 `cargo test -p vcw-cli -- --ignored` are the harnesses.
 
 Two measurement jobs stay queued and can run on the machine's own time: S3's
@@ -2013,7 +2521,8 @@ the spike harness.
   at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
   `19dd459`. WP-01 is committed at `cd8e445`, WP-02 at `acb8835`, WP-03 at `941981a`,
   WP-04 at `95f1f52`, WP-05 at `358c44a`, WP-06 at `b2a517b` and WP-07 at `051a648`.
-  WP-08 is committed at `75123ab`, and WP-09 at `ae9b6d8` and `807d097`. WP-09 is the
+  WP-08 is committed at `75123ab`, WP-09 at `ae9b6d8` and `807d097`, WP-10 at `91ba45f`
+  and WP-11 at `35fc89d`. WP-09 is the
   first change since WP-02 to touch the schema, so `docs/SCHEMA.md` was regenerated with
   it; regenerate with `VCW_BLESS=1 cargo test -p vcw-project --test schema_doc` whenever
   the schema moves, or `the_committed_document_matches_the_schema` fails.
@@ -2035,6 +2544,14 @@ the spike harness.
   `cargo run --release -- /data2/vripr_training vripr-answers.jsonl` from that directory
   if the reference ever needs rebuilding, and expect the parity floors in
   `tests/vripr_parity.rs` to need re-reading against the new figures.
+- **`/data2/vcw-scratch/genreparity/`** is the same trick as `parity/`, for WP-12: a
+  scratch crate holding a byte-verbatim copy of VRipr's `src/metadata/genre.rs` and its
+  `assets/genre.dat`, reading genre strings on stdin and writing JSONL. Its output is
+  checked in at `crates/metadata/tests/fixtures/vripr_genres.jsonl` (1,819 answers, md5
+  `045fc5b24f800f5854f4a15419777cd5` over three runs); the crate is not, so the
+  repository holds one implementation of the algorithm and one recorded set of answers.
+  `inputs.txt` is the 1,819 query strings, and regenerating is
+  `cargo run --release < inputs.txt > vripr_genres.jsonl`.
 - **`/data2/vcw-scratch/`** is the measurement bench for WP-09 and WP-10, none of it in
   the repository
   and all of it disposable. `realrip/` is a throwaway crate that pushes a headerless WAV
@@ -2045,6 +2562,12 @@ the spike harness.
   passing 90-minute run and `soak90-contended.log` the spoiled one. `play/` holds WP-10's
   six-second project and the `.raw` renders taken off it by hand; `m2/m2.vcw` is the
   twenty-second capture the M2 chain above was demonstrated on.
+- **`/data2/vcw-scratch/wp13-cli.vcw`** is a 2.5 GiB copy of `side-a.vcw` that WP-13's
+  whole editing sequence was run against: adopt, set, split, merge, re-adopt, reassign,
+  release set and artwork, then a clean `validate`. It is disposable, and it is also the
+  project the evidence round-trip defect was found on, so it now carries both the old
+  compounded names and the healed ones. Delete it when the disk is wanted; a fresh copy
+  of `side-a.vcw` reproduces it in one `cp` and two adopt passes.
 - **`/data2/vcw_soak/`** holds what is left of the WP-05 soak: `wp05.log`, the run
   transcript quoted above, and `live.vcw`, the four-second hardware capture. The 5.94
   GiB `wp05.vcw` has been deleted, as have the two three-minute WAL-pair projects.

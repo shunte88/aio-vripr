@@ -50,10 +50,13 @@
 mod capture;
 mod detect;
 mod devices;
+mod metadata;
 mod play;
 mod recover;
+mod release;
 mod session;
 mod soak;
+mod tracks;
 mod waveform;
 
 use clap::{Parser, Subcommand};
@@ -327,6 +330,42 @@ enum Command {
         json: bool,
     },
 
+    /// Search a metadata provider, or read one release (§28, §40).
+    ///
+    /// Offline is a first-class mode, not a simulation: `--offline` hands the
+    /// providers the same refusing transport the application defaults to, so
+    /// every path here can be exercised with no network and no credential.
+    Metadata {
+        #[command(subcommand)]
+        what: MetadataCommand,
+    },
+
+    /// Lay out a record: sides, tracks, boundaries, and the edits of §31.
+    ///
+    /// Nothing here writes a sample. §4.1 means an edit is a statement about
+    /// where the music is, so every one of these subcommands touches only the
+    /// side, boundary and track rows - which `vcw validate` will confirm.
+    Tracks {
+        /// Project to edit.
+        project: std::path::PathBuf,
+        #[command(subcommand)]
+        what: TracksCommand,
+        /// Machine-readable output.
+        #[arg(long, global = true)]
+        json: bool,
+    },
+
+    /// Read or write the release the project is of (§28, §32).
+    Release {
+        /// Project to read.
+        project: std::path::PathBuf,
+        #[command(subcommand)]
+        what: ReleaseCommand,
+        /// Machine-readable output.
+        #[arg(long, global = true)]
+        json: bool,
+    },
+
     /// Drive the writer from a simulated source for a long time and check
     /// every byte that lands (WP-05, D3).
     Soak {
@@ -379,6 +418,291 @@ enum Command {
     },
 }
 
+/// What `vcw metadata` was asked to do.
+#[derive(Subcommand)]
+enum MetadataCommand {
+    /// Search for a release by any of §28's criteria.
+    Search {
+        /// The performing artist.
+        #[arg(long)]
+        artist: Option<String>,
+        /// The release title.
+        #[arg(long)]
+        album: Option<String>,
+        /// The label's catalogue number. Usually identifies one pressing, which
+        /// is the difference between finding a record and finding the record.
+        #[arg(long)]
+        catalog: Option<String>,
+        /// The barcode on the sleeve. Discogs indexes it; MusicBrainz does not.
+        #[arg(long)]
+        barcode: Option<String>,
+        /// The record label.
+        #[arg(long)]
+        label: Option<String>,
+        /// Year of release.
+        #[arg(long)]
+        year: Option<u32>,
+        /// Country of release.
+        #[arg(long)]
+        country: Option<String>,
+        /// Include CDs, files and cassettes. Vinyl only is the default.
+        #[arg(long)]
+        all_formats: bool,
+        /// How many results to ask each provider for.
+        #[arg(long, default_value_t = 25)]
+        limit: usize,
+        /// Which provider to ask.
+        #[arg(long = "provider", value_enum, default_value_t = metadata::Which::Both)]
+        which: metadata::Which,
+        /// Refuse to use the network (§40).
+        #[arg(long)]
+        offline: bool,
+        /// Directory to cache provider responses in. Omit for no cache.
+        #[arg(long)]
+        cache: Option<std::path::PathBuf>,
+        /// Machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Read one release in full, with its tracklist.
+    Fetch {
+        /// The provider's identifier: a MusicBrainz id, or a Discogs number.
+        id: String,
+        /// Which provider it belongs to. Inferred from the shape when it can be.
+        #[arg(long = "provider", value_enum, default_value_t = metadata::Which::Both)]
+        which: metadata::Which,
+        /// Refuse to use the network (§40).
+        #[arg(long)]
+        offline: bool,
+        /// Directory to cache provider responses in.
+        #[arg(long)]
+        cache: Option<std::path::PathBuf>,
+        /// Machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Normalise genre names through the §32 mapping table. Needs no network.
+    Genres {
+        /// Names to normalise, semicolon-delimited or one per argument.
+        names: Vec<String>,
+        /// A replacement mapping table, in the shipped file's format.
+        #[arg(long)]
+        table: Option<std::path::PathBuf>,
+        /// Machine-readable output.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Say which credentials are configured, and never what they are (§39).
+    Credentials,
+}
+
+/// What `vcw tracks` was asked to do.
+#[derive(Subcommand)]
+enum TracksCommand {
+    /// Print the project's sides, tracks and boundaries.
+    List {
+        /// One side. Omit for every side.
+        #[arg(long)]
+        side: Option<char>,
+        /// Print boundaries too, with the evidence behind each one (§24).
+        #[arg(long)]
+        boundaries: bool,
+    },
+    /// Point a side at the capture that recorded it.
+    Attach {
+        /// The side letter. A is the first face of the first disc.
+        #[arg(long)]
+        side: char,
+        /// The capture. Omit for the most recent.
+        #[arg(long)]
+        capture: Option<i64>,
+    },
+    /// Add a track between two times.
+    Add {
+        /// The side letter.
+        #[arg(long)]
+        side: char,
+        /// Where it starts, in seconds.
+        #[arg(long)]
+        start: f64,
+        /// Where it ends, in seconds.
+        #[arg(long)]
+        end: f64,
+    },
+    /// Split a track in two.
+    Split {
+        /// The track.
+        track: i64,
+        /// Where to cut, in seconds from the start of the side.
+        at: f64,
+    },
+    /// Merge two adjacent tracks, keeping the first one's metadata.
+    ///
+    /// The boundary between them has to be unlocked first if a person placed
+    /// it: undoing your own split is a decision only you can make (§24).
+    Merge {
+        /// The track that survives.
+        left: i64,
+        /// The track folded into it.
+        right: i64,
+    },
+    /// Delete a track. Keeps every sample it covered (§4.1).
+    Delete {
+        /// The track.
+        track: i64,
+    },
+    /// Move a boundary, and with it whichever tracks it bounds.
+    Move {
+        /// The boundary. `vcw tracks list --boundaries` prints the ids.
+        boundary: i64,
+        /// Where to, in seconds.
+        to: f64,
+        /// Move it even if it is locked. Also claims it as yours (§24).
+        #[arg(long)]
+        force: bool,
+    },
+    /// Lock a boundary against analysis, or hand it back (§24).
+    Lock {
+        /// The boundary.
+        boundary: i64,
+        /// Unlock instead.
+        #[arg(long)]
+        unlock: bool,
+    },
+    /// Set a track's metadata (§32).
+    ///
+    /// An empty value clears a field back to the release's, which is what NULL
+    /// means in those columns. The title is the exception: empty is untitled.
+    Set {
+        /// The track.
+        track: i64,
+        /// The title.
+        #[arg(long)]
+        title: Option<String>,
+        /// The track artist, for a compilation.
+        #[arg(long)]
+        artist: Option<String>,
+        /// The composer.
+        #[arg(long)]
+        composer: Option<String>,
+        /// Free text.
+        #[arg(long)]
+        comments: Option<String>,
+        /// The MusicBrainz recording id.
+        #[arg(long)]
+        recording: Option<String>,
+        /// Mark the metadata as accepted (§26).
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Move a track to another side of the same capture.
+    Reassign {
+        /// The track.
+        track: i64,
+        /// The side letter.
+        #[arg(long)]
+        to: char,
+    },
+    /// Run a detection pass and write what the policy accepts (§24).
+    ///
+    /// The one subcommand that can place a boundary without a person naming a
+    /// frame, so it is conservative by default: two detectors have to agree, or
+    /// it does not go in. A boundary a person locked is left exactly where it is.
+    Adopt {
+        /// The side letter.
+        #[arg(long)]
+        side: char,
+        /// How many detectors must have reported a boundary.
+        #[arg(long, default_value_t = 2)]
+        min_sources: usize,
+        /// The shortest span worth calling a track, in seconds.
+        #[arg(long)]
+        min_track: Option<f64>,
+        /// Report what would be written, and write nothing.
+        #[arg(long)]
+        dry_run: bool,
+        /// Level a window must reach to count as music, in dBFS.
+        #[arg(long)]
+        threshold_db: Option<f64>,
+        /// Derive the threshold from the side's own noise floor (§22).
+        #[arg(long)]
+        adaptive: bool,
+    },
+}
+
+/// What `vcw release` was asked to do.
+#[derive(Subcommand)]
+enum ReleaseCommand {
+    /// Print what the project knows about the release.
+    Show,
+    /// Set one or more of the release's fields (§32).
+    ///
+    /// An empty value clears a field. Identification fills most of these in
+    /// (§28); this is the operator's own hand, and what §5.3's new-project
+    /// prompt will write.
+    Set(Box<ReleaseFields>),
+    /// Store a cover image for the release (§32).
+    Artwork {
+        /// The image file.
+        file: std::path::PathBuf,
+        /// Which image it is: front, back, label or other.
+        #[arg(long, default_value = "front")]
+        role: String,
+    },
+    /// Print which artwork the project holds, without the bytes.
+    Covers,
+}
+
+/// The fields `vcw release set` takes.
+///
+/// A boxed struct rather than a variant's worth of fields: thirteen of them make
+/// `ReleaseCommand` several hundred bytes wide, and every copy of the enum would
+/// carry that width around for the sake of the two one-word variants beside it.
+#[derive(Debug, clap::Args)]
+struct ReleaseFields {
+    /// The album title.
+    #[arg(long)]
+    album: Option<String>,
+    /// The album artist.
+    #[arg(long)]
+    artist: Option<String>,
+    /// The year of this pressing.
+    #[arg(long)]
+    year: Option<u32>,
+    /// Genres, separated by semicolons, in order.
+    #[arg(long)]
+    genres: Option<String>,
+    /// The label.
+    #[arg(long)]
+    label: Option<String>,
+    /// The catalogue number, which is what identifies a pressing.
+    #[arg(long)]
+    catalog: Option<String>,
+    /// The country of pressing.
+    #[arg(long)]
+    country: Option<String>,
+    /// The barcode.
+    #[arg(long)]
+    barcode: Option<String>,
+    /// The composer.
+    #[arg(long)]
+    composer: Option<String>,
+    /// Free text.
+    #[arg(long)]
+    comments: Option<String>,
+    /// How many discs the record is.
+    #[arg(long)]
+    discs: Option<u32>,
+    /// Track numbering: alpha for A1, numeric for a running count.
+    #[arg(long)]
+    numbering: Option<String>,
+    /// Mark the release's metadata as accepted (§26).
+    #[arg(long)]
+    confirm: bool,
+}
 fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
         Command::Doctor => doctor(),
@@ -520,6 +844,145 @@ fn main() -> anyhow::Result<()> {
             repair,
             verify,
             json,
+        }),
+        Command::Tracks {
+            project,
+            what,
+            json,
+        } => tracks::run(&tracks::Args {
+            project,
+            json,
+            task: match what {
+                TracksCommand::List { side, boundaries } => tracks::Task::List { side, boundaries },
+                TracksCommand::Attach { side, capture } => tracks::Task::Attach { side, capture },
+                TracksCommand::Add { side, start, end } => tracks::Task::Add { side, start, end },
+                TracksCommand::Split { track, at } => tracks::Task::Split { track, at },
+                TracksCommand::Merge { left, right } => tracks::Task::Merge { left, right },
+                TracksCommand::Delete { track } => tracks::Task::Delete { track },
+                TracksCommand::Move {
+                    boundary,
+                    to,
+                    force,
+                } => tracks::Task::Move {
+                    boundary,
+                    to,
+                    force,
+                },
+                TracksCommand::Lock { boundary, unlock } => tracks::Task::Lock { boundary, unlock },
+                TracksCommand::Set {
+                    track,
+                    title,
+                    artist,
+                    composer,
+                    comments,
+                    recording,
+                    confirm,
+                } => tracks::Task::Set {
+                    track,
+                    update: vcw_project::track::Update {
+                        title,
+                        artist,
+                        composer,
+                        comments,
+                        musicbrainz_id: recording,
+                        confirmed: confirm.then_some(true),
+                    },
+                },
+                TracksCommand::Reassign { track, to } => tracks::Task::Reassign { track, to },
+                TracksCommand::Adopt {
+                    side,
+                    min_sources,
+                    min_track,
+                    dry_run,
+                    threshold_db,
+                    adaptive,
+                } => tracks::Task::Adopt {
+                    side,
+                    min_sources,
+                    min_track,
+                    dry_run,
+                    threshold_db,
+                    adaptive,
+                },
+            },
+        }),
+
+        Command::Release {
+            project,
+            what,
+            json,
+        } => release::run(&release::Args {
+            project,
+            json,
+            task: match what {
+                ReleaseCommand::Show => release::Task::Show,
+                ReleaseCommand::Covers => release::Task::Covers,
+                ReleaseCommand::Artwork { file, role } => release::Task::Artwork { file, role },
+                ReleaseCommand::Set(fields) => release::Task::Set(Box::new(release::Change {
+                    album: fields.album,
+                    artist: fields.artist,
+                    year: fields.year,
+                    genres: fields.genres,
+                    label: fields.label,
+                    catalog: fields.catalog,
+                    country: fields.country,
+                    barcode: fields.barcode,
+                    composer: fields.composer,
+                    comments: fields.comments,
+                    discs: fields.discs,
+                    numbering: fields.numbering,
+                    confirm: fields.confirm,
+                })),
+            },
+        }),
+
+        Command::Metadata { what } => metadata::run(match what {
+            MetadataCommand::Search {
+                artist,
+                album,
+                catalog,
+                barcode,
+                label,
+                year,
+                country,
+                all_formats,
+                limit,
+                which,
+                offline,
+                cache,
+                json,
+            } => metadata::Args::Search(Box::new(metadata::SearchArgs {
+                artist,
+                album,
+                catalog,
+                barcode,
+                label,
+                year,
+                country,
+                all_formats,
+                limit,
+                which,
+                offline,
+                cache,
+                json,
+            })),
+            MetadataCommand::Fetch {
+                id,
+                which,
+                offline,
+                cache,
+                json,
+            } => metadata::Args::Fetch(metadata::FetchArgs {
+                id,
+                which,
+                offline,
+                cache,
+                json,
+            }),
+            MetadataCommand::Genres { names, table, json } => {
+                metadata::Args::Genres { names, table, json }
+            }
+            MetadataCommand::Credentials => metadata::Args::Credentials,
         }),
         Command::Soak {
             project,

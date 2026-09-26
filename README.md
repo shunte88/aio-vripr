@@ -177,8 +177,67 @@ vcw detect side-a.vcw --min-sources 2      # boundaries a second detector second
 vcw detect side-a.vcw --evidence --json    # every measurement behind every boundary
 ```
 
-Nothing here writes a track. That is WP-13's, and §23 is the reason: an analysis
-subsystem publishes what it saw, and a project decides what to do about it.
+Nothing there writes a track, and §23 is the reason: an analysis subsystem publishes
+what it saw, and a project decides what to do about it. Deciding is WP-13's, below.
+
+Metadata (WP-12) is the first part of the product that reaches outside the machine, and
+the interesting requirement is §40: the application stays **fully usable with networking
+disabled**. That is met as a property of the build rather than as a flag. Only a
+`Transport` can perform I/O, `Offline` is the default, and the HTTP agent lives behind a
+`net` feature - so `cargo test -p vcw-metadata --no-default-features` passes with no HTTP
+code compiled at all, and it is part of the gate. Above the transport a `Client` owns the
+request path in one fixed order, **cache, then rate limit, then retry, then timeout, then
+cancel**: a cached answer must not spend a rate-limit slot, or a warm cache is slower than
+a cold one. Above that, a `Provider` knows one service's grammar and nothing about time or
+the network.
+
+```sh
+vcw metadata search --artist Autechre --album Amber --provider musicbrainz
+vcw metadata fetch bd5b1270-7468-47f0-9c9a-928199f9e4ad     # sides A-D, 11 tracks
+vcw metadata genres "HH; ambient techno; Mn"                # Hip-Hop; Hip Hop; ambient techno; Minimal
+```
+
+§32's genre normalisation is ported from VRipr and held to VRipr's *output*: 1,819
+recorded answers, produced by a verbatim copy of the original running out of tree, all
+reproduced. Doing it that way found a nondeterminism the original shipped - five genre
+keys collide under case folding with differing answers, resolved there by hash order and
+here by file order. §39's rule about credentials is a design constraint rather than a
+check: the Discogs token travels in an `Authorization` header, never in the query string,
+because the URL is the cache key, the log line and the thing that ends up in a bug report.
+
+The vinyl data model (WP-13) is where a detection becomes a record. Schema v2 adds the
+release, its artwork, its sides and their boundaries, and **a track is its two
+boundaries** - the `tracks` table has no frame columns at all, so moving a boundary moves
+whatever it bounds and there is no second copy of the position to disagree. There is no
+`discs` table either: side index 2 *is* disc 2's first face, by arithmetic, and a row
+would be a second place to store one fact. `releases.discs` is the operator's claim and
+the side rows are the reality, so the gap between them is the answer to what still needs
+recording.
+
+```sh
+vcw tracks side-a.vcw adopt --side A --min-sources 2 --dry-run   # 270 found, 6 seconded
+vcw tracks side-a.vcw split 1 --at 140.0
+vcw tracks side-a.vcw set 1 --title "The Rainbow" --confirmed
+vcw tracks side-a.vcw lock 4                                     # analysis may not move it
+vcw tracks side-a.vcw list --boundaries
+vcw release side-a.vcw set --artist "Talk Talk" --title "Spirit of Eden" --discs 1
+```
+
+Every edit is non-destructive, and that is asserted rather than intended: a test
+fingerprints every byte of both audio tables, runs fifteen editing verbs through it, and
+requires the fingerprint unchanged after each one - having first proved the fingerprint
+notices a single altered sample. §24's lock gets the same treatment. A boundary a person
+places survives a second detection pass configured to disagree with the first, which is
+the whole loop - read the project's boundaries back as prior observations, resolve them
+against what the detectors now say, write the result under a promotion policy - and not
+one function tested in isolation. The policy's default is the conservative one, two
+detectors or it does not become a track, because on a real side the HMM reports 270
+boundaries where the other two detectors second 6.
+
+What a lock binds is *analysis*, not the person who set it: `merge` still joins two
+tracks across a locked boundary and leaves the boundary behind as a marker of where the
+join was, and an operator can always overrule a lock - at which point the boundary
+becomes theirs, since whoever overrides a lock is the new author of that position.
 
 ## Layout
 
@@ -288,6 +347,25 @@ vcw detect side-a.vcw --adaptive --min-sources 2 --evidence
 settings; `--evidence` prints the measurements each boundary rests on. It opens the
 project read-only and writes nothing, so a side can be examined while another one is
 recording.
+
+`metadata` asks the providers, and can be told not to:
+
+```sh
+vcw metadata credentials
+vcw metadata search --artist Autechre --album Amber --limit 5 [--json]
+vcw metadata search --offline --artist Autechre       # what refusing looks like
+vcw metadata fetch bd5b1270-7468-47f0-9c9a-928199f9e4ad
+```
+
+```
+  musicbrainz  2 candidate(s)
+     1  Autechre - Amber   1994  Warp  WARPLP25   GB  2LP  [bd5b1270-...]
+```
+
+`credentials` reports what is configured and never what it is. `fetch` guesses the
+provider from the shape of the id. Credentials come from the environment only, never from
+a project file: `VCW_DISCOGS_TOKEN` for Discogs, and `VCW_CONTACT` for the
+self-identifying User-Agent both services ask for.
 
 Requires a Rust toolchain at 1.90 or newer and, on Linux, `libasound2-dev`. SQLite is
 compiled in, so there is no system SQLite to match.

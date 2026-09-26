@@ -63,6 +63,7 @@ pub mod migrate;
 pub mod pcm;
 pub mod persistence;
 pub mod recovery;
+pub mod release;
 pub mod schema;
 pub mod session;
 pub mod side;

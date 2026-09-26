@@ -10,6 +10,22 @@ authors.workspace = true
 
 [dependencies]
 vcw-types = { workspace = true }
+crc32fast = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+ureq = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+# `net` is on by default and off in a build that must not be able to reach a
+# network. This is §40's offline mode taken literally: without the feature the HTTP
+# transport does not exist, so no call site can accidentally make a request, and
+# `cargo check -p vcw-metadata --no-default-features` is a gate leg that proves it.
+[features]
+default = ["net"]
+net = ["dep:ureq"]
 
 [lints]
 workspace = true

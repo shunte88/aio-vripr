@@ -1,0 +1,1819 @@
+{"input":"Mn","output":["Minimal"]}
+{"input":"mn","output":["Minimal"]}
+{"input":"MN","output":["Minimal"]}
+{"input":"DT","output":["Dub Techno"]}
+{"input":"dt","output":["Dub Techno"]}
+{"input":"Gamelan","output":["Gamelan"]}
+{"input":"gamelan","output":["Gamelan"]}
+{"input":"GAMELAN","output":["Gamelan"]}
+{"input":"UH","output":["Euro House"]}
+{"input":"uh","output":["Euro House"]}
+{"input":"In","output":["Industrial"]}
+{"input":"in","output":["Industrial"]}
+{"input":"IN","output":["Industrial"]}
+{"input":"IR","output":["Indie Rock"]}
+{"input":"ir","output":["Indie Rock"]}
+{"input":"Dn","output":["Downtempo"]}
+{"input":"dn","output":["Downtempo"]}
+{"input":"DN","output":["Downtempo"]}
+{"input":"Folk Pop","output":["Folk Pop","Folk","Pop"]}
+{"input":"folk pop","output":["Folk Pop","Folk","Pop"]}
+{"input":"FOLK POP","output":["Folk Pop","Folk","Pop"]}
+{"input":"Avant-Pop","output":["Avant-Pop","Pop"]}
+{"input":"avant-pop","output":["Avant-Pop","Pop"]}
+{"input":"AVANT-POP","output":["Avant-Pop","Pop"]}
+{"input":"Downtemp","output":["Downtempo"]}
+{"input":"downtemp","output":["Downtempo"]}
+{"input":"DOWNTEMP","output":["Downtempo"]}
+{"input":"Southern Rock","output":["Southern Rock","Rock"]}
+{"input":"southern rock","output":["Southern Rock","Rock"]}
+{"input":"SOUTHERN ROCK","output":["Southern Rock","Rock"]}
+{"input":"IndieRock","output":["Indie Rock","Indie"]}
+{"input":"indierock","output":["Indie Rock","Indie"]}
+{"input":"INDIEROCK","output":["Indie Rock","Indie"]}
+{"input":"HH","output":["Hip-Hop","Hip Hop"]}
+{"input":"hh","output":["Hip-Hop","Hip Hop"]}
+{"input":"J","output":["Jazz"]}
+{"input":"j","output":["Jazz"]}
+{"input":"CJ","output":["Contemporary Jazz"]}
+{"input":"cj","output":["Contemporary Jazz"]}
+{"input":"Ju","output":["Jungle"]}
+{"input":"ju","output":["Jungle"]}
+{"input":"JU","output":["Jungle"]}
+{"input":"E","output":["Electronic"]}
+{"input":"e","output":["Electronic"]}
+{"input":"Ac","output":["Acid"]}
+{"input":"ac","output":["Acid"]}
+{"input":"AC","output":["Acid"]}
+{"input":"Am","output":["Ambient"]}
+{"input":"am","output":["Ambient"]}
+{"input":"AM","output":["Ambient"]}
+{"input":"Ab","output":["Abstract"]}
+{"input":"ab","output":["Abstract"]}
+{"input":"AB","output":["Abstract"]}
+{"input":"X","output":["Experimental"]}
+{"input":"x","output":["Experimental"]}
+{"input":"Ex","output":["Experimental"]}
+{"input":"ex","output":["Experimental"]}
+{"input":"EX","output":["Experimental"]}
+{"input":"D","output":["Dub"]}
+{"input":"d","output":["Dub"]}
+{"input":"R","output":["Reggae"]}
+{"input":"r","output":["Reggae"]}
+{"input":"H","output":["House"]}
+{"input":"h","output":["House"]}
+{"input":"T","output":["Techno"]}
+{"input":"t","output":["Techno"]}
+{"input":"Ro","output":["Rock"]}
+{"input":"ro","output":["Rock"]}
+{"input":"RO","output":["Rock"]}
+{"input":"HR","output":["Heavy Rock","Rock"]}
+{"input":"hr","output":["Heavy Rock","Rock"]}
+{"input":"I","output":["Industrial"]}
+{"input":"i","output":["Industrial"]}
+{"input":"DH","output":["Deep House","House"]}
+{"input":"dh","output":["Deep House","House"]}
+{"input":"EAT","output":["Electronic","Ambient","Techno"]}
+{"input":"eat","output":["Electronic","Ambient","Techno"]}
+{"input":"EAX","output":["Electronic","Ambient","Experimental"]}
+{"input":"eax","output":["Electronic","Ambient","Experimental"]}
+{"input":"Reggaeton","output":["Reggaeton"]}
+{"input":"reggaeton","output":["Reggaeton"]}
+{"input":"REGGAETON","output":["Reggaeton"]}
+{"input":"J-pop","output":["J-pop"]}
+{"input":"J-Pop","output":["J-Pop"]}
+{"input":"JPop","output":["J-Pop"]}
+{"input":"Jpop","output":["J-pop"]}
+{"input":"JP","output":["J-pop"]}
+{"input":"jp","output":["J-pop"]}
+{"input":"Ragtime","output":["Ragtime"]}
+{"input":"ragtime","output":["Ragtime"]}
+{"input":"RAGTIME","output":["Ragtime"]}
+{"input":"Neo Soul","output":["Neo Soul"]}
+{"input":"neo soul","output":["Neo Soul"]}
+{"input":"NEO SOUL","output":["Neo Soul"]}
+{"input":"Cape Jazz","output":["Cape Jazz","Jazz"]}
+{"input":"cape jazz","output":["Cape Jazz","Jazz"]}
+{"input":"CAPE JAZZ","output":["Cape Jazz","Jazz"]}
+{"input":"Synthpo","output":["Synthpop"]}
+{"input":"synthpo","output":["Synthpop"]}
+{"input":"SYNTHPO","output":["Synthpop"]}
+{"input":"Modern Classsical","output":["Modern Classical","Contemporary","Classical"]}
+{"input":"modern classsical","output":["Modern Classical","Contemporary","Classical"]}
+{"input":"MODERN CLASSSICAL","output":["Modern Classical","Contemporary","Classical"]}
+{"input":"Freakbeat","output":["Freakbeat","Mod"]}
+{"input":"freakbeat","output":["Freakbeat","Mod"]}
+{"input":"FREAKBEAT","output":["Freakbeat","Mod"]}
+{"input":"Traditional","output":["Traditional"]}
+{"input":"traditional","output":["Traditional"]}
+{"input":"TRADITIONAL","output":["Traditional"]}
+{"input":"HeavyRock","output":["Heavy Rock","Rock"]}
+{"input":"heavyrock","output":["Heavy Rock","Rock"]}
+{"input":"HEAVYROCK","output":["Heavy Rock","Rock"]}
+{"input":"HardRock","output":["Hard Rock","Rock"]}
+{"input":"Alternative & Indie","output":["Alternative & Indie","Alternative","Indie"]}
+{"input":"alternative & indie","output":["Alternative & Indie","Alternative","Indie"]}
+{"input":"ALTERNATIVE & INDIE","output":["Alternative & Indie","Alternative","Indie"]}
+{"input":"World Beat","output":["World Beat"]}
+{"input":"world beat","output":["World Beat"]}
+{"input":"WORLD BEAT","output":["World Beat"]}
+{"input":"African","output":["African"]}
+{"input":"african","output":["African"]}
+{"input":"AFRICAN","output":["African"]}
+{"input":"BluesRock","output":["Blues Rock","Rock"]}
+{"input":"bluesrock","output":["Blues Rock","Rock"]}
+{"input":"BLUESROCK","output":["Blues Rock","Rock"]}
+{"input":"Rebetiko","output":["Rebetiko"]}
+{"input":"rebetiko","output":["Rebetiko"]}
+{"input":"REBETIKO","output":["Rebetiko"]}
+{"input":"Post-Metal","output":["Post-Metal"]}
+{"input":"post-metal","output":["Post-Metal"]}
+{"input":"POST-METAL","output":["Post-Metal"]}
+{"input":"Glitch Dub","output":["Dub","Glitch","Glitch Dub"]}
+{"input":"glitch dub","output":["Dub","Glitch","Glitch Dub"]}
+{"input":"GLITCH DUB","output":["Dub","Glitch","Glitch Dub"]}
+{"input":"Speed Metal","output":["Speed Metal","Metal"]}
+{"input":"speed metal","output":["Speed Metal","Metal"]}
+{"input":"SPEED METAL","output":["Speed Metal","Metal"]}
+{"input":"Heavy Rock","output":["Heavy Rock","Heavy Metal","Metal","Rock"]}
+{"input":"heavy rock","output":["Heavy Rock","Heavy Metal","Metal","Rock"]}
+{"input":"HEAVY ROCK","output":["Heavy Rock","Heavy Metal","Metal","Rock"]}
+{"input":"Jangle Pop","output":["Jangle Pop"]}
+{"input":"jangle pop","output":["Jangle Pop"]}
+{"input":"JANGLE POP","output":["Jangle Pop"]}
+{"input":"Children's","output":["Children's"]}
+{"input":"children's","output":["Children's"]}
+{"input":"CHILDREN'S","output":["Children's"]}
+{"input":"Popo","output":["Pop"]}
+{"input":"popo","output":["Pop"]}
+{"input":"POPO","output":["Pop"]}
+{"input":"Reggae Pop","output":["Reggae","Pop","Reggae-Pop"]}
+{"input":"reggae pop","output":["Reggae","Pop","Reggae-Pop"]}
+{"input":"REGGAE POP","output":["Reggae","Pop","Reggae-Pop"]}
+{"input":"Reggae-Pop","output":["Reggae Pop"]}
+{"input":"reggae-pop","output":["Reggae Pop"]}
+{"input":"REGGAE-POP","output":["Reggae Pop"]}
+{"input":"House, Techno, Tech House","output":["Electronic","House","Techno","Tech House"]}
+{"input":"house, techno, tech house","output":["Electronic","House","Techno","Tech House"]}
+{"input":"HOUSE, TECHNO, TECH HOUSE","output":["Electronic","House","Techno","Tech House"]}
+{"input":"Indue","output":["Indie"]}
+{"input":"indue","output":["Indie"]}
+{"input":"INDUE","output":["Indie"]}
+{"input":"ClassicRock","output":["Classic Rock","Rock"]}
+{"input":"classicrock","output":["Classic Rock","Rock"]}
+{"input":"CLASSICROCK","output":["Classic Rock","Rock"]}
+{"input":"Boogaloo","output":["Boogaloo"]}
+{"input":"boogaloo","output":["Boogaloo"]}
+{"input":"BOOGALOO","output":["Boogaloo"]}
+{"input":"Latin Jazz","output":["Latin Jazz"]}
+{"input":"latin jazz","output":["Latin Jazz"]}
+{"input":"LATIN JAZZ","output":["Latin Jazz"]}
+{"input":"Salsa","output":["Salsa"]}
+{"input":"salsa","output":["Salsa"]}
+{"input":"SALSA","output":["Salsa"]}
+{"input":"Bleep","output":["Bleep"]}
+{"input":"bleep","output":["Bleep"]}
+{"input":"BLEEP","output":["Bleep"]}
+{"input":"Horror","output":["Horror"]}
+{"input":"horror","output":["Horror"]}
+{"input":"HORROR","output":["Horror"]}
+{"input":"Hauntology","output":["Hauntology"]}
+{"input":"hauntology","output":["Hauntology"]}
+{"input":"HAUNTOLOGY","output":["Hauntology"]}
+{"input":"TECHNO","output":["Techno"]}
+{"input":"techno","output":["Techno"]}
+{"input":"Trchno","output":["Techno"]}
+{"input":"trchno","output":["Techno"]}
+{"input":"TRCHNO","output":["Techno"]}
+{"input":"HOUSE","output":["House"]}
+{"input":"house","output":["House"]}
+{"input":"Classica","output":["Classical"]}
+{"input":"classica","output":["Classical"]}
+{"input":"CLASSICA","output":["Classical"]}
+{"input":"Beatdown","output":["Beatdown"]}
+{"input":"beatdown","output":["Beatdown"]}
+{"input":"BEATDOWN","output":["Beatdown"]}
+{"input":"Jazz Fusion","output":["Jazz Fusion"]}
+{"input":"jazz fusion","output":["Jazz Fusion"]}
+{"input":"JAZZ FUSION","output":["Jazz Fusion"]}
+{"input":"Jazz/Funk","output":["Jazz/Funk"]}
+{"input":"jazz/funk","output":["Jazz/Funk"]}
+{"input":"JAZZ/FUNK","output":["Jazz/Funk"]}
+{"input":"Afro","output":["Afro"]}
+{"input":"afro","output":["Afro"]}
+{"input":"AFRO","output":["Afro"]}
+{"input":"Religious","output":["Religious"]}
+{"input":"religious","output":["Religious"]}
+{"input":"RELIGIOUS","output":["Religious"]}
+{"input":"lectronic","output":["Electronic"]}
+{"input":"LECTRONIC","output":["Electronic"]}
+{"input":"No Wave","output":["No Wave"]}
+{"input":"no wave","output":["No Wave"]}
+{"input":"NO WAVE","output":["No Wave"]}
+{"input":"Electronic,","output":["Electronic"]}
+{"input":"electronic,","output":["Electronic"]}
+{"input":"ELECTRONIC,","output":["Electronic"]}
+{"input":"Electronica,","output":["Electronica"]}
+{"input":"electronica,","output":["Electronica"]}
+{"input":"ELECTRONICA,","output":["Electronica"]}
+{"input":"Downtempo,","output":["Downtempo"]}
+{"input":"downtempo,","output":["Downtempo"]}
+{"input":"DOWNTEMPO,","output":["Downtempo"]}
+{"input":"Classical,","output":["Classical"]}
+{"input":"classical,","output":["Classical"]}
+{"input":"CLASSICAL,","output":["Classical"]}
+{"input":"Ambient,","output":["Ambient"]}
+{"input":"ambient,","output":["Ambient"]}
+{"input":"AMBIENT,","output":["Ambient"]}
+{"input":"Experimental,","output":["Experimental"]}
+{"input":"experimental,","output":["Experimental"]}
+{"input":"EXPERIMENTAL,","output":["Experimental"]}
+{"input":"Modern Classical,","output":["Modern Classical","Contemporary","Classical"]}
+{"input":"modern classical,","output":["Modern Classical","Contemporary","Classical"]}
+{"input":"MODERN CLASSICAL,","output":["Modern Classical","Contemporary","Classical"]}
+{"input":"Generative Synthesis","output":["Generative Synthesis"]}
+{"input":"generative synthesis","output":["Generative Synthesis"]}
+{"input":"GENERATIVE SYNTHESIS","output":["Generative Synthesis"]}
+{"input":"ndustrial","output":["Industrial"]}
+{"input":"NDUSTRIAL","output":["Industrial"]}
+{"input":"Electric","output":["Electronic"]}
+{"input":"electric","output":["Electronic"]}
+{"input":"ELECTRIC","output":["Electronic"]}
+{"input":"Glitch, Breaks","output":["Glitch","Breaks"]}
+{"input":"glitch, breaks","output":["Glitch","Breaks"]}
+{"input":"GLITCH, BREAKS","output":["Glitch","Breaks"]}
+{"input":"Electroacoustic","output":["Electroacoustic"]}
+{"input":"electroacoustic","output":["Electroacoustic"]}
+{"input":"ELECTROACOUSTIC","output":["Electroacoustic"]}
+{"input":"Electro-acoustic","output":["Electroacoustic"]}
+{"input":"AcousticElectronic","output":["Acoustic","Electronic","Electroacoustic"]}
+{"input":"acousticelectronic","output":["Acoustic","Electronic","Electroacoustic"]}
+{"input":"ACOUSTICELECTRONIC","output":["Acoustic","Electronic","Electroacoustic"]}
+{"input":"Deep Dance","output":["Deep Dance"]}
+{"input":"deep dance","output":["Deep Dance"]}
+{"input":"DEEP DANCE","output":["Deep Dance"]}
+{"input":"Home Recording","output":["Home Recording"]}
+{"input":"home recording","output":["Home Recording"]}
+{"input":"HOME RECORDING","output":["Home Recording"]}
+{"input":"Lockdown","output":["Lockdown"]}
+{"input":"lockdown","output":["Lockdown"]}
+{"input":"LOCKDOWN","output":["Lockdown"]}
+{"input":"Sound Art","output":["Sound Art"]}
+{"input":"sound art","output":["Sound Art"]}
+{"input":"SOUND ART","output":["Sound Art"]}
+{"input":"Halftime","output":["Halftime"]}
+{"input":"halftime","output":["Halftime"]}
+{"input":"HALFTIME","output":["Halftime"]}
+{"input":"Folk, World And Country","output":["Folk, World & Country"]}
+{"input":"folk, world and country","output":["Folk, World & Country"]}
+{"input":"FOLK, WORLD AND COUNTRY","output":["Folk, World & Country"]}
+{"input":"Blue-grass","output":["Bluegrass"]}
+{"input":"blue-grass","output":["Bluegrass"]}
+{"input":"BLUE-GRASS","output":["Bluegrass"]}
+{"input":"Club House","output":["Club House"]}
+{"input":"club house","output":["Club House"]}
+{"input":"CLUB HOUSE","output":["Club House"]}
+{"input":"Roots Regga","output":["Roots Reggae"]}
+{"input":"roots regga","output":["Roots Reggae"]}
+{"input":"ROOTS REGGA","output":["Roots Reggae"]}
+{"input":"Political","output":["Political"]}
+{"input":"political","output":["Political"]}
+{"input":"POLITICAL","output":["Political"]}
+{"input":"Dark Ambientl","output":["Dark Ambient"]}
+{"input":"dark ambientl","output":["Dark Ambient"]}
+{"input":"DARK AMBIENTL","output":["Dark Ambient"]}
+{"input":"Industrial:Wave","output":["Industrial","Wave"]}
+{"input":"industrial:wave","output":["Industrial","Wave"]}
+{"input":"INDUSTRIAL:WAVE","output":["Industrial","Wave"]}
+{"input":"Field Recordings","output":["Field Recording"]}
+{"input":"field recordings","output":["Field Recording"]}
+{"input":"FIELD RECORDINGS","output":["Field Recording"]}
+{"input":"Electronic'Ambient","output":["Electronic","Ambient"]}
+{"input":"electronic'ambient","output":["Electronic","Ambient"]}
+{"input":"ELECTRONIC'AMBIENT","output":["Electronic","Ambient"]}
+{"input":"Electyronic","output":["Electronic"]}
+{"input":"electyronic","output":["Electronic"]}
+{"input":"ELECTYRONIC","output":["Electronic"]}
+{"input":"Industriasl","output":["Industrial"]}
+{"input":"industriasl","output":["Industrial"]}
+{"input":"INDUSTRIASL","output":["Industrial"]}
+{"input":"Hard Techno","output":["Hard Techno"]}
+{"input":"hard techno","output":["Hard Techno"]}
+{"input":"HARD TECHNO","output":["Hard Techno"]}
+{"input":"Americana","output":["Americana"]}
+{"input":"americana","output":["Americana"]}
+{"input":"AMERICANA","output":["Americana"]}
+{"input":"Folk, World, And Country","output":["Folk, World, & Country"]}
+{"input":"folk, world, and country","output":["Folk, World, & Country"]}
+{"input":"FOLK, WORLD, AND COUNTRY","output":["Folk, World, & Country"]}
+{"input":"Lo-FiNoise","output":["Lo-Fi","Noise"]}
+{"input":"lo-finoise","output":["Lo-Fi","Noise"]}
+{"input":"LO-FINOISE","output":["Lo-Fi","Noise"]}
+{"input":"Non-music","output":["Non-music"]}
+{"input":"Radioplay","output":["Radioplay"]}
+{"input":"radioplay","output":["Radioplay"]}
+{"input":"RADIOPLAY","output":["Radioplay"]}
+{"input":"Experimerntal","output":["Experimental"]}
+{"input":"experimerntal","output":["Experimental"]}
+{"input":"EXPERIMERNTAL","output":["Experimental"]}
+{"input":"Psychede","output":["Psychedelic Rock"]}
+{"input":"psychede","output":["Psychedelic Rock"]}
+{"input":"PSYCHEDE","output":["Psychedelic Rock"]}
+{"input":"Avant-Funk","output":["Avant-Funk"]}
+{"input":"avant-funk","output":["Avant-Funk"]}
+{"input":"AVANT-FUNK","output":["Avant-Funk"]}
+{"input":"lpop","output":["Pop"]}
+{"input":"LPOP","output":["Pop"]}
+{"input":"lPop","output":["Pop"]}
+{"input":"LPop","output":["Pop"]}
+{"input":"Progressive","output":["Progressive"]}
+{"input":"progressive","output":["Progressive"]}
+{"input":"PROGRESSIVE","output":["Progressive"]}
+{"input":"Abstract","output":["Abstract"]}
+{"input":"abstract","output":["Abstract"]}
+{"input":"ABSTRACT","output":["Abstract"]}
+{"input":"Acid","output":["Acid"]}
+{"input":"acid","output":["Acid"]}
+{"input":"ACID","output":["Acid"]}
+{"input":"Acid House","output":["Electronic","Acid House","House"]}
+{"input":"acid house","output":["Electronic","Acid House","House"]}
+{"input":"ACID HOUSE","output":["Electronic","Acid House","House"]}
+{"input":"Acid Jazz","output":["Electronic","Acid Jazz"]}
+{"input":"acid jazz","output":["Electronic","Acid Jazz"]}
+{"input":"ACID JAZZ","output":["Electronic","Acid Jazz"]}
+{"input":"Acid Punk","output":["Electronic","Acid Punk"]}
+{"input":"acid punk","output":["Electronic","Acid Punk"]}
+{"input":"ACID PUNK","output":["Electronic","Acid Punk"]}
+{"input":"Acid Rock","output":["Electronic","Acid Rock"]}
+{"input":"acid rock","output":["Electronic","Acid Rock"]}
+{"input":"ACID ROCK","output":["Electronic","Acid Rock"]}
+{"input":"Acid Techno","output":["Electronic","Acid Techno","Techno"]}
+{"input":"acid techno","output":["Electronic","Acid Techno","Techno"]}
+{"input":"ACID TECHNO","output":["Electronic","Acid Techno","Techno"]}
+{"input":"Acoustic","output":["Acoustic"]}
+{"input":"acoustic","output":["Acoustic"]}
+{"input":"ACOUSTIC","output":["Acoustic"]}
+{"input":"Acoustic Alternative","output":["Acoustic Alternative","Acoustic","Alternative"]}
+{"input":"acoustic alternative","output":["Acoustic Alternative","Acoustic","Alternative"]}
+{"input":"ACOUSTIC ALTERNATIVE","output":["Acoustic Alternative","Acoustic","Alternative"]}
+{"input":"Acoustic Rock","output":["Acoustic Rock","Acoustic","Rock"]}
+{"input":"acoustic rock","output":["Acoustic Rock","Acoustic","Rock"]}
+{"input":"ACOUSTIC ROCK","output":["Acoustic Rock","Acoustic","Rock"]}
+{"input":"Adult Contemporary","output":["Adult Contemporary"]}
+{"input":"adult contemporary","output":["Adult Contemporary"]}
+{"input":"ADULT CONTEMPORARY","output":["Adult Contemporary"]}
+{"input":"Afro-Beat","output":["Afrobeat"]}
+{"input":"afro-beat","output":["Afrobeat"]}
+{"input":"AFRO-BEAT","output":["Afrobeat"]}
+{"input":"Afro-Cuban","output":["Afro-Cuban"]}
+{"input":"afro-cuban","output":["Afro-Cuban"]}
+{"input":"AFRO-CUBAN","output":["Afro-Cuban"]}
+{"input":"Afrobeat","output":["Afrobeat"]}
+{"input":"afrobeat","output":["Afrobeat"]}
+{"input":"AFROBEAT","output":["Afrobeat"]}
+{"input":"Agit-pop","output":["Agit-pop"]}
+{"input":"agit-pop","output":["Agit-pop"]}
+{"input":"AGIT-POP","output":["Agit-pop"]}
+{"input":"Alt-Country","output":["Alt-Country","Alt. Country"]}
+{"input":"alt-country","output":["Alt-Country","Alt. Country"]}
+{"input":"ALT-COUNTRY","output":["Alt-Country","Alt. Country"]}
+{"input":"Alt.Country","output":["Alt-Country","Alt. Country"]}
+{"input":"alt.country","output":["Alt-Country","Alt. Country"]}
+{"input":"ALT.COUNTRY","output":["Alt-Country","Alt. Country"]}
+{"input":"Alt. Pop","output":["Alt. Pop","Alternative"]}
+{"input":"alt. pop","output":["Alt. Pop","Alternative"]}
+{"input":"ALT. POP","output":["Alt. Pop","Alternative"]}
+{"input":"Alt. Pop/Rock","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"alt. pop/rock","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"ALT. POP/ROCK","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"Alt. Rock","output":["Alt. Rock","Alternative"]}
+{"input":"alt. rock","output":["Alt. Rock","Alternative"]}
+{"input":"ALT. ROCK","output":["Alt. Rock","Alternative"]}
+{"input":"Alt Rock","output":["Alt. Rock","Alternative"]}
+{"input":"alt rock","output":["Alt. Rock","Alternative"]}
+{"input":"ALT ROCK","output":["Alt. Rock","Alternative"]}
+{"input":"Alt.Rock","output":["Alt. Rock","Alternative"]}
+{"input":"alt.rock","output":["Alt. Rock","Alternative"]}
+{"input":"ALT.ROCK","output":["Alt. Rock","Alternative"]}
+{"input":"Alt. Rock, Britpop","output":["Alt. Rock","Alternative","Britpop"]}
+{"input":"alt. rock, britpop","output":["Alt. Rock","Alternative","Britpop"]}
+{"input":"ALT. ROCK, BRITPOP","output":["Alt. Rock","Alternative","Britpop"]}
+{"input":"Alte","output":["Alternative"]}
+{"input":"alte","output":["Alternative"]}
+{"input":"ALTE","output":["Alternative"]}
+{"input":"Alternate Rock","output":["Alt. Rock","Alternative"]}
+{"input":"alternate rock","output":["Alt. Rock","Alternative"]}
+{"input":"ALTERNATE ROCK","output":["Alt. Rock","Alternative"]}
+{"input":"Alternative","output":["Alternative"]}
+{"input":"alternative","output":["Alternative"]}
+{"input":"ALTERNATIVE","output":["Alternative"]}
+{"input":"Alternative Folk","output":["Alternative","Alternative Folk"]}
+{"input":"alternative folk","output":["Alternative","Alternative Folk"]}
+{"input":"ALTERNATIVE FOLK","output":["Alternative","Alternative Folk"]}
+{"input":"Alternative Musik","output":["Alternative","Indie"]}
+{"input":"alternative musik","output":["Alternative","Indie"]}
+{"input":"ALTERNATIVE MUSIK","output":["Alternative","Indie"]}
+{"input":"Alternative Pop","output":["Alt. Pop","Alternative"]}
+{"input":"alternative pop","output":["Alt. Pop","Alternative"]}
+{"input":"ALTERNATIVE POP","output":["Alt. Pop","Alternative"]}
+{"input":"Alternative Pop/Rock","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"alternative pop/rock","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"ALTERNATIVE POP/ROCK","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"Alternative, Post-rock","output":["Post-Rock","Alternative","Indie"]}
+{"input":"alternative, post-rock","output":["Post-Rock","Alternative","Indie"]}
+{"input":"ALTERNATIVE, POST-ROCK","output":["Post-Rock","Alternative","Indie"]}
+{"input":"Alternative & Punk","output":["Punk","Punk Rock","Alternative"]}
+{"input":"alternative & punk","output":["Punk","Punk Rock","Alternative"]}
+{"input":"ALTERNATIVE & PUNK","output":["Punk","Punk Rock","Alternative"]}
+{"input":"Alternative Roc","output":["Alt. Rock","Alternative"]}
+{"input":"alternative roc","output":["Alt. Rock","Alternative"]}
+{"input":"ALTERNATIVE ROC","output":["Alt. Rock","Alternative"]}
+{"input":"Alternative Rock","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"alternative rock","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"ALTERNATIVE ROCK","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"Alternative Rock/Pop","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"alternative rock/pop","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"ALTERNATIVE ROCK/POP","output":["Alt. Pop","Alt. Rock","Alternative"]}
+{"input":"Alternatives","output":["Alternative"]}
+{"input":"alternatives","output":["Alternative"]}
+{"input":"ALTERNATIVES","output":["Alternative"]}
+{"input":"Alternrock","output":["Alt. Rock","Alternative"]}
+{"input":"alternrock","output":["Alt. Rock","Alternative"]}
+{"input":"ALTERNROCK","output":["Alt. Rock","Alternative"]}
+{"input":"AlternRock","output":["Alt. Rock","Alternative"]}
+{"input":"Alterntive Rock","output":["Alt. Rock","Alternative"]}
+{"input":"alterntive rock","output":["Alt. Rock","Alternative"]}
+{"input":"ALTERNTIVE ROCK","output":["Alt. Rock","Alternative"]}
+{"input":"Ambient","output":["Ambient"]}
+{"input":"ambient","output":["Ambient"]}
+{"input":"AMBIENT","output":["Ambient"]}
+{"input":"Ambient : Classical","output":["Ambient","Modern Classical","Classical","Contemporary"]}
+{"input":"ambient : classical","output":["Ambient","Modern Classical","Classical","Contemporary"]}
+{"input":"AMBIENT : CLASSICAL","output":["Ambient","Modern Classical","Classical","Contemporary"]}
+{"input":"Ambient Dub","output":["Ambient","Dub"]}
+{"input":"ambient dub","output":["Ambient","Dub"]}
+{"input":"AMBIENT DUB","output":["Ambient","Dub"]}
+{"input":"Ambient Industrial","output":["Ambient","Electronic","Industrial"]}
+{"input":"ambient industrial","output":["Ambient","Electronic","Industrial"]}
+{"input":"AMBIENT INDUSTRIAL","output":["Ambient","Electronic","Industrial"]}
+{"input":"Ambient Pop, Dream Pop","output":["Ambient Pop","Dream Pop"]}
+{"input":"ambient pop, dream pop","output":["Ambient Pop","Dream Pop"]}
+{"input":"AMBIENT POP, DREAM POP","output":["Ambient Pop","Dream Pop"]}
+{"input":"AmbientExperimental","output":["Ambient","Experimental"]}
+{"input":"ambientexperimental","output":["Ambient","Experimental"]}
+{"input":"AMBIENTEXPERIMENTAL","output":["Ambient","Experimental"]}
+{"input":"Ambiet","output":["Ambient"]}
+{"input":"ambiet","output":["Ambient"]}
+{"input":"AMBIET","output":["Ambient"]}
+{"input":"Anthemic Pop","output":["Pop","Rock","Anthemic Pop"]}
+{"input":"anthemic pop","output":["Pop","Rock","Anthemic Pop"]}
+{"input":"ANTHEMIC POP","output":["Pop","Rock","Anthemic Pop"]}
+{"input":"AOR","output":["AOR","Rock"]}
+{"input":"aor","output":["AOR","Rock"]}
+{"input":"Art Rock","output":["Rock","Art Rock"]}
+{"input":"art rock","output":["Rock","Art Rock"]}
+{"input":"ART ROCK","output":["Rock","Art Rock"]}
+{"input":"Astral Jazz","output":["Electronic","Astral Jazz"]}
+{"input":"astral jazz","output":["Electronic","Astral Jazz"]}
+{"input":"ASTRAL JAZZ","output":["Electronic","Astral Jazz"]}
+{"input":"Audiobook","output":["Spoken Word","Audiobook"]}
+{"input":"audiobook","output":["Spoken Word","Audiobook"]}
+{"input":"AUDIOBOOK","output":["Spoken Word","Audiobook"]}
+{"input":"Avant Garde","output":["Avant-garde"]}
+{"input":"avant garde","output":["Avant-garde"]}
+{"input":"AVANT GARDE","output":["Avant-garde"]}
+{"input":"Avant-Garde","output":["Avant-garde"]}
+{"input":"avant-garde","output":["Avant-garde"]}
+{"input":"AVANT-GARDE","output":["Avant-garde"]}
+{"input":"Avant-garde Jazz","output":["Jazz","Avant-garde"]}
+{"input":"avant-garde jazz","output":["Jazz","Avant-garde"]}
+{"input":"AVANT-GARDE JAZZ","output":["Jazz","Avant-garde"]}
+{"input":"Avant Pop","output":["Pop","Avant-garde"]}
+{"input":"avant pop","output":["Pop","Avant-garde"]}
+{"input":"AVANT POP","output":["Pop","Avant-garde"]}
+{"input":"Avant Rock","output":["Rock","Avant-garde"]}
+{"input":"avant rock","output":["Rock","Avant-garde"]}
+{"input":"AVANT ROCK","output":["Rock","Avant-garde"]}
+{"input":"Avant-Rock","output":["Rock","Avant-garde"]}
+{"input":"avant-rock","output":["Rock","Avant-garde"]}
+{"input":"AVANT-ROCK","output":["Rock","Avant-garde"]}
+{"input":"Avantgarde","output":["Avant-garde"]}
+{"input":"avantgarde","output":["Avant-garde"]}
+{"input":"AVANTGARDE","output":["Avant-garde"]}
+{"input":"Avantgardge","output":["Avant-garde"]}
+{"input":"avantgardge","output":["Avant-garde"]}
+{"input":"AVANTGARDGE","output":["Avant-garde"]}
+{"input":"Avant-garde","output":["Avant-garde"]}
+{"input":"Techno, Experimental, Ambient","output":["Techno","Experimental","Ambient"]}
+{"input":"techno, experimental, ambient","output":["Techno","Experimental","Ambient"]}
+{"input":"TECHNO, EXPERIMENTAL, AMBIENT","output":["Techno","Experimental","Ambient"]}
+{"input":"Baggy","output":["Dance","Baggy","Britpop"]}
+{"input":"baggy","output":["Dance","Baggy","Britpop"]}
+{"input":"BAGGY","output":["Dance","Baggy","Britpop"]}
+{"input":"Balearic","output":["Electronic","Dance","Balearic"]}
+{"input":"balearic","output":["Electronic","Dance","Balearic"]}
+{"input":"BALEARIC","output":["Electronic","Dance","Balearic"]}
+{"input":"Ballad","output":["Ballad"]}
+{"input":"ballad","output":["Ballad"]}
+{"input":"BALLAD","output":["Ballad"]}
+{"input":"Ballard","output":["Ballad"]}
+{"input":"ballard","output":["Ballad"]}
+{"input":"BALLARD","output":["Ballad"]}
+{"input":"Baroque","output":["Baroque","Classical"]}
+{"input":"baroque","output":["Baroque","Classical"]}
+{"input":"BAROQUE","output":["Baroque","Classical"]}
+{"input":"Bass","output":["Electronic","Bass","Bass Music"]}
+{"input":"bass","output":["Electronic","Bass","Bass Music"]}
+{"input":"BASS","output":["Electronic","Bass","Bass Music"]}
+{"input":"Bass Music","output":["Electronic","Bass","Bass Music"]}
+{"input":"bass music","output":["Electronic","Bass","Bass Music"]}
+{"input":"BASS MUSIC","output":["Electronic","Bass","Bass Music"]}
+{"input":"Bassline","output":["Electronic","Bass","Bass Music"]}
+{"input":"bassline","output":["Electronic","Bass","Bass Music"]}
+{"input":"BASSLINE","output":["Electronic","Bass","Bass Music"]}
+{"input":"Beat","output":["Electronic","Beats","Beat Music"]}
+{"input":"beat","output":["Electronic","Beats","Beat Music"]}
+{"input":"BEAT","output":["Electronic","Beats","Beat Music"]}
+{"input":"Beats","output":["Electronic","Beats","Beat Music"]}
+{"input":"beats","output":["Electronic","Beats","Beat Music"]}
+{"input":"BEATS","output":["Electronic","Beats","Beat Music"]}
+{"input":"Bebob","output":["Jazz","Bebop"]}
+{"input":"bebob","output":["Jazz","Bebop"]}
+{"input":"BEBOB","output":["Jazz","Bebop"]}
+{"input":"Berlin-School","output":["Electronic","Berlin School","Krautrock"]}
+{"input":"berlin-school","output":["Electronic","Berlin School","Krautrock"]}
+{"input":"BERLIN-SCHOOL","output":["Electronic","Berlin School","Krautrock"]}
+{"input":"Berlin-school","output":["Electronic","Berlin School","Krautrock"]}
+{"input":"Berlin School","output":["Electronic","Berlin School","Krautrock"]}
+{"input":"berlin school","output":["Electronic","Berlin School","Krautrock"]}
+{"input":"BERLIN SCHOOL","output":["Electronic","Berlin School","Krautrock"]}
+{"input":"Bhangra","output":["Bhangra","Dance"]}
+{"input":"bhangra","output":["Bhangra","Dance"]}
+{"input":"BHANGRA","output":["Bhangra","Dance"]}
+{"input":"Big Band","output":["Big Band","Jazz"]}
+{"input":"big band","output":["Big Band","Jazz"]}
+{"input":"BIG BAND","output":["Big Band","Jazz"]}
+{"input":"Big Beat","output":["Electronic","Big Beat"]}
+{"input":"big beat","output":["Electronic","Big Beat"]}
+{"input":"BIG BEAT","output":["Electronic","Big Beat"]}
+{"input":"Big Beats","output":["Electronic","Big Beat"]}
+{"input":"big beats","output":["Electronic","Big Beat"]}
+{"input":"BIG BEATS","output":["Electronic","Big Beat"]}
+{"input":"Experimenta","output":["Experimental"]}
+{"input":"experimenta","output":["Experimental"]}
+{"input":"EXPERIMENTA","output":["Experimental"]}
+{"input":"Bluegrass","output":["Bluegrass"]}
+{"input":"bluegrass","output":["Bluegrass"]}
+{"input":"BLUEGRASS","output":["Bluegrass"]}
+{"input":"Blues","output":["Blues"]}
+{"input":"blues","output":["Blues"]}
+{"input":"BLUES","output":["Blues"]}
+{"input":"Blues Rock","output":["Blues Rock"]}
+{"input":"blues rock","output":["Blues Rock"]}
+{"input":"BLUES ROCK","output":["Blues Rock"]}
+{"input":"Blues-Rock","output":["Blues Rock"]}
+{"input":"blues-rock","output":["Blues Rock"]}
+{"input":"BLUES-ROCK","output":["Blues Rock"]}
+{"input":"Boogie","output":["Jazz","Boogie"]}
+{"input":"boogie","output":["Jazz","Boogie"]}
+{"input":"BOOGIE","output":["Jazz","Boogie"]}
+{"input":"Bop","output":["Bop"]}
+{"input":"bop","output":["Bop"]}
+{"input":"BOP","output":["Bop"]}
+{"input":"Bossa Nova","output":["Bossa Nova"]}
+{"input":"bossa nova","output":["Bossa Nova"]}
+{"input":"BOSSA NOVA","output":["Bossa Nova"]}
+{"input":"Brass & Military","output":["Brass & Military"]}
+{"input":"brass & military","output":["Brass & Military"]}
+{"input":"BRASS & MILITARY","output":["Brass & Military"]}
+{"input":"Break Beat","output":["Electronic","Break Beat"]}
+{"input":"break beat","output":["Electronic","Break Beat"]}
+{"input":"BREAK BEAT","output":["Electronic","Break Beat"]}
+{"input":"Breakbeat","output":["Electronic","Break Beat"]}
+{"input":"breakbeat","output":["Electronic","Break Beat"]}
+{"input":"BREAKBEAT","output":["Electronic","Break Beat"]}
+{"input":"Breakcore","output":["Breakcore"]}
+{"input":"breakcore","output":["Breakcore"]}
+{"input":"BREAKCORE","output":["Breakcore"]}
+{"input":"Breaks","output":["Electronic","Breaks"]}
+{"input":"breaks","output":["Electronic","Breaks"]}
+{"input":"BREAKS","output":["Electronic","Breaks"]}
+{"input":"Brit Pop","output":["Britpop"]}
+{"input":"brit pop","output":["Britpop"]}
+{"input":"BRIT POP","output":["Britpop"]}
+{"input":"Brit-Pop","output":["Britpop"]}
+{"input":"brit-pop","output":["Britpop"]}
+{"input":"BRIT-POP","output":["Britpop"]}
+{"input":"Brit-pop","output":["Britpop"]}
+{"input":"Brit Pop Rock","output":["Britpop","Rock"]}
+{"input":"brit pop rock","output":["Britpop","Rock"]}
+{"input":"BRIT POP ROCK","output":["Britpop","Rock"]}
+{"input":"Brit Rock","output":["Britpop","Rock"]}
+{"input":"brit rock","output":["Britpop","Rock"]}
+{"input":"BRIT ROCK","output":["Britpop","Rock"]}
+{"input":"BritPop","output":["Britpop"]}
+{"input":"britpop","output":["Britpop"]}
+{"input":"BRITPOP","output":["Britpop"]}
+{"input":"Britpop","output":["Britpop"]}
+{"input":"Broken Beat","output":["Electronic","Broken Beat"]}
+{"input":"broken beat","output":["Electronic","Broken Beat"]}
+{"input":"BROKEN BEAT","output":["Electronic","Broken Beat"]}
+{"input":"Cabaret","output":["Cabaret"]}
+{"input":"cabaret","output":["Cabaret"]}
+{"input":"CABARET","output":["Cabaret"]}
+{"input":"Calypso","output":["Calypso","Reggae"]}
+{"input":"calypso","output":["Calypso","Reggae"]}
+{"input":"CALYPSO","output":["Calypso","Reggae"]}
+{"input":"Canterbury Scene","output":["Rock","Canterbury Scene"]}
+{"input":"canterbury scene","output":["Rock","Canterbury Scene"]}
+{"input":"CANTERBURY SCENE","output":["Rock","Canterbury Scene"]}
+{"input":"Cha-Cha","output":["Latin","Jazz","Cha-Cha"]}
+{"input":"cha-cha","output":["Latin","Jazz","Cha-Cha"]}
+{"input":"CHA-CHA","output":["Latin","Jazz","Cha-Cha"]}
+{"input":"Chamber Music","output":["Classical","Chamber Music"]}
+{"input":"chamber music","output":["Classical","Chamber Music"]}
+{"input":"CHAMBER MUSIC","output":["Classical","Chamber Music"]}
+{"input":"Chamber Rock","output":["Chamber Rock","Rock"]}
+{"input":"chamber rock","output":["Chamber Rock","Rock"]}
+{"input":"CHAMBER ROCK","output":["Chamber Rock","Rock"]}
+{"input":"Chanson","output":["Chanson"]}
+{"input":"chanson","output":["Chanson"]}
+{"input":"CHANSON","output":["Chanson"]}
+{"input":"Chetto House","output":["Ghetto House","House"]}
+{"input":"chetto house","output":["Ghetto House","House"]}
+{"input":"CHETTO HOUSE","output":["Ghetto House","House"]}
+{"input":"Chicago Blues","output":["Chicago Blues"]}
+{"input":"chicago blues","output":["Chicago Blues"]}
+{"input":"CHICAGO BLUES","output":["Chicago Blues"]}
+{"input":"Chill","output":["Electronic","Ambient","Chill"]}
+{"input":"chill","output":["Electronic","Ambient","Chill"]}
+{"input":"CHILL","output":["Electronic","Ambient","Chill"]}
+{"input":"Chill Out","output":["Electronic","Ambient","Chill","Chillout"]}
+{"input":"chill out","output":["Electronic","Ambient","Chill","Chillout"]}
+{"input":"CHILL OUT","output":["Electronic","Ambient","Chill","Chillout"]}
+{"input":"Chillout","output":["Electronic","Ambient","Chill","Chillout"]}
+{"input":"chillout","output":["Electronic","Ambient","Chill","Chillout"]}
+{"input":"CHILLOUT","output":["Electronic","Ambient","Chill","Chillout"]}
+{"input":"Chillwave","output":["Electronic","Ambient","Chill","Chillwave"]}
+{"input":"chillwave","output":["Electronic","Ambient","Chill","Chillwave"]}
+{"input":"CHILLWAVE","output":["Electronic","Ambient","Chill","Chillwave"]}
+{"input":"Chiptune","output":["Electronic","Chiptune"]}
+{"input":"chiptune","output":["Electronic","Chiptune"]}
+{"input":"CHIPTUNE","output":["Electronic","Chiptune"]}
+{"input":"Choral","output":["Choral"]}
+{"input":"choral","output":["Choral"]}
+{"input":"CHORAL","output":["Choral"]}
+{"input":"Cinematic","output":["Cinematic"]}
+{"input":"cinematic","output":["Cinematic"]}
+{"input":"CINEMATIC","output":["Cinematic"]}
+{"input":"Classic Rock","output":["Classic Rock"]}
+{"input":"classic rock","output":["Classic Rock"]}
+{"input":"CLASSIC ROCK","output":["Classic Rock"]}
+{"input":"Classical","output":["Classical"]}
+{"input":"classical","output":["Classical"]}
+{"input":"CLASSICAL","output":["Classical"]}
+{"input":"Clicks / Glitch","output":["Clicks","Glitch"]}
+{"input":"clicks / glitch","output":["Clicks","Glitch"]}
+{"input":"CLICKS / GLITCH","output":["Clicks","Glitch"]}
+{"input":"Club","output":["Club","Dance"]}
+{"input":"club","output":["Club","Dance"]}
+{"input":"CLUB","output":["Club","Dance"]}
+{"input":"Club-House","output":["Club-House","Dance"]}
+{"input":"club-house","output":["Club-House","Dance"]}
+{"input":"CLUB-HOUSE","output":["Club-House","Dance"]}
+{"input":"Coldwave","output":["Coldwave"]}
+{"input":"coldwave","output":["Coldwave"]}
+{"input":"COLDWAVE","output":["Coldwave"]}
+{"input":"Collage","output":["Collage"]}
+{"input":"collage","output":["Collage"]}
+{"input":"COLLAGE","output":["Collage"]}
+{"input":"Comedy","output":["Comedy"]}
+{"input":"comedy","output":["Comedy"]}
+{"input":"COMEDY","output":["Comedy"]}
+{"input":"Contemporary","output":["Contemporary"]}
+{"input":"contemporary","output":["Contemporary"]}
+{"input":"CONTEMPORARY","output":["Contemporary"]}
+{"input":"Contemporary Classical","output":["Contemporary Classical"]}
+{"input":"contemporary classical","output":["Contemporary Classical"]}
+{"input":"CONTEMPORARY CLASSICAL","output":["Contemporary Classical"]}
+{"input":"Contemporary Jazz","output":["Contemporary Jazz"]}
+{"input":"contemporary jazz","output":["Contemporary Jazz"]}
+{"input":"CONTEMPORARY JAZZ","output":["Contemporary Jazz"]}
+{"input":"Contemporary R&B","output":["Contemporary R&B"]}
+{"input":"contemporary r&b","output":["Contemporary R&B"]}
+{"input":"CONTEMPORARY R&B","output":["Contemporary R&B"]}
+{"input":"Contemporary RnB","output":["Contemporary R&B"]}
+{"input":"contemporary rnb","output":["Contemporary R&B"]}
+{"input":"CONTEMPORARY RNB","output":["Contemporary R&B"]}
+{"input":"Cool Jazz","output":["Cool Jazz"]}
+{"input":"cool jazz","output":["Cool Jazz"]}
+{"input":"COOL JAZZ","output":["Cool Jazz"]}
+{"input":"Cool-Jazz","output":["Cool Jazz"]}
+{"input":"cool-jazz","output":["Cool Jazz"]}
+{"input":"COOL-JAZZ","output":["Cool Jazz"]}
+{"input":"Country","output":["Country"]}
+{"input":"country","output":["Country"]}
+{"input":"COUNTRY","output":["Country"]}
+{"input":"Country Blues","output":["Country Blues"]}
+{"input":"country blues","output":["Country Blues"]}
+{"input":"COUNTRY BLUES","output":["Country Blues"]}
+{"input":"Country Rock","output":["Country Rock"]}
+{"input":"country rock","output":["Country Rock"]}
+{"input":"COUNTRY ROCK","output":["Country Rock"]}
+{"input":"Crossover","output":["Crossover"]}
+{"input":"crossover","output":["Crossover"]}
+{"input":"CROSSOVER","output":["Crossover"]}
+{"input":"Crunk","output":["Crunk"]}
+{"input":"crunk","output":["Crunk"]}
+{"input":"CRUNK","output":["Crunk"]}
+{"input":"Dance","output":["Dance"]}
+{"input":"dance","output":["Dance"]}
+{"input":"DANCE","output":["Dance"]}
+{"input":"Dance Hall","output":["Dance Hall"]}
+{"input":"dance hall","output":["Dance Hall"]}
+{"input":"DANCE HALL","output":["Dance Hall"]}
+{"input":"Dance-pop","output":["Dance-pop"]}
+{"input":"dance-pop","output":["Dance-pop"]}
+{"input":"DANCE-POP","output":["Dance-pop"]}
+{"input":"Dance Pop","output":["Dance-Pop"]}
+{"input":"dance pop","output":["Dance-Pop"]}
+{"input":"DANCE POP","output":["Dance-Pop"]}
+{"input":"Dance Punk","output":["Dance-Punk"]}
+{"input":"dance punk","output":["Dance-Punk"]}
+{"input":"DANCE PUNK","output":["Dance-Punk"]}
+{"input":"Dance-Punk","output":["Dance-Punk"]}
+{"input":"dance-punk","output":["Dance-Punk"]}
+{"input":"DANCE-PUNK","output":["Dance-Punk"]}
+{"input":"Dance Rock","output":["Dance-Rock"]}
+{"input":"dance rock","output":["Dance-Rock"]}
+{"input":"DANCE ROCK","output":["Dance-Rock"]}
+{"input":"Dance-Rock","output":["Dance-Rock"]}
+{"input":"dance-rock","output":["Dance-Rock"]}
+{"input":"DANCE-ROCK","output":["Dance-Rock"]}
+{"input":"Dancefloor","output":["Dancefloor"]}
+{"input":"dancefloor","output":["Dancefloor"]}
+{"input":"DANCEFLOOR","output":["Dancefloor"]}
+{"input":"Dancehall","output":["Dancehall"]}
+{"input":"dancehall","output":["Dancehall"]}
+{"input":"DANCEHALL","output":["Dancehall"]}
+{"input":"Dancehall-Reggae","output":["Dancehall","Reggae"]}
+{"input":"dancehall-reggae","output":["Dancehall","Reggae"]}
+{"input":"DANCEHALL-REGGAE","output":["Dancehall","Reggae"]}
+{"input":"Dancehall Reggae","output":["Dancehall","Reggae"]}
+{"input":"dancehall reggae","output":["Dancehall","Reggae"]}
+{"input":"DANCEHALL REGGAE","output":["Dancehall","Reggae"]}
+{"input":"Dark Ambient","output":["Dark Ambient"]}
+{"input":"dark ambient","output":["Dark Ambient"]}
+{"input":"DARK AMBIENT","output":["Dark Ambient"]}
+{"input":"Dark Lo-Fi","output":["Dark Lo-Fi"]}
+{"input":"dark lo-fi","output":["Dark Lo-Fi"]}
+{"input":"DARK LO-FI","output":["Dark Lo-Fi"]}
+{"input":"Dark Techno","output":["Dark Techno"]}
+{"input":"dark techno","output":["Dark Techno"]}
+{"input":"DARK TECHNO","output":["Dark Techno"]}
+{"input":"Dark Wave","output":["Darkwave"]}
+{"input":"dark wave","output":["Darkwave"]}
+{"input":"DARK WAVE","output":["Darkwave"]}
+{"input":"Darkwave","output":["Darkwave"]}
+{"input":"darkwave","output":["Darkwave"]}
+{"input":"DARKWAVE","output":["Darkwave"]}
+{"input":"Death Metal","output":["Death Metal"]}
+{"input":"death metal","output":["Death Metal"]}
+{"input":"DEATH METAL","output":["Death Metal"]}
+{"input":"Deep House","output":["Deep House"]}
+{"input":"deep house","output":["Deep House"]}
+{"input":"DEEP HOUSE","output":["Deep House"]}
+{"input":"Deep Techno","output":["Deep Techno"]}
+{"input":"deep techno","output":["Deep Techno"]}
+{"input":"DEEP TECHNO","output":["Deep Techno"]}
+{"input":"DeepHouse","output":["Deep House"]}
+{"input":"deephouse","output":["Deep House"]}
+{"input":"DEEPHOUSE","output":["Deep House"]}
+{"input":"Delta Blues","output":["Delta Blues"]}
+{"input":"delta blues","output":["Delta Blues"]}
+{"input":"DELTA BLUES","output":["Delta Blues"]}
+{"input":"Disco","output":["Disco"]}
+{"input":"disco","output":["Disco"]}
+{"input":"DISCO","output":["Disco"]}
+{"input":"Disco Punk","output":["Disco Punk"]}
+{"input":"disco punk","output":["Disco Punk"]}
+{"input":"DISCO PUNK","output":["Disco Punk"]}
+{"input":"DnB","output":["DnB"]}
+{"input":"dnb","output":["DnB"]}
+{"input":"DNB","output":["DnB"]}
+{"input":"Doom Metal","output":["Doom Metal"]}
+{"input":"doom metal","output":["Doom Metal"]}
+{"input":"DOOM METAL","output":["Doom Metal"]}
+{"input":"Dowentempo","output":["Downtempo"]}
+{"input":"dowentempo","output":["Downtempo"]}
+{"input":"DOWENTEMPO","output":["Downtempo"]}
+{"input":"Downbeat","output":["Downbeat"]}
+{"input":"downbeat","output":["Downbeat"]}
+{"input":"DOWNBEAT","output":["Downbeat"]}
+{"input":"Downtempo","output":["Downtempo"]}
+{"input":"downtempo","output":["Downtempo"]}
+{"input":"DOWNTEMPO","output":["Downtempo"]}
+{"input":"Downtempo, Tribal, New Age","output":["Downtempo","Tribal","New Age"]}
+{"input":"downtempo, tribal, new age","output":["Downtempo","Tribal","New Age"]}
+{"input":"DOWNTEMPO, TRIBAL, NEW AGE","output":["Downtempo","Tribal","New Age"]}
+{"input":"Dream Pop","output":["Dream Pop","Dreampop"]}
+{"input":"dream pop","output":["Dream Pop","Dreampop"]}
+{"input":"DREAM POP","output":["Dream Pop","Dreampop"]}
+{"input":"Dreampop","output":["Dream Pop","Dreampop"]}
+{"input":"dreampop","output":["Dream Pop","Dreampop"]}
+{"input":"DREAMPOP","output":["Dream Pop","Dreampop"]}
+{"input":"Drone","output":["Drone"]}
+{"input":"drone","output":["Drone"]}
+{"input":"DRONE","output":["Drone"]}
+{"input":"Drone Metal","output":["Drone Metal"]}
+{"input":"drone metal","output":["Drone Metal"]}
+{"input":"DRONE METAL","output":["Drone Metal"]}
+{"input":"Drum","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"drum","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"DRUM","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"Drum And Bass","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"drum and bass","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"DRUM AND BASS","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"Drum & Bass","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"drum & bass","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"DRUM & BASS","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"Drum n Bass","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"drum n bass","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"DRUM N BASS","output":["Drum & Bass","DnB","Drum And Bass"]}
+{"input":"Dub","output":["Dub"]}
+{"input":"dub","output":["Dub"]}
+{"input":"DUB","output":["Dub"]}
+{"input":"Dub Disco","output":["Dub Disco"]}
+{"input":"dub disco","output":["Dub Disco"]}
+{"input":"DUB DISCO","output":["Dub Disco"]}
+{"input":"Dub House","output":["Dub House"]}
+{"input":"dub house","output":["Dub House"]}
+{"input":"DUB HOUSE","output":["Dub House"]}
+{"input":"Dub Poetry","output":["Dub Poetry"]}
+{"input":"dub poetry","output":["Dub Poetry"]}
+{"input":"DUB POETRY","output":["Dub Poetry"]}
+{"input":"Dub Reggae","output":["Dub Reggae"]}
+{"input":"dub reggae","output":["Dub Reggae"]}
+{"input":"DUB REGGAE","output":["Dub Reggae"]}
+{"input":"Dub Techno","output":["Dub Techno"]}
+{"input":"dub techno","output":["Dub Techno"]}
+{"input":"DUB TECHNO","output":["Dub Techno"]}
+{"input":"DubTechno","output":["Dub Techno"]}
+{"input":"dubtechno","output":["Dub Techno"]}
+{"input":"DUBTECHNO","output":["Dub Techno"]}
+{"input":"Dubstep","output":["Dubstep"]}
+{"input":"dubstep","output":["Dubstep"]}
+{"input":"DUBSTEP","output":["Dubstep"]}
+{"input":"Dungeon Synth","output":["Dungeon Synth"]}
+{"input":"dungeon synth","output":["Dungeon Synth"]}
+{"input":"DUNGEON SYNTH","output":["Dungeon Synth"]}
+{"input":"Early Electronic","output":["Early Electronic","Electronic"]}
+{"input":"early electronic","output":["Early Electronic","Electronic"]}
+{"input":"EARLY ELECTRONIC","output":["Early Electronic","Electronic"]}
+{"input":"East Coast Blues","output":["East Coast Blues"]}
+{"input":"east coast blues","output":["East Coast Blues"]}
+{"input":"EAST COAST BLUES","output":["East Coast Blues"]}
+{"input":"Easy Listening","output":["Easy Listening"]}
+{"input":"easy listening","output":["Easy Listening"]}
+{"input":"EASY LISTENING","output":["Easy Listening"]}
+{"input":"EBM","output":["EBM"]}
+{"input":"ebm","output":["EBM"]}
+{"input":"Eclectic","output":["Eclectic"]}
+{"input":"eclectic","output":["Eclectic"]}
+{"input":"ECLECTIC","output":["Eclectic"]}
+{"input":"Electric Blues","output":["Electric Blues"]}
+{"input":"electric blues","output":["Electric Blues"]}
+{"input":"ELECTRIC BLUES","output":["Electric Blues"]}
+{"input":"Electro","output":["Electro"]}
+{"input":"electro","output":["Electro"]}
+{"input":"ELECTRO","output":["Electro"]}
+{"input":"Electro-Acoustic","output":["Electro-Acoustic"]}
+{"input":"Electro Acoustic","output":["Electro-Acoustic"]}
+{"input":"electro acoustic","output":["Electro-Acoustic"]}
+{"input":"ELECTRO ACOUSTIC","output":["Electro-Acoustic"]}
+{"input":"Electro House","output":["Electro House"]}
+{"input":"electro house","output":["Electro House"]}
+{"input":"ELECTRO HOUSE","output":["Electro House"]}
+{"input":"Electro-Pop","output":["Electro-Pop","Electropop"]}
+{"input":"electro-pop","output":["Electro-Pop","Electropop"]}
+{"input":"ELECTRO-POP","output":["Electro-Pop","Electropop"]}
+{"input":"Electro Rock","output":["Electro Rock"]}
+{"input":"electro rock","output":["Electro Rock"]}
+{"input":"ELECTRO ROCK","output":["Electro Rock"]}
+{"input":"Electro Swing","output":["Electro Swing"]}
+{"input":"electro swing","output":["Electro Swing"]}
+{"input":"ELECTRO SWING","output":["Electro Swing"]}
+{"input":"Electroclash","output":["Electroclash"]}
+{"input":"electroclash","output":["Electroclash"]}
+{"input":"ELECTROCLASH","output":["Electroclash"]}
+{"input":"Electronic","output":["Electronic"]}
+{"input":"electronic","output":["Electronic"]}
+{"input":"ELECTRONIC","output":["Electronic"]}
+{"input":"Electronic Anarchy","output":["Electronic Anarchy"]}
+{"input":"electronic anarchy","output":["Electronic Anarchy"]}
+{"input":"ELECTRONIC ANARCHY","output":["Electronic Anarchy"]}
+{"input":"Electronica","output":["Electronica"]}
+{"input":"electronica","output":["Electronica"]}
+{"input":"ELECTRONICA","output":["Electronica"]}
+{"input":"Electronica/Dance","output":["Electronic","Electronica","Dance"]}
+{"input":"electronica/dance","output":["Electronic","Electronica","Dance"]}
+{"input":"ELECTRONICA/DANCE","output":["Electronic","Electronica","Dance"]}
+{"input":"Electronica & Dance","output":["Electronic","Electronica","Dance"]}
+{"input":"electronica & dance","output":["Electronic","Electronica","Dance"]}
+{"input":"ELECTRONICA & DANCE","output":["Electronic","Electronica","Dance"]}
+{"input":"Electronica, Trip-Hop","output":["Electronic","Electronica","Trip-Hop"]}
+{"input":"electronica, trip-hop","output":["Electronic","Electronica","Trip-Hop"]}
+{"input":"ELECTRONICA, TRIP-HOP","output":["Electronic","Electronica","Trip-Hop"]}
+{"input":"Electropop","output":["Electropop"]}
+{"input":"electropop","output":["Electropop"]}
+{"input":"ELECTROPOP","output":["Electropop"]}
+{"input":"Elektro","output":["Electro"]}
+{"input":"elektro","output":["Electro"]}
+{"input":"ELEKTRO","output":["Electro"]}
+{"input":"Eletronic","output":["Electronic"]}
+{"input":"eletronic","output":["Electronic"]}
+{"input":"ELETRONIC","output":["Electronic"]}
+{"input":"English Rock","output":["English Rock"]}
+{"input":"english rock","output":["English Rock"]}
+{"input":"ENGLISH ROCK","output":["English Rock"]}
+{"input":"Ethereal","output":["Ethereal"]}
+{"input":"ethereal","output":["Ethereal"]}
+{"input":"ETHEREAL","output":["Ethereal"]}
+{"input":"Etherial","output":["Ethereal"]}
+{"input":"etherial","output":["Ethereal"]}
+{"input":"ETHERIAL","output":["Ethereal"]}
+{"input":"Ethnic","output":["Ethnic"]}
+{"input":"ethnic","output":["Ethnic"]}
+{"input":"ETHNIC","output":["Ethnic"]}
+{"input":"Euro-Disco","output":["Euro-Disco"]}
+{"input":"euro-disco","output":["Euro-Disco"]}
+{"input":"EURO-DISCO","output":["Euro-Disco"]}
+{"input":"Euro-House","output":["Euro-House"]}
+{"input":"euro-house","output":["Euro-House"]}
+{"input":"EURO-HOUSE","output":["Euro-House"]}
+{"input":"Euro House","output":["Euro-House"]}
+{"input":"euro house","output":["Euro-House"]}
+{"input":"EURO HOUSE","output":["Euro-House"]}
+{"input":"Euro-Pop","output":["Euro-Pop"]}
+{"input":"euro-pop","output":["Euro-Pop"]}
+{"input":"EURO-POP","output":["Euro-Pop"]}
+{"input":"Eurodance","output":["Euro-Dance"]}
+{"input":"eurodance","output":["Euro-Dance"]}
+{"input":"EURODANCE","output":["Euro-Dance"]}
+{"input":"Europop","output":["Euro-Pop"]}
+{"input":"europop","output":["Euro-Pop"]}
+{"input":"EUROPOP","output":["Euro-Pop"]}
+{"input":"Experimental","output":["Experimental"]}
+{"input":"experimental","output":["Experimental"]}
+{"input":"EXPERIMENTAL","output":["Experimental"]}
+{"input":"Experimental, Ambient, Future Jazz, Minimal","output":["Experimental","Ambient","Future Jazz","Minimal"]}
+{"input":"experimental, ambient, future jazz, minimal","output":["Experimental","Ambient","Future Jazz","Minimal"]}
+{"input":"EXPERIMENTAL, AMBIENT, FUTURE JAZZ, MINIMAL","output":["Experimental","Ambient","Future Jazz","Minimal"]}
+{"input":"Experimental Electronic","output":["Experimental","Electronic"]}
+{"input":"experimental electronic","output":["Experimental","Electronic"]}
+{"input":"EXPERIMENTAL ELECTRONIC","output":["Experimental","Electronic"]}
+{"input":"Experimental House","output":["Experimental","House"]}
+{"input":"experimental house","output":["Experimental","House"]}
+{"input":"EXPERIMENTAL HOUSE","output":["Experimental","House"]}
+{"input":"Experimental Jazz","output":["Experimental","Jazz"]}
+{"input":"experimental jazz","output":["Experimental","Jazz"]}
+{"input":"EXPERIMENTAL JAZZ","output":["Experimental","Jazz"]}
+{"input":"Experimental Rock","output":["Experimental","Rock"]}
+{"input":"experimental rock","output":["Experimental","Rock"]}
+{"input":"EXPERIMENTAL ROCK","output":["Experimental","Rock"]}
+{"input":"Experimental Techno","output":["Experimental","Techno"]}
+{"input":"experimental techno","output":["Experimental","Techno"]}
+{"input":"EXPERIMENTAL TECHNO","output":["Experimental","Techno"]}
+{"input":"Field Recording","output":["Field Recording"]}
+{"input":"field recording","output":["Field Recording"]}
+{"input":"FIELD RECORDING","output":["Field Recording"]}
+{"input":"Flamenco","output":["Flamenco"]}
+{"input":"flamenco","output":["Flamenco"]}
+{"input":"FLAMENCO","output":["Flamenco"]}
+{"input":"Folk","output":["Folk"]}
+{"input":"folk","output":["Folk"]}
+{"input":"FOLK","output":["Folk"]}
+{"input":"Folk Metal","output":["Folk Metal"]}
+{"input":"folk metal","output":["Folk Metal"]}
+{"input":"FOLK METAL","output":["Folk Metal"]}
+{"input":"Folk Rock","output":["Folk Rock"]}
+{"input":"folk rock","output":["Folk Rock"]}
+{"input":"FOLK ROCK","output":["Folk Rock"]}
+{"input":"Folk/Rock","output":["Folk Rock"]}
+{"input":"folk/rock","output":["Folk Rock"]}
+{"input":"FOLK/ROCK","output":["Folk Rock"]}
+{"input":"Folk-Rock","output":["Folk Rock"]}
+{"input":"folk-rock","output":["Folk Rock"]}
+{"input":"FOLK-ROCK","output":["Folk Rock"]}
+{"input":"Folk, World, & Country","output":["Folk, World, & Country"]}
+{"input":"folk, world, & country","output":["Folk, World, & Country"]}
+{"input":"FOLK, WORLD, & COUNTRY","output":["Folk, World, & Country"]}
+{"input":"Folk, World & Country","output":["Folk, World, & Country"]}
+{"input":"folk, world & country","output":["Folk, World, & Country"]}
+{"input":"FOLK, WORLD & COUNTRY","output":["Folk, World, & Country"]}
+{"input":"Footwork","output":["Footwork"]}
+{"input":"footwork","output":["Footwork"]}
+{"input":"FOOTWORK","output":["Footwork"]}
+{"input":"Free Funk","output":["Free Funk"]}
+{"input":"free funk","output":["Free Funk"]}
+{"input":"FREE FUNK","output":["Free Funk"]}
+{"input":"Free Improvisation","output":["Free Improvisation"]}
+{"input":"free improvisation","output":["Free Improvisation"]}
+{"input":"FREE IMPROVISATION","output":["Free Improvisation"]}
+{"input":"Free Jazz","output":["Free Jazz"]}
+{"input":"free jazz","output":["Free Jazz"]}
+{"input":"FREE JAZZ","output":["Free Jazz"]}
+{"input":"Free-Jazz","output":["Free Jazz"]}
+{"input":"free-jazz","output":["Free Jazz"]}
+{"input":"FREE-JAZZ","output":["Free Jazz"]}
+{"input":"Freestyle","output":["Freestyle"]}
+{"input":"freestyle","output":["Freestyle"]}
+{"input":"FREESTYLE","output":["Freestyle"]}
+{"input":"French House","output":["French House"]}
+{"input":"french house","output":["French House"]}
+{"input":"FRENCH HOUSE","output":["French House"]}
+{"input":"Funk","output":["Funk"]}
+{"input":"funk","output":["Funk"]}
+{"input":"FUNK","output":["Funk"]}
+{"input":"Funk Metal","output":["Funk Metal"]}
+{"input":"funk metal","output":["Funk Metal"]}
+{"input":"FUNK METAL","output":["Funk Metal"]}
+{"input":"Funk/Soul","output":["Funk / Soul"]}
+{"input":"funk/soul","output":["Funk / Soul"]}
+{"input":"FUNK/SOUL","output":["Funk / Soul"]}
+{"input":"Funk / Soul","output":["Funk / Soul"]}
+{"input":"funk / soul","output":["Funk / Soul"]}
+{"input":"FUNK / SOUL","output":["Funk / Soul"]}
+{"input":"Nu-Disco","output":["Nu-Disco"]}
+{"input":"nu-disco","output":["Nu-Disco"]}
+{"input":"NU-DISCO","output":["Nu-Disco"]}
+{"input":"Funky","output":["Funk"]}
+{"input":"funky","output":["Funk"]}
+{"input":"FUNKY","output":["Funk"]}
+{"input":"Fusion","output":["Fusion"]}
+{"input":"fusion","output":["Fusion"]}
+{"input":"FUSION","output":["Fusion"]}
+{"input":"Future Jazz","output":["Future Jazz"]}
+{"input":"future jazz","output":["Future Jazz"]}
+{"input":"FUTURE JAZZ","output":["Future Jazz"]}
+{"input":"Gabba","output":["Gabba"]}
+{"input":"gabba","output":["Gabba"]}
+{"input":"GABBA","output":["Gabba"]}
+{"input":"Gabber","output":["Gabba"]}
+{"input":"gabber","output":["Gabba"]}
+{"input":"GABBER","output":["Gabba"]}
+{"input":"Gangsta","output":["Gangsta"]}
+{"input":"gangsta","output":["Gangsta"]}
+{"input":"GANGSTA","output":["Gangsta"]}
+{"input":"Garage","output":["Garage"]}
+{"input":"garage","output":["Garage"]}
+{"input":"GARAGE","output":["Garage"]}
+{"input":"Garage House","output":["Garage House"]}
+{"input":"garage house","output":["Garage House"]}
+{"input":"GARAGE HOUSE","output":["Garage House"]}
+{"input":"Garage Pop","output":["Garage Pop"]}
+{"input":"garage pop","output":["Garage Pop"]}
+{"input":"GARAGE POP","output":["Garage Pop"]}
+{"input":"Garage Rock","output":["Garage Rock"]}
+{"input":"garage rock","output":["Garage Rock"]}
+{"input":"GARAGE ROCK","output":["Garage Rock"]}
+{"input":"Garage Rock/Alternative","output":["Garage Rock","Alternative"]}
+{"input":"garage rock/alternative","output":["Garage Rock","Alternative"]}
+{"input":"GARAGE ROCK/ALTERNATIVE","output":["Garage Rock","Alternative"]}
+{"input":"Ghetto","output":["Ghetto"]}
+{"input":"ghetto","output":["Ghetto"]}
+{"input":"GHETTO","output":["Ghetto"]}
+{"input":"Ghetto House","output":["Ghetto House"]}
+{"input":"ghetto house","output":["Ghetto House"]}
+{"input":"GHETTO HOUSE","output":["Ghetto House"]}
+{"input":"Glam","output":["Glam"]}
+{"input":"glam","output":["Glam"]}
+{"input":"GLAM","output":["Glam"]}
+{"input":"Glam Rock","output":["Glam Rock"]}
+{"input":"glam rock","output":["Glam Rock"]}
+{"input":"GLAM ROCK","output":["Glam Rock"]}
+{"input":"Glitch","output":["Glitch"]}
+{"input":"glitch","output":["Glitch"]}
+{"input":"GLITCH","output":["Glitch"]}
+{"input":"Glitch Hop","output":["Glitch Hop"]}
+{"input":"glitch hop","output":["Glitch Hop"]}
+{"input":"GLITCH HOP","output":["Glitch Hop"]}
+{"input":"Goa","output":["Goa","Trance"]}
+{"input":"goa","output":["Goa","Trance"]}
+{"input":"GOA","output":["Goa","Trance"]}
+{"input":"Goth","output":["Goth"]}
+{"input":"goth","output":["Goth"]}
+{"input":"GOTH","output":["Goth"]}
+{"input":"Goth Rock","output":["Goth Rock"]}
+{"input":"goth rock","output":["Goth Rock"]}
+{"input":"GOTH ROCK","output":["Goth Rock"]}
+{"input":"Goth Rock, New Wave","output":["Goth Rock","New Wave"]}
+{"input":"goth rock, new wave","output":["Goth Rock","New Wave"]}
+{"input":"GOTH ROCK, NEW WAVE","output":["Goth Rock","New Wave"]}
+{"input":"Gothic","output":["Gothic"]}
+{"input":"gothic","output":["Gothic"]}
+{"input":"GOTHIC","output":["Gothic"]}
+{"input":"Gothic Rock","output":["Gothic Rock"]}
+{"input":"gothic rock","output":["Gothic Rock"]}
+{"input":"GOTHIC ROCK","output":["Gothic Rock"]}
+{"input":"Grebo","output":["Grebo"]}
+{"input":"grebo","output":["Grebo"]}
+{"input":"GREBO","output":["Grebo"]}
+{"input":"Grime","output":["Grime"]}
+{"input":"grime","output":["Grime"]}
+{"input":"GRIME","output":["Grime"]}
+{"input":"Grunge","output":["Grunge"]}
+{"input":"grunge","output":["Grunge"]}
+{"input":"GRUNGE","output":["Grunge"]}
+{"input":"Gypsy Jazz","output":["Gypsy Jazz"]}
+{"input":"gypsy jazz","output":["Gypsy Jazz"]}
+{"input":"GYPSY JAZZ","output":["Gypsy Jazz"]}
+{"input":"Happy Hardcore","output":["Happy Hardcore"]}
+{"input":"happy hardcore","output":["Happy Hardcore"]}
+{"input":"HAPPY HARDCORE","output":["Happy Hardcore"]}
+{"input":"Hard Bop","output":["Hard Bop"]}
+{"input":"hard bop","output":["Hard Bop"]}
+{"input":"HARD BOP","output":["Hard Bop"]}
+{"input":"Hard House","output":["Hard House"]}
+{"input":"hard house","output":["Hard House"]}
+{"input":"HARD HOUSE","output":["Hard House"]}
+{"input":"Hard Rock","output":["Hard Rock"]}
+{"input":"hard rock","output":["Hard Rock"]}
+{"input":"HARD ROCK","output":["Hard Rock"]}
+{"input":"Hard Trance","output":["Hard Trance"]}
+{"input":"hard trance","output":["Hard Trance"]}
+{"input":"HARD TRANCE","output":["Hard Trance"]}
+{"input":"Hardcore","output":["Hardcore"]}
+{"input":"hardcore","output":["Hardcore"]}
+{"input":"HARDCORE","output":["Hardcore"]}
+{"input":"Hardcore Hip-Hop","output":["Hardcore Hip-Hop"]}
+{"input":"hardcore hip-hop","output":["Hardcore Hip-Hop"]}
+{"input":"HARDCORE HIP-HOP","output":["Hardcore Hip-Hop"]}
+{"input":"Hardrock","output":["Hard Rock"]}
+{"input":"Hardstyle","output":["Hardstyle"]}
+{"input":"hardstyle","output":["Hardstyle"]}
+{"input":"HARDSTYLE","output":["Hardstyle"]}
+{"input":"Heavy Metal","output":["Heavy Metal"]}
+{"input":"heavy metal","output":["Heavy Metal"]}
+{"input":"HEAVY METAL","output":["Heavy Metal"]}
+{"input":"Hi NRG","output":["Hi-NRG"]}
+{"input":"hi nrg","output":["Hi-NRG"]}
+{"input":"HI NRG","output":["Hi-NRG"]}
+{"input":"Hip Hop","output":["Hip Hop","Hip-Hop"]}
+{"input":"hip hop","output":["Hip Hop","Hip-Hop"]}
+{"input":"HIP HOP","output":["Hip Hop","Hip-Hop"]}
+{"input":"Hip-Hop","output":["Hip Hop","Hip-Hop"]}
+{"input":"hip-hop","output":["Hip Hop","Hip-Hop"]}
+{"input":"HIP-HOP","output":["Hip Hop","Hip-Hop"]}
+{"input":"Hip Hop, Pop","output":["Hip Hop","Hip-Hop","Pop"]}
+{"input":"hip hop, pop","output":["Hip Hop","Hip-Hop","Pop"]}
+{"input":"HIP HOP, POP","output":["Hip Hop","Hip-Hop","Pop"]}
+{"input":"Hip-Hop/Rap","output":["Hip Hop","Hip-Hop","Rap"]}
+{"input":"hip-hop/rap","output":["Hip Hop","Hip-Hop","Rap"]}
+{"input":"HIP-HOP/RAP","output":["Hip Hop","Hip-Hop","Rap"]}
+{"input":"Hip-Hop, Trip-Hop","output":["Hip Hop","Hip-Hop","Trip-Hop","Trip Hop"]}
+{"input":"hip-hop, trip-hop","output":["Hip Hop","Hip-Hop","Trip-Hop","Trip Hop"]}
+{"input":"HIP-HOP, TRIP-HOP","output":["Hip Hop","Hip-Hop","Trip-Hop","Trip Hop"]}
+{"input":"Hip-House","output":["Hip-House"]}
+{"input":"hip-house","output":["Hip-House"]}
+{"input":"HIP-HOUSE","output":["Hip-House"]}
+{"input":"Hippie Rock","output":["Hippie Rock"]}
+{"input":"hippie rock","output":["Hippie Rock"]}
+{"input":"HIPPIE ROCK","output":["Hippie Rock"]}
+{"input":"House","output":["House"]}
+{"input":"House Music","output":["House"]}
+{"input":"house music","output":["House"]}
+{"input":"HOUSE MUSIC","output":["House"]}
+{"input":"IDM","output":["IDM"]}
+{"input":"idm","output":["IDM"]}
+{"input":"Illbient","output":["Illbient"]}
+{"input":"illbient","output":["Illbient"]}
+{"input":"ILLBIENT","output":["Illbient"]}
+{"input":"Impressionist","output":["Impressionist"]}
+{"input":"impressionist","output":["Impressionist"]}
+{"input":"IMPRESSIONIST","output":["Impressionist"]}
+{"input":"Indie","output":["Indie"]}
+{"input":"indie","output":["Indie"]}
+{"input":"INDIE","output":["Indie"]}
+{"input":"Indie Dance","output":["Indie Dance"]}
+{"input":"indie dance","output":["Indie Dance"]}
+{"input":"INDIE DANCE","output":["Indie Dance"]}
+{"input":"Indie Pop","output":["Indie Pop"]}
+{"input":"indie pop","output":["Indie Pop"]}
+{"input":"INDIE POP","output":["Indie Pop"]}
+{"input":"Indie-pop","output":["Indie Pop"]}
+{"input":"indie-pop","output":["Indie Pop"]}
+{"input":"INDIE-POP","output":["Indie Pop"]}
+{"input":"Indie-Pop","output":["Indie Pop"]}
+{"input":"Indie Rock","output":["Indie Rock","Indie"]}
+{"input":"indie rock","output":["Indie Rock","Indie"]}
+{"input":"INDIE ROCK","output":["Indie Rock","Indie"]}
+{"input":"Indie-Rock","output":["Indie Rock","Indie"]}
+{"input":"indie-rock","output":["Indie Rock","Indie"]}
+{"input":"INDIE-ROCK","output":["Indie Rock","Indie"]}
+{"input":"Indie Rock, Folk","output":["Indie Rock","Folk"]}
+{"input":"indie rock, folk","output":["Indie Rock","Folk"]}
+{"input":"INDIE ROCK, FOLK","output":["Indie Rock","Folk"]}
+{"input":"Indiepop","output":["Indie Pop"]}
+{"input":"indiepop","output":["Indie Pop"]}
+{"input":"INDIEPOP","output":["Indie Pop"]}
+{"input":"Industrial","output":["Industrial"]}
+{"input":"industrial","output":["Industrial"]}
+{"input":"INDUSTRIAL","output":["Industrial"]}
+{"input":"Industrial Metal","output":["Industrial Metal"]}
+{"input":"industrial metal","output":["Industrial Metal"]}
+{"input":"INDUSTRIAL METAL","output":["Industrial Metal"]}
+{"input":"Industrial, Minimal Synth","output":["Industrial","Minimal Synth"]}
+{"input":"industrial, minimal synth","output":["Industrial","Minimal Synth"]}
+{"input":"INDUSTRIAL, MINIMAL SYNTH","output":["Industrial","Minimal Synth"]}
+{"input":"Industrial/Techno","output":["Industrial","Techno"]}
+{"input":"industrial/techno","output":["Industrial","Techno"]}
+{"input":"INDUSTRIAL/TECHNO","output":["Industrial","Techno"]}
+{"input":"Instrumental","output":["Instrumental"]}
+{"input":"instrumental","output":["Instrumental"]}
+{"input":"INSTRUMENTAL","output":["Instrumental"]}
+{"input":"Instrumental Hip-Hop","output":["Instrumental Hip-Hop"]}
+{"input":"instrumental hip-hop","output":["Instrumental Hip-Hop"]}
+{"input":"INSTRUMENTAL HIP-HOP","output":["Instrumental Hip-Hop"]}
+{"input":"Instrumental Rock","output":["Instrumental Rock"]}
+{"input":"instrumental rock","output":["Instrumental Rock"]}
+{"input":"INSTRUMENTAL ROCK","output":["Instrumental Rock"]}
+{"input":"Irish Folk","output":["Irish Folk"]}
+{"input":"irish folk","output":["Irish Folk"]}
+{"input":"IRISH FOLK","output":["Irish Folk"]}
+{"input":"Italo-Disco","output":["Italo-Disco"]}
+{"input":"italo-disco","output":["Italo-Disco"]}
+{"input":"ITALO-DISCO","output":["Italo-Disco"]}
+{"input":"Jazz","output":["Jazz"]}
+{"input":"jazz","output":["Jazz"]}
+{"input":"JAZZ","output":["Jazz"]}
+{"input":"Jazz Blues","output":["Jazz Blues"]}
+{"input":"jazz blues","output":["Jazz Blues"]}
+{"input":"JAZZ BLUES","output":["Jazz Blues"]}
+{"input":"Jazz-Blues","output":["Jazz Blues"]}
+{"input":"jazz-blues","output":["Jazz Blues"]}
+{"input":"JAZZ-BLUES","output":["Jazz Blues"]}
+{"input":"Jazz/Blues/Folk","output":["Jazz","Blues","Folk"]}
+{"input":"jazz/blues/folk","output":["Jazz","Blues","Folk"]}
+{"input":"JAZZ/BLUES/FOLK","output":["Jazz","Blues","Folk"]}
+{"input":"Jazz Funk","output":["Jazz Funk"]}
+{"input":"jazz funk","output":["Jazz Funk"]}
+{"input":"JAZZ FUNK","output":["Jazz Funk"]}
+{"input":"Jazz-Funk","output":["Jazz Funk"]}
+{"input":"jazz-funk","output":["Jazz Funk"]}
+{"input":"JAZZ-FUNK","output":["Jazz Funk"]}
+{"input":"Jazz Rock","output":["Jazz Rock"]}
+{"input":"jazz rock","output":["Jazz Rock"]}
+{"input":"JAZZ ROCK","output":["Jazz Rock"]}
+{"input":"Jazz-Rock","output":["Jazz Rock"]}
+{"input":"jazz-rock","output":["Jazz Rock"]}
+{"input":"JAZZ-ROCK","output":["Jazz Rock"]}
+{"input":"Jazz Vocal","output":["Jazz Vocal","Jazz","Vocal"]}
+{"input":"jazz vocal","output":["Jazz Vocal","Jazz","Vocal"]}
+{"input":"JAZZ VOCAL","output":["Jazz Vocal","Jazz","Vocal"]}
+{"input":"Jazzy Hip-Hop","output":["Jazzy Hip-Hop","Jazzy Hip Hop"]}
+{"input":"jazzy hip-hop","output":["Jazzy Hip-Hop","Jazzy Hip Hop"]}
+{"input":"JAZZY HIP-HOP","output":["Jazzy Hip-Hop","Jazzy Hip Hop"]}
+{"input":"Jazzy Hip Hop","output":["Jazzy Hip-Hop","Jazzy Hip Hop"]}
+{"input":"jazzy hip hop","output":["Jazzy Hip-Hop","Jazzy Hip Hop"]}
+{"input":"JAZZY HIP HOP","output":["Jazzy Hip-Hop","Jazzy Hip Hop"]}
+{"input":"Juke","output":["Juke"]}
+{"input":"juke","output":["Juke"]}
+{"input":"JUKE","output":["Juke"]}
+{"input":"Jump Blues","output":["Jump Blues"]}
+{"input":"jump blues","output":["Jump Blues"]}
+{"input":"JUMP BLUES","output":["Jump Blues"]}
+{"input":"Jumpstyle","output":["Jumpstyle"]}
+{"input":"jumpstyle","output":["Jumpstyle"]}
+{"input":"JUMPSTYLE","output":["Jumpstyle"]}
+{"input":"Jungle","output":["Jungle"]}
+{"input":"jungle","output":["Jungle"]}
+{"input":"JUNGLE","output":["Jungle"]}
+{"input":"Kosmische","output":["Kosmische","Krautrock"]}
+{"input":"kosmische","output":["Kosmische","Krautrock"]}
+{"input":"KOSMISCHE","output":["Kosmische","Krautrock"]}
+{"input":"Krautrock","output":["Krautrock"]}
+{"input":"krautrock","output":["Krautrock"]}
+{"input":"KRAUTROCK","output":["Krautrock"]}
+{"input":"Latin","output":["Latin"]}
+{"input":"latin","output":["Latin"]}
+{"input":"LATIN","output":["Latin"]}
+{"input":"Leftfield","output":["Leftfield"]}
+{"input":"leftfield","output":["Leftfield"]}
+{"input":"LEFTFIELD","output":["Leftfield"]}
+{"input":"Lo-Fi","output":["Lo-Fi"]}
+{"input":"lo-fi","output":["Lo-Fi"]}
+{"input":"LO-FI","output":["Lo-Fi"]}
+{"input":"Lo Fi","output":["Lo-Fi"]}
+{"input":"lo fi","output":["Lo-Fi"]}
+{"input":"LO FI","output":["Lo-Fi"]}
+{"input":"Lounge","output":["Lounge"]}
+{"input":"lounge","output":["Lounge"]}
+{"input":"LOUNGE","output":["Lounge"]}
+{"input":"Lovers Rock","output":["Lovers Rock"]}
+{"input":"lovers rock","output":["Lovers Rock"]}
+{"input":"LOVERS ROCK","output":["Lovers Rock"]}
+{"input":"Madchester","output":["Madchester"]}
+{"input":"madchester","output":["Madchester"]}
+{"input":"MADCHESTER","output":["Madchester"]}
+{"input":"Mambo","output":["Mambo"]}
+{"input":"mambo","output":["Mambo"]}
+{"input":"MAMBO","output":["Mambo"]}
+{"input":"Math Rock","output":["Math Rock"]}
+{"input":"math rock","output":["Math Rock"]}
+{"input":"MATH ROCK","output":["Math Rock"]}
+{"input":"Metal","output":["Metal"]}
+{"input":"metal","output":["Metal"]}
+{"input":"METAL","output":["Metal"]}
+{"input":"Minimal","output":["Minimal"]}
+{"input":"minimal","output":["Minimal"]}
+{"input":"MINIMAL","output":["Minimal"]}
+{"input":"Minimal House","output":["Minimal House"]}
+{"input":"minimal house","output":["Minimal House"]}
+{"input":"MINIMAL HOUSE","output":["Minimal House"]}
+{"input":"Minimal Synth","output":["Minimal Synth"]}
+{"input":"minimal synth","output":["Minimal Synth"]}
+{"input":"MINIMAL SYNTH","output":["Minimal Synth"]}
+{"input":"Minimal Techno","output":["Minimal Techno"]}
+{"input":"minimal techno","output":["Minimal Techno"]}
+{"input":"MINIMAL TECHNO","output":["Minimal Techno"]}
+{"input":"Minimal Wave","output":["Minimal Wave"]}
+{"input":"minimal wave","output":["Minimal Wave"]}
+{"input":"MINIMAL WAVE","output":["Minimal Wave"]}
+{"input":"Minimalism","output":["Minimalism"]}
+{"input":"minimalism","output":["Minimalism"]}
+{"input":"MINIMALISM","output":["Minimalism"]}
+{"input":"Modal","output":["Modal"]}
+{"input":"modal","output":["Modal"]}
+{"input":"MODAL","output":["Modal"]}
+{"input":"Modern Classical","output":["Modern Classical"]}
+{"input":"modern classical","output":["Modern Classical"]}
+{"input":"MODERN CLASSICAL","output":["Modern Classical"]}
+{"input":"Moog","output":["Moog"]}
+{"input":"moog","output":["Moog"]}
+{"input":"MOOG","output":["Moog"]}
+{"input":"Motorik","output":["Motorik","Krautrock"]}
+{"input":"motorik","output":["Motorik","Krautrock"]}
+{"input":"MOTORIK","output":["Motorik","Krautrock"]}
+{"input":"Musique Concrete","output":["Musique Concrete"]}
+{"input":"musique concrete","output":["Musique Concrete"]}
+{"input":"MUSIQUE CONCRETE","output":["Musique Concrete"]}
+{"input":"Neo-Classical","output":["Neo-Classical"]}
+{"input":"neo-classical","output":["Neo-Classical"]}
+{"input":"NEO-CLASSICAL","output":["Neo-Classical"]}
+{"input":"Neo-classical","output":["Neo-Classical"]}
+{"input":"Neo Classical","output":["Neo-Classical"]}
+{"input":"neo classical","output":["Neo-Classical"]}
+{"input":"NEO CLASSICAL","output":["Neo-Classical"]}
+{"input":"Neoclassical","output":["Neo-Classical"]}
+{"input":"neoclassical","output":["Neo-Classical"]}
+{"input":"NEOCLASSICAL","output":["Neo-Classical"]}
+{"input":"Neofolk","output":["Neo-Folk"]}
+{"input":"neofolk","output":["Neo-Folk"]}
+{"input":"NEOFOLK","output":["Neo-Folk"]}
+{"input":"New Age","output":["New Age"]}
+{"input":"new age","output":["New Age"]}
+{"input":"NEW AGE","output":["New Age"]}
+{"input":"New Beat","output":["New Beat"]}
+{"input":"new beat","output":["New Beat"]}
+{"input":"NEW BEAT","output":["New Beat"]}
+{"input":"New Romantic","output":["New Romantic"]}
+{"input":"new romantic","output":["New Romantic"]}
+{"input":"NEW ROMANTIC","output":["New Romantic"]}
+{"input":"New Wave","output":["New Wave"]}
+{"input":"new wave","output":["New Wave"]}
+{"input":"NEW WAVE","output":["New Wave"]}
+{"input":"New-Wave","output":["New Wave"]}
+{"input":"new-wave","output":["New Wave"]}
+{"input":"NEW-WAVE","output":["New Wave"]}
+{"input":"New Wave / New Romantic","output":["New Wave","New Romantic"]}
+{"input":"new wave / new romantic","output":["New Wave","New Romantic"]}
+{"input":"NEW WAVE / NEW ROMANTIC","output":["New Wave","New Romantic"]}
+{"input":"New Wave; Synth-pop","output":["New Wave","Synth-pop"]}
+{"input":"new wave; synth-pop","output":["New Wave","Synth-pop"]}
+{"input":"NEW WAVE; SYNTH-POP","output":["New Wave","Synth-pop"]}
+{"input":"No-Wave","output":["No-Wave"]}
+{"input":"no-wave","output":["No-Wave"]}
+{"input":"NO-WAVE","output":["No-Wave"]}
+{"input":"Noise","output":["Noise"]}
+{"input":"noise","output":["Noise"]}
+{"input":"NOISE","output":["Noise"]}
+{"input":"Noise Rock","output":["Noise Rock"]}
+{"input":"noise rock","output":["Noise Rock"]}
+{"input":"NOISE ROCK","output":["Noise Rock"]}
+{"input":"Noisepop","output":["Noise Pop"]}
+{"input":"noisepop","output":["Noise Pop"]}
+{"input":"NOISEPOP","output":["Noise Pop"]}
+{"input":"Non-Music","output":["Non-Music"]}
+{"input":"Northern Soul","output":["Northern Soul"]}
+{"input":"northern soul","output":["Northern Soul"]}
+{"input":"NORTHERN SOUL","output":["Northern Soul"]}
+{"input":"Nu Disco","output":["Nu-Disco"]}
+{"input":"nu disco","output":["Nu-Disco"]}
+{"input":"NU DISCO","output":["Nu-Disco"]}
+{"input":"Nu Metal","output":["Nu-Metal"]}
+{"input":"nu metal","output":["Nu-Metal"]}
+{"input":"NU METAL","output":["Nu-Metal"]}
+{"input":"NuDisco","output":["Nu-Disco"]}
+{"input":"nudisco","output":["Nu-Disco"]}
+{"input":"NUDISCO","output":["Nu-Disco"]}
+{"input":"Oi","output":["Oi"]}
+{"input":"oi","output":["Oi"]}
+{"input":"OI","output":["Oi"]}
+{"input":"Opera","output":["Opera"]}
+{"input":"opera","output":["Opera"]}
+{"input":"OPERA","output":["Opera"]}
+{"input":"Orchestral Pop","output":["Orchestral Pop"]}
+{"input":"orchestral pop","output":["Orchestral Pop"]}
+{"input":"ORCHESTRAL POP","output":["Orchestral Pop"]}
+{"input":"Orchestral Techno","output":["Orchestral Techno"]}
+{"input":"orchestral techno","output":["Orchestral Techno"]}
+{"input":"ORCHESTRAL TECHNO","output":["Orchestral Techno"]}
+{"input":"OST","output":["Stage & Screen","Score","Soundtrack"]}
+{"input":"ost","output":["Stage & Screen","Score","Soundtrack"]}
+{"input":"Pop","output":["Pop"]}
+{"input":"pop","output":["Pop"]}
+{"input":"POP","output":["Pop"]}
+{"input":"Pop Alternative","output":["Pop","Alternative"]}
+{"input":"pop alternative","output":["Pop","Alternative"]}
+{"input":"POP ALTERNATIVE","output":["Pop","Alternative"]}
+{"input":"Pop Punk","output":["Pop Punk"]}
+{"input":"pop punk","output":["Pop Punk"]}
+{"input":"POP PUNK","output":["Pop Punk"]}
+{"input":"Pop Rap","output":["Pop Rap"]}
+{"input":"pop rap","output":["Pop Rap"]}
+{"input":"POP RAP","output":["Pop Rap"]}
+{"input":"Pop Rock","output":["Pop Rock"]}
+{"input":"pop rock","output":["Pop Rock"]}
+{"input":"POP ROCK","output":["Pop Rock"]}
+{"input":"Pop/Rock","output":["Pop/Rock"]}
+{"input":"pop/rock","output":["Pop/Rock"]}
+{"input":"POP/ROCK","output":["Pop/Rock"]}
+{"input":"Pop-Rock","output":["Pop Rock"]}
+{"input":"pop-rock","output":["Pop Rock"]}
+{"input":"POP-ROCK","output":["Pop Rock"]}
+{"input":"Pop Soul","output":["Pop Soul"]}
+{"input":"pop soul","output":["Pop Soul"]}
+{"input":"POP SOUL","output":["Pop Soul"]}
+{"input":"Post Bop","output":["Post Bop"]}
+{"input":"post bop","output":["Post Bop"]}
+{"input":"POST BOP","output":["Post Bop"]}
+{"input":"Post-Dubstep","output":["Post Dubstep"]}
+{"input":"post-dubstep","output":["Post Dubstep"]}
+{"input":"POST-DUBSTEP","output":["Post Dubstep"]}
+{"input":"Post Punk","output":["Post-Punk"]}
+{"input":"post punk","output":["Post-Punk"]}
+{"input":"POST PUNK","output":["Post-Punk"]}
+{"input":"Post-Punk","output":["Post-Punk"]}
+{"input":"post-punk","output":["Post-Punk"]}
+{"input":"POST-PUNK","output":["Post-Punk"]}
+{"input":"Post-punk","output":["Post-Punk"]}
+{"input":"Post Rock","output":["Post-Rock"]}
+{"input":"post rock","output":["Post-Rock"]}
+{"input":"POST ROCK","output":["Post-Rock"]}
+{"input":"Post-Rock","output":["Post-Rock"]}
+{"input":"post-rock","output":["Post-Rock"]}
+{"input":"POST-ROCK","output":["Post-Rock"]}
+{"input":"Post-rock","output":["Post-Rock"]}
+{"input":"Power Electronics","output":["Power Electronics"]}
+{"input":"power electronics","output":["Power Electronics"]}
+{"input":"POWER ELECTRONICS","output":["Power Electronics"]}
+{"input":"Power Pop","output":["Power Pop"]}
+{"input":"power pop","output":["Power Pop"]}
+{"input":"POWER POP","output":["Power Pop"]}
+{"input":"Prog Rock","output":["Prog Rock","Prog-Rock","Progressive Rock","Progressive"]}
+{"input":"prog rock","output":["Prog Rock","Prog-Rock","Progressive Rock","Progressive"]}
+{"input":"PROG ROCK","output":["Prog Rock","Prog-Rock","Progressive Rock","Progressive"]}
+{"input":"Prog-Rock","output":["Prog Rock","Prog-Rock","Progressive Rock","Progressive"]}
+{"input":"prog-rock","output":["Prog Rock","Prog-Rock","Progressive Rock","Progressive"]}
+{"input":"PROG-ROCK","output":["Prog Rock","Prog-Rock","Progressive Rock","Progressive"]}
+{"input":"Progressive Rock","output":["Prog Rock","Prog-Rock","Progressive Rock","Progressive"]}
+{"input":"progressive rock","output":["Prog Rock","Prog-Rock","Progressive Rock","Progressive"]}
+{"input":"PROGRESSIVE ROCK","output":["Prog Rock","Prog-Rock","Progressive Rock","Progressive"]}
+{"input":"Progressive Electronic","output":["Progressive Electronic"]}
+{"input":"progressive electronic","output":["Progressive Electronic"]}
+{"input":"PROGRESSIVE ELECTRONIC","output":["Progressive Electronic"]}
+{"input":"Progressive House","output":["Progressive House"]}
+{"input":"progressive house","output":["Progressive House"]}
+{"input":"PROGRESSIVE HOUSE","output":["Progressive House"]}
+{"input":"Progressive Trance","output":["Progressive Trance"]}
+{"input":"progressive trance","output":["Progressive Trance"]}
+{"input":"PROGRESSIVE TRANCE","output":["Progressive Trance"]}
+{"input":"Proto-Punk","output":["Proto-Punk"]}
+{"input":"proto-punk","output":["Proto-Punk"]}
+{"input":"PROTO-PUNK","output":["Proto-Punk"]}
+{"input":"Psy-Trance","output":["Psy-Trance"]}
+{"input":"psy-trance","output":["Psy-Trance"]}
+{"input":"PSY-TRANCE","output":["Psy-Trance"]}
+{"input":"Psychadelic","output":["Psychedelic","Psychedelia"]}
+{"input":"psychadelic","output":["Psychedelic","Psychedelia"]}
+{"input":"PSYCHADELIC","output":["Psychedelic","Psychedelia"]}
+{"input":"Psychedelia","output":["Psychedelic","Psychedelia"]}
+{"input":"psychedelia","output":["Psychedelic","Psychedelia"]}
+{"input":"PSYCHEDELIA","output":["Psychedelic","Psychedelia"]}
+{"input":"Psychedelic","output":["Psychedelic","Psychedelia"]}
+{"input":"psychedelic","output":["Psychedelic","Psychedelia"]}
+{"input":"PSYCHEDELIC","output":["Psychedelic","Psychedelia"]}
+{"input":"Psychedelic Punk","output":["Psychedelic Punk"]}
+{"input":"psychedelic punk","output":["Psychedelic Punk"]}
+{"input":"PSYCHEDELIC PUNK","output":["Psychedelic Punk"]}
+{"input":"Psychedelic Rock","output":["Psychedelic Rock"]}
+{"input":"psychedelic rock","output":["Psychedelic Rock"]}
+{"input":"PSYCHEDELIC ROCK","output":["Psychedelic Rock"]}
+{"input":"Psychobilly","output":["Psychobilly"]}
+{"input":"psychobilly","output":["Psychobilly"]}
+{"input":"PSYCHOBILLY","output":["Psychobilly"]}
+{"input":"Pub Rock","output":["Pub Rock"]}
+{"input":"pub rock","output":["Pub Rock"]}
+{"input":"PUB ROCK","output":["Pub Rock"]}
+{"input":"Punk","output":["Punk"]}
+{"input":"punk","output":["Punk"]}
+{"input":"PUNK","output":["Punk"]}
+{"input":"Punk Pop","output":["Punk Pop"]}
+{"input":"punk pop","output":["Punk Pop"]}
+{"input":"PUNK POP","output":["Punk Pop"]}
+{"input":"Punk Rock","output":["Punk-Rock"]}
+{"input":"punk rock","output":["Punk-Rock"]}
+{"input":"PUNK ROCK","output":["Punk-Rock"]}
+{"input":"Punk-Rock","output":["Punk-Rock"]}
+{"input":"punk-rock","output":["Punk-Rock"]}
+{"input":"PUNK-ROCK","output":["Punk-Rock"]}
+{"input":"R&B","output":["R&B"]}
+{"input":"r&b","output":["R&B"]}
+{"input":"Ragga","output":["Ragga"]}
+{"input":"ragga","output":["Ragga"]}
+{"input":"RAGGA","output":["Ragga"]}
+{"input":"Rap","output":["Rap"]}
+{"input":"rap","output":["Rap"]}
+{"input":"RAP","output":["Rap"]}
+{"input":"Rap & Hip Hop","output":["Rap","Hip Hop","Hip-Hop"]}
+{"input":"rap & hip hop","output":["Rap","Hip Hop","Hip-Hop"]}
+{"input":"RAP & HIP HOP","output":["Rap","Hip Hop","Hip-Hop"]}
+{"input":"Rap & Hip-Hop","output":["Rap","Hip Hop","Hip-Hop"]}
+{"input":"rap & hip-hop","output":["Rap","Hip Hop","Hip-Hop"]}
+{"input":"RAP & HIP-HOP","output":["Rap","Hip Hop","Hip-Hop"]}
+{"input":"Rave","output":["Rave"]}
+{"input":"rave","output":["Rave"]}
+{"input":"RAVE","output":["Rave"]}
+{"input":"Regenerative Synthesis","output":["Regenerative Synthesis"]}
+{"input":"regenerative synthesis","output":["Regenerative Synthesis"]}
+{"input":"REGENERATIVE SYNTHESIS","output":["Regenerative Synthesis"]}
+{"input":"Reggae","output":["Reggae"]}
+{"input":"reggae","output":["Reggae"]}
+{"input":"REGGAE","output":["Reggae"]}
+{"input":"Reggae Dub","output":["Reggae","Dub","Dub Reggae"]}
+{"input":"reggae dub","output":["Reggae","Dub","Dub Reggae"]}
+{"input":"REGGAE DUB","output":["Reggae","Dub","Dub Reggae"]}
+{"input":"Reggae, Dub","output":["Reggae","Dub","Dub Reggae"]}
+{"input":"reggae, dub","output":["Reggae","Dub","Dub Reggae"]}
+{"input":"REGGAE, DUB","output":["Reggae","Dub","Dub Reggae"]}
+{"input":"Reggae & Dub","output":["Reggae","Dub","Dub Reggae"]}
+{"input":"reggae & dub","output":["Reggae","Dub","Dub Reggae"]}
+{"input":"REGGAE & DUB","output":["Reggae","Dub","Dub Reggae"]}
+{"input":"Reggea","output":["Reggae"]}
+{"input":"reggea","output":["Reggae"]}
+{"input":"REGGEA","output":["Reggae"]}
+{"input":"Remixes","output":["Remixes"]}
+{"input":"remixes","output":["Remixes"]}
+{"input":"REMIXES","output":["Remixes"]}
+{"input":"Rhythm & Blues","output":["Rhythm & Blues","R&B","RnB"]}
+{"input":"rhythm & blues","output":["Rhythm & Blues","R&B","RnB"]}
+{"input":"RHYTHM & BLUES","output":["Rhythm & Blues","R&B","RnB"]}
+{"input":"RnB","output":["Rhythm & Blues","R&B","RnB"]}
+{"input":"rnb","output":["Rhythm & Blues","R&B","RnB"]}
+{"input":"RNB","output":["Rhythm & Blues","R&B","RnB"]}
+{"input":"RnB/Swing","output":["Rhythm & Blues","R&B","RnB","Swing"]}
+{"input":"rnb/swing","output":["Rhythm & Blues","R&B","RnB","Swing"]}
+{"input":"RNB/SWING","output":["Rhythm & Blues","R&B","RnB","Swing"]}
+{"input":"Rock","output":["Rock"]}
+{"input":"rock","output":["Rock"]}
+{"input":"ROCK","output":["Rock"]}
+{"input":"Rockabilly","output":["Rock-a-billy","Rockabilly"]}
+{"input":"rockabilly","output":["Rock-a-billy","Rockabilly"]}
+{"input":"ROCKABILLY","output":["Rock-a-billy","Rockabilly"]}
+{"input":"Rocksteady","output":["Rocksteady"]}
+{"input":"rocksteady","output":["Rocksteady"]}
+{"input":"ROCKSTEADY","output":["Rocksteady"]}
+{"input":"Rock & Roll","output":["Rock & Roll","Rock And Roll"]}
+{"input":"rock & roll","output":["Rock & Roll","Rock And Roll"]}
+{"input":"ROCK & ROLL","output":["Rock & Roll","Rock And Roll"]}
+{"input":"Romantic","output":["Romantic"]}
+{"input":"romantic","output":["Romantic"]}
+{"input":"ROMANTIC","output":["Romantic"]}
+{"input":"Roots","output":["Roots","Roots Reggae"]}
+{"input":"roots","output":["Roots","Roots Reggae"]}
+{"input":"ROOTS","output":["Roots","Roots Reggae"]}
+{"input":"Roots Reggae","output":["Roots","Roots Reggae"]}
+{"input":"roots reggae","output":["Roots","Roots Reggae"]}
+{"input":"ROOTS REGGAE","output":["Roots","Roots Reggae"]}
+{"input":"Rumba","output":["Rumba"]}
+{"input":"rumba","output":["Rumba"]}
+{"input":"RUMBA","output":["Rumba"]}
+{"input":"Samba","output":["Samba"]}
+{"input":"samba","output":["Samba"]}
+{"input":"SAMBA","output":["Samba"]}
+{"input":"Score","output":["Score"]}
+{"input":"score","output":["Score"]}
+{"input":"SCORE","output":["Score"]}
+{"input":"Shoegaze","output":["Shoegaze"]}
+{"input":"shoegaze","output":["Shoegaze"]}
+{"input":"SHOEGAZE","output":["Shoegaze"]}
+{"input":"Shoegazer","output":["Shoegaze"]}
+{"input":"shoegazer","output":["Shoegaze"]}
+{"input":"SHOEGAZER","output":["Shoegaze"]}
+{"input":"Singer-songwriter","output":["Singer Songwriter"]}
+{"input":"singer-songwriter","output":["Singer Songwriter"]}
+{"input":"SINGER-SONGWRITER","output":["Singer Songwriter"]}
+{"input":"Singer Songwriter","output":["Singer Songwriter"]}
+{"input":"singer songwriter","output":["Singer Songwriter"]}
+{"input":"SINGER SONGWRITER","output":["Singer Songwriter"]}
+{"input":"Singer/Songwriter","output":["Singer Songwriter"]}
+{"input":"singer/songwriter","output":["Singer Songwriter"]}
+{"input":"SINGER/SONGWRITER","output":["Singer Songwriter"]}
+{"input":"Ska","output":["Ska"]}
+{"input":"ska","output":["Ska"]}
+{"input":"SKA","output":["Ska"]}
+{"input":"Slow Rock","output":["Slow Rock"]}
+{"input":"slow rock","output":["Slow Rock"]}
+{"input":"SLOW ROCK","output":["Slow Rock"]}
+{"input":"Smooth Jazz","output":["Smooth Jazz"]}
+{"input":"smooth jazz","output":["Smooth Jazz"]}
+{"input":"SMOOTH JAZZ","output":["Smooth Jazz"]}
+{"input":"Soca","output":["Soca"]}
+{"input":"soca","output":["Soca"]}
+{"input":"SOCA","output":["Soca"]}
+{"input":"Soft Rock","output":["Soft Rock"]}
+{"input":"soft rock","output":["Soft Rock"]}
+{"input":"SOFT ROCK","output":["Soft Rock"]}
+{"input":"Soul","output":["Soul"]}
+{"input":"soul","output":["Soul"]}
+{"input":"SOUL","output":["Soul"]}
+{"input":"Soul-Jazz","output":["Soul-Jazz"]}
+{"input":"soul-jazz","output":["Soul-Jazz"]}
+{"input":"SOUL-JAZZ","output":["Soul-Jazz"]}
+{"input":"Sound Collage","output":["Sound Collage"]}
+{"input":"sound collage","output":["Sound Collage"]}
+{"input":"SOUND COLLAGE","output":["Sound Collage"]}
+{"input":"Soundscape","output":["Soundscape"]}
+{"input":"soundscape","output":["Soundscape"]}
+{"input":"SOUNDSCAPE","output":["Soundscape"]}
+{"input":"Soundtrack","output":["Soundtrack","Stage & Screen","Score"]}
+{"input":"soundtrack","output":["Soundtrack","Stage & Screen","Score"]}
+{"input":"SOUNDTRACK","output":["Soundtrack","Stage & Screen","Score"]}
+{"input":"Space","output":["Space"]}
+{"input":"space","output":["Space"]}
+{"input":"SPACE","output":["Space"]}
+{"input":"Space-Age","output":["Space-Age"]}
+{"input":"space-age","output":["Space-Age"]}
+{"input":"SPACE-AGE","output":["Space-Age"]}
+{"input":"Space Rock","output":["Space Rock"]}
+{"input":"space rock","output":["Space Rock"]}
+{"input":"SPACE ROCK","output":["Space Rock"]}
+{"input":"Spoken","output":["Spoken"]}
+{"input":"spoken","output":["Spoken"]}
+{"input":"SPOKEN","output":["Spoken"]}
+{"input":"Spoken Word","output":["Spoken Word"]}
+{"input":"spoken word","output":["Spoken Word"]}
+{"input":"SPOKEN WORD","output":["Spoken Word"]}
+{"input":"Stage & Screen","output":["Soundtrack","Stage & Screen","Score"]}
+{"input":"stage & screen","output":["Soundtrack","Stage & Screen","Score"]}
+{"input":"STAGE & SCREEN","output":["Soundtrack","Stage & Screen","Score"]}
+{"input":"Stoner Rock","output":["Stoner Rock"]}
+{"input":"stoner rock","output":["Stoner Rock"]}
+{"input":"STONER ROCK","output":["Stoner Rock"]}
+{"input":"Swing","output":["Swing"]}
+{"input":"swing","output":["Swing"]}
+{"input":"SWING","output":["Swing"]}
+{"input":"Symphonic Rock","output":["Symphonic Rock"]}
+{"input":"symphonic rock","output":["Symphonic Rock"]}
+{"input":"SYMPHONIC ROCK","output":["Symphonic Rock"]}
+{"input":"Synth","output":["Synth"]}
+{"input":"synth","output":["Synth"]}
+{"input":"SYNTH","output":["Synth"]}
+{"input":"Synth-pop","output":["Synth-pop"]}
+{"input":"synth-pop","output":["Synth-pop"]}
+{"input":"SYNTH-POP","output":["Synth-pop"]}
+{"input":"Synth-Pop","output":["Synth-pop"]}
+{"input":"Synth Pop","output":["Synth-pop"]}
+{"input":"synth pop","output":["Synth-pop"]}
+{"input":"SYNTH POP","output":["Synth-pop"]}
+{"input":"Synth-pop, New Wave, Pop","output":["Synth-pop","New Wave","Pop"]}
+{"input":"synth-pop, new wave, pop","output":["Synth-pop","New Wave","Pop"]}
+{"input":"SYNTH-POP, NEW WAVE, POP","output":["Synth-pop","New Wave","Pop"]}
+{"input":"Synth-wave","output":["Synth-wave","Synthwave"]}
+{"input":"synth-wave","output":["Synth-wave","Synthwave"]}
+{"input":"SYNTH-WAVE","output":["Synth-wave","Synthwave"]}
+{"input":"Synthie-Pop","output":["Synth-pop"]}
+{"input":"synthie-pop","output":["Synth-pop"]}
+{"input":"SYNTHIE-POP","output":["Synth-pop"]}
+{"input":"Synthiepop","output":["Synth-pop"]}
+{"input":"synthiepop","output":["Synth-pop"]}
+{"input":"SYNTHIEPOP","output":["Synth-pop"]}
+{"input":"Synthpop","output":["Synth-pop"]}
+{"input":"synthpop","output":["Synth-pop"]}
+{"input":"SYNTHPOP","output":["Synth-pop"]}
+{"input":"SynthPop","output":["Synth-pop"]}
+{"input":"Synthpunk","output":["Synth-punk","Punk"]}
+{"input":"synthpunk","output":["Synth-punk","Punk"]}
+{"input":"SYNTHPUNK","output":["Synth-punk","Punk"]}
+{"input":"Synthwave","output":["Synth-wave","Synthwave"]}
+{"input":"synthwave","output":["Synth-wave","Synthwave"]}
+{"input":"SYNTHWAVE","output":["Synth-wave","Synthwave"]}
+{"input":"Tech House","output":["Tech House"]}
+{"input":"tech house","output":["Tech House"]}
+{"input":"TECH HOUSE","output":["Tech House"]}
+{"input":"Techno","output":["Techno"]}
+{"input":"Techno, Experimental","output":["Techno","Experimental"]}
+{"input":"techno, experimental","output":["Techno","Experimental"]}
+{"input":"TECHNO, EXPERIMENTAL","output":["Techno","Experimental"]}
+{"input":"Techno House","output":["Techno House"]}
+{"input":"techno house","output":["Techno House"]}
+{"input":"TECHNO HOUSE","output":["Techno House"]}
+{"input":"Techno-Industrial","output":["Techno-Industrial","Techno Industrial","Techno","Industrial"]}
+{"input":"techno-industrial","output":["Techno-Industrial","Techno Industrial","Techno","Industrial"]}
+{"input":"TECHNO-INDUSTRIAL","output":["Techno-Industrial","Techno Industrial","Techno","Industrial"]}
+{"input":"Techno-pop","output":["Techno-pop","Technopop"]}
+{"input":"techno-pop","output":["Techno-pop","Technopop"]}
+{"input":"TECHNO-POP","output":["Techno-pop","Technopop"]}
+{"input":"Techno/Rock","output":["Techno","Rock"]}
+{"input":"techno/rock","output":["Techno","Rock"]}
+{"input":"TECHNO/ROCK","output":["Techno","Rock"]}
+{"input":"Technopop","output":["Techno-pop","Technopop"]}
+{"input":"technopop","output":["Techno-pop","Technopop"]}
+{"input":"TECHNOPOP","output":["Techno-pop","Technopop"]}
+{"input":"Texas Blues","output":["Texas Blues"]}
+{"input":"texas blues","output":["Texas Blues"]}
+{"input":"TEXAS BLUES","output":["Texas Blues"]}
+{"input":"Trance","output":["Trance"]}
+{"input":"trance","output":["Trance"]}
+{"input":"TRANCE","output":["Trance"]}
+{"input":"Trap","output":["Trap"]}
+{"input":"trap","output":["Trap"]}
+{"input":"TRAP","output":["Trap"]}
+{"input":"Tribal","output":["Tribal"]}
+{"input":"tribal","output":["Tribal"]}
+{"input":"TRIBAL","output":["Tribal"]}
+{"input":"Tribal House","output":["Tribal House"]}
+{"input":"tribal house","output":["Tribal House"]}
+{"input":"TRIBAL HOUSE","output":["Tribal House"]}
+{"input":"Trip Hop","output":["Trip Hop","Trip-Hop"]}
+{"input":"trip hop","output":["Trip Hop","Trip-Hop"]}
+{"input":"TRIP HOP","output":["Trip Hop","Trip-Hop"]}
+{"input":"Trip-Hop","output":["Trip Hop","Trip-Hop"]}
+{"input":"trip-hop","output":["Trip Hop","Trip-Hop"]}
+{"input":"TRIP-HOP","output":["Trip Hop","Trip-Hop"]}
+{"input":"Tropical House","output":["Tropical House"]}
+{"input":"tropical house","output":["Tropical House"]}
+{"input":"TROPICAL HOUSE","output":["Tropical House"]}
+{"input":"Turntablism","output":["Turntablism","DJ"]}
+{"input":"turntablism","output":["Turntablism","DJ"]}
+{"input":"TURNTABLISM","output":["Turntablism","DJ"]}
+{"input":"Twee Pop","output":["Twee Pop"]}
+{"input":"twee pop","output":["Twee Pop"]}
+{"input":"TWEE POP","output":["Twee Pop"]}
+{"input":"UK Bass","output":["UK Bass","Bass","Bass Music"]}
+{"input":"uk bass","output":["UK Bass","Bass","Bass Music"]}
+{"input":"UK BASS","output":["UK Bass","Bass","Bass Music"]}
+{"input":"UK Garage","output":["UK Garage"]}
+{"input":"uk garage","output":["UK Garage"]}
+{"input":"UK GARAGE","output":["UK Garage"]}
+{"input":"UK Garage, Dubstep, Techno","output":["UK Garage","Dubstep","Techno"]}
+{"input":"uk garage, dubstep, techno","output":["UK Garage","Dubstep","Techno"]}
+{"input":"UK GARAGE, DUBSTEP, TECHNO","output":["UK Garage","Dubstep","Techno"]}
+{"input":"Unclassifiable","output":["Unclassifiable"]}
+{"input":"unclassifiable","output":["Unclassifiable"]}
+{"input":"UNCLASSIFIABLE","output":["Unclassifiable"]}
+{"input":"Vocal","output":["Vocal"]}
+{"input":"vocal","output":["Vocal"]}
+{"input":"VOCAL","output":["Vocal"]}
+{"input":"Wave","output":["Wave"]}
+{"input":"wave","output":["Wave"]}
+{"input":"WAVE","output":["Wave"]}
+{"input":"Witch House","output":["Witch House"]}
+{"input":"witch house","output":["Witch House"]}
+{"input":"WITCH HOUSE","output":["Witch House"]}
+{"input":"World","output":["World"]}
+{"input":"world","output":["World"]}
+{"input":"WORLD","output":["World"]}
+{"input":"World Music","output":["World Music"]}
+{"input":"world music","output":["World Music"]}
+{"input":"WORLD MUSIC","output":["World Music"]}
+{"input":"Bebop","output":["Bebop","Jazz"]}
+{"input":"bebop","output":["Bebop","Jazz"]}
+{"input":"BEBOP","output":["Bebop","Jazz"]}
+{"input":"Modern Folk / Indie","output":["Modern Folk","Indie"]}
+{"input":"modern folk / indie","output":["Modern Folk","Indie"]}
+{"input":"MODERN FOLK / INDIE","output":["Modern Folk","Indie"]}
+{"input":"Folk Pop; Pop; Folk","output":["Folk Pop","Folk","Pop"]}
+{"input":"HH; Hip-Hop; hip hop","output":["Hip-Hop","Hip Hop"]}
+{"input":"Mn;DT;Mn","output":["Minimal","Dub Techno"]}
+{"input":"Electronic; Dub Techno; Ambient","output":["Electronic","Dub Techno","Ambient"]}
+{"input":"  Mn  ","output":["Minimal"]}
+{"input":"Jazz; jazz; JAZZ","output":["Jazz"]}
+{"input":"Hauntological Library Music","output":["Hauntological Library Music"]}
+{"input":"Shoegaze Revival; IndieRock","output":["Shoegaze Revival","Indie Rock","Indie"]}
+{"input":"  ;  ; ","output":[]}
+{"input":"Southern Rock;Rock;Southern Rock","output":["Southern Rock","Rock"]}
+{"input":"IR;In;Dn;UH","output":["Indie Rock","Industrial","Downtempo","Euro House"]}
+{"input":"Ambient Techno; idm; ambient","output":["Ambient Techno","IDM","Ambient"]}
+{"input":"Trip Hop;Trip-Hop","output":["Trip Hop","Trip-Hop"]}

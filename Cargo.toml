@@ -55,6 +55,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 thiserror = "2"
+# The blocking HTTP client behind the `net` feature of vcw-metadata (§40). Blocking
+# because VCW has no async runtime and is not getting one for two REST APIs; rustls
+# rather than native-tls so a Windows build needs no OpenSSL and the license
+# allowlist in deny.toml already covers it.
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 
 # Enforced as errors in CI (`clippy --all-targets -- -D warnings`), warnings locally.
 # `missing_docs` is deliberate: a scaffold whose modules do not say what they are for

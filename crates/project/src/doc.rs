@@ -34,7 +34,8 @@
 //!
 //! §49 promises the project format is openly documented. A schema document
 //! maintained by hand keeps that promise for about one release, so this one is
-//! generated: [`markdown`] parses [`SCHEMA_V1`] - comments included, since the
+//! generated: [`markdown`] parses every migration's DDL by way of [`objects`] -
+//! comments included, since the
 //! comments are the explanation - and `tests/schema_doc.rs` fails if the committed
 //! file differs.
 //!
@@ -47,8 +48,9 @@ use std::fmt::Write as _;
 
 use vcw_types::StorageFormat;
 
+use crate::migrate::MIGRATIONS;
 use crate::schema::{
-    APPLICATION_ID, BLOCK_MILLIS, EXTENSION, FORMAT_VERSION, PAGE_SIZE, SCHEMA_V1, SCHEMA_VERSION,
+    APPLICATION_ID, BLOCK_MILLIS, EXTENSION, FORMAT_VERSION, PAGE_SIZE, SCHEMA_VERSION,
     SUMMARY_64K_STRIDE, SUMMARY_256_STRIDE,
 };
 
@@ -76,6 +78,16 @@ pub struct Object {
     pub columns: Vec<Column>,
     /// The statement, as written.
     pub sql: String,
+}
+
+/// Every object the current schema has, in the order the migrations create them.
+///
+/// The document describes what a project *is*, and what a project is, is the result
+/// of running every migration. Parsing one version's DDL would document the file
+/// VCW used to write.
+#[must_use]
+pub fn objects() -> Vec<Object> {
+    MIGRATIONS.iter().flat_map(|m| parse(m.sql)).collect()
 }
 
 /// Parses DDL into objects, carrying the comments across.
@@ -258,7 +270,7 @@ pub fn markdown() -> String {
     out.push('\n');
 
     out.push_str("## Tables\n\n");
-    for object in parse(SCHEMA_V1) {
+    for object in objects() {
         if object.kind != "TABLE" {
             continue;
         }
@@ -280,7 +292,7 @@ pub fn markdown() -> String {
     }
 
     out.push_str("## Indices\n\n");
-    for object in parse(SCHEMA_V1) {
+    for object in objects() {
         if object.kind != "INDEX" {
             continue;
         }
@@ -293,12 +305,16 @@ pub fn markdown() -> String {
 
     out.push_str("## What is not here yet\n\n");
     out.push_str(
-        "Schema v1 covers capture: blocks, sessions, diagnostics and versioning - \
-         everything milestone M1, *it records*, depends on. The vinyl data model \
-         (releases, discs, sides, tracks, boundaries), metadata, identification \
-         evidence, artwork and export settings arrive as later migrations, at WP-13 \
-         and beyond. That is what the migration machinery is for, and writing those \
-         tables now would be guessing at shapes three work packages away.\n",
+        "Schema v1 covers capture - blocks, sessions, diagnostics and versioning, \
+         everything milestone M1, *it records*, depends on - and v2 adds the vinyl \
+         data model: the release, its artwork, its sides, their track boundaries and \
+         the tracks between them. Identification evidence, export settings and \
+         imported-project provenance arrive as later migrations, at WP-14, WP-20 and \
+         WP-26. That is what the migration machinery is for, and writing those tables \
+         now would be guessing at shapes several work packages away.\n\n\
+         There is no `discs` table, deliberately. A disc carries no fact a side does \
+         not already imply: side index 2 is disc 2's first face, by arithmetic, and a \
+         disc row would be a second place to store the same thing.\n",
     );
 
     out
