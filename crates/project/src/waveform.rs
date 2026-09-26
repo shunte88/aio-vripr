@@ -56,7 +56,7 @@
 //! length of the recording. Zooming out does not read more rows, it reads the
 //! same rows more coarsely - and past a quarter-second per pixel it stops
 //! opening blobs at all. That is what §37's "independent of total sample count"
-//! means in practice, and [`crates/project/tests/waveform_reads.rs`] measures it
+//! means in practice, and `tests/waveform_reads.rs` measures it
 //! rather than assuming it.
 //!
 //! # Progressive by construction (§19)

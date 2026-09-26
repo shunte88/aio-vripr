@@ -35,7 +35,7 @@
 //! The DDL lives here as text rather than being built by a query builder, because
 //! it is the thing the format *is*. It is diffed against a real Audacity project in
 //! CI (`tests/aup4_shape.rs`) and rendered into `docs/SCHEMA.md` by
-//! [`crate::schema::markdown`], so there is one definition and two checks on it.
+//! [`crate::doc::markdown`], so there is one definition and two checks on it.
 
 /// SQLite `application_id` for a `.vcw` project: ASCII `"VCW\0"`.
 ///

@@ -66,7 +66,7 @@
 //!
 //! # Why a failed commit stops the writer
 //!
-//! Blocks tile each channel's timeline with no gaps - [`crate::validate`]
+//! Blocks tile each channel's timeline with no gaps - [`validate`](mod@crate::validate)
 //! enforces it and recovery depends on it. Carrying on after a failed commit
 //! would punch a hole in that tiling which no later write could close, so the
 //! writer stops, the session is marked interrupted, and the error is surfaced.

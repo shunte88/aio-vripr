@@ -9,7 +9,11 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+rustfft = { workspace = true }
 vcw-types = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+serde_json = { workspace = true }

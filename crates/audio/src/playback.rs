@@ -925,21 +925,12 @@ impl Playback {
     }
 }
 
-/// Picks the configuration that converts least.
-///
-/// The preference order is the opposite of capture's, and deliberately so.
-/// Capture takes the *best* the device offers, because a better capture is
-/// strictly better. Playback wants the configuration that matches what is
-/// already on disk, because anything else is a conversion - a 24-bit side on a
-/// 32-bit stream sounds identical and can no longer be called bit-perfect.
-///
-/// The rate is not a preference. There is no resampler, so a device that cannot
 /// How much audio playback asks a device to take in one callback, when the
 /// caller has not said.
 ///
 /// Four chunks. Low enough that a seek reaches the converter promptly, high
 /// enough that a busy machine does not starve it, and - the part that matters -
-/// a number VCW knows, so [`sizing`] can make the queue deep enough to
+/// a number VCW knows, so `sizing` can make the queue deep enough to
 /// serve one callback in full.
 pub const TARGET_BUFFER_MILLIS: u32 = 4 * chunks::CHUNK_MILLIS;
 
@@ -1059,7 +1050,16 @@ fn start(
     })
 }
 
-/// play the material's rate is an error with a specific message.
+/// Picks the configuration that converts least.
+///
+/// The preference order is the opposite of capture's, and deliberately so.
+/// Capture takes the *best* the device offers, because a better capture is
+/// strictly better. Playback wants the configuration that matches what is
+/// already on disk, because anything else is a conversion - a 24-bit side on a
+/// 32-bit stream sounds identical and can no longer be called bit-perfect.
+///
+/// The rate is not a preference. There is no resampler, so a device that
+/// cannot play the material's rate is an error with a specific message.
 fn choose(matrix: &Matrix, request: &Request, report: &DeviceReport) -> Result<Capability> {
     let material = request.material;
     let at_rate: Vec<&Capability> = matrix

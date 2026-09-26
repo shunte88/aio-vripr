@@ -38,8 +38,11 @@
 //!
 //! Requirements: §17-§19 (metering and waveform), §22-§24 (detection).
 
+pub mod features;
 pub mod hmm;
 pub mod meter;
+pub mod regions;
+pub mod resolve;
 pub mod silence;
 pub mod spectral;
 pub mod waveform;

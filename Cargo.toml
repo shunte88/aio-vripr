@@ -47,6 +47,10 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 # and S2 at 24/192 for 90 minutes; wait-free on both ends, which is the property
 # the audio thread needs and a mutex cannot give it.
 rtrb = "0.4"
+# The FFT behind spectral flatness (§22). Chosen to match VRipr's detector exactly:
+# the port has to agree with it numerically, and swapping in a real-input transform
+# would have made every parity difference an argument about arithmetic order.
+rustfft = "6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"

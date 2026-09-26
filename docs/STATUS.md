@@ -1,15 +1,16 @@
 # VCW - project status
 
 **As of:** 2026-09-26
-**Phase:** 1 is underway - WP-01 through WP-10 are built, all on Linux x86_64 only.
+**Phase:** 1 is underway - WP-01 through WP-11 are built, all on Linux x86_64 only.
 All five Phase 0 spikes returned verdicts on their primary platform; gate G0 remains
 open on hardware coverage, WP-05's soak settled D3's firmed-config run, **WP-06 closes
 milestone M1, *it records*,** WP-07 locks D8, WP-08 adds the meters and the §10 fan-out
 they read through, WP-09 draws the waveform - and cost the schema two covering
-indexes to do it in milliseconds rather than seconds - and **WP-10 closes milestone M2,
+indexes to do it in milliseconds rather than seconds - **WP-10 closes milestone M2,
 *it plays back*,** with a seek that joins in a median 19.8 ms on hardware and byte-exactly
-in CI.
-**Branch:** `main` at `807d097` (WP-09), pushed. WP-10 is in the working tree,
+in CI, and **WP-11 closes milestone M3, *it finds tracks*,** at 97.6% to 99.7% parity
+with VRipr over 595 labelled snippets, exact to the frame.
+**Branch:** `main` at `91ba45f` (WP-10), pushed. WP-11 is in the working tree,
 gate-green, uncommitted.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
@@ -191,6 +192,11 @@ round-trip**. Characterised, bounded, immaterial, and deliberately not root-caus
 One trap recorded for WP-11: `feed()` only `debug_assert!`s frame alignment, so a release
 build handed a partial frame silently transposes the channel interleave and returns a
 plausible wrong answer. The worker must guarantee whole frames at the type level.
+
+The same hazard turned up in WP-11's own extractor, and the note is why it was looked
+for: `features::Windows` was dropping the orphan sample at the end of each call rather
+than transposing it, which is quieter and just as wrong. It now carries the part-frame
+between calls. The fingerprint worker still has to do the same when it arrives.
 
 ### S5 - the format is not a mystery any more, in either version
 
@@ -1692,12 +1698,264 @@ for them and has never run.
 Nothing has played a 192 kHz side yet, and nothing has played for an hour. The reserve
 fixes the seek that lands between callbacks; a seek storm has not been tried.
 
+## Phase 1 - WP-11, the detection port
+
+Built 2026-09-26. VRipr's three detectors, ported into `vcw-signal`, published as §24
+observations rather than tracks, resolved into decisions, and reachable from the command
+line at both ends of §22: live while the record turns, and again over the committed
+side. Exit criterion met on both halves. **Parity: 97.6% to 99.7% of VRipr's boundaries
+reproduced over all 595 snippets of the labelled corpus, every agreement at the
+identical frame**, with the residue traced to one documented cause. **Provenance and
+confidence: every boundary carries both, plus the measurements behind them**, and
+`vcw detect --evidence` prints the lot.
+
+**Milestone M3, *it finds tracks*, is met.** On a real 26-minute side:
+
+```sh
+vcw detect side-a.vcw --min-sources 2
+```
+
+```
+  analysis   15658 window(s), 3 detector(s), 12.839 s
+  silence          6 boundary/ies at   -40.0 dB, floor -
+  spectral-change  6 boundary/ies at   -40.0 dB, floor -
+  hmm             266 boundary/ies at   -40.0 dB, floor -
+  showing    6 of 270 boundary/ies, those 2 or more detectors reported
+     1  start      0.000 s  conf 1.00  silence+spectral-change (2)
+     2  end      282.800 s  conf 0.53  silence+spectral-change (2)
+     3  start    283.800 s  conf 1.00  silence+spectral-change+hmm (3)
+     4  end      686.000 s  conf 0.53  silence+spectral-change (2)
+     5  start    687.200 s  conf 1.00  silence+spectral-change+hmm (3)
+     6  end     1561.400 s  conf 0.59  silence+spectral-change (2)
+```
+
+Three tracks, 4:43, 6:42 and 14:34. The 266 the HMM found on its own are the subject of
+one of the findings below.
+
+### The split VRipr does not have
+
+VRipr's detectors take a file path and decode it with Symphonia. VCW's take frames,
+because §22 asks for live analysis while the record is still turning and there is no
+file to open. So `features::Windows` is the only thing that touches audio: it turns
+capture bytes into `Frame { rms, flatness }`, and `silence`, `spectral` and `hmm` see
+nothing else. The same extractor serves both passes, which is what makes the live answer
+and the refine answer comparable rather than merely similar.
+
+`Windows` carries a frame that straddles two calls instead of dropping it. A meter can
+drop three bytes and be wrong by nothing anyone can hear; an extractor cannot, because a
+dropped orphan sample shifts the window alignment for the rest of the side and moves
+every boundary after it. That was a real defect, found by a test that pushed the same
+audio in ragged chunks and in one go and demanded the same frames
+(`frames_do_not_depend_on_how_the_audio_arrives`).
+
+### Positions are frames, and that is where VRipr and VCW part company
+
+VRipr works in seconds as `f64`. VCW works in frames, and `Region::seconds` exists for
+printing. The difference shows up in exactly one place and it is worth the paragraph:
+`merge_gaps` bridges gaps *shorter than* a limit, and VRipr computes the gap from
+`index as f64 * window_secs`, so a gap of exactly eight 100 ms windows comes out as
+0.7999999999999993 and gets bridged. VCW computes 0.8 and leaves it.
+
+That single boundary condition accounts for most of the corpus disagreement. Forcing it
+the other way was tried: the level detector rises from 99.52% to 99.86% and the HMM
+*falls* from 98.01% to 96.22%, because VRipr's own answer depends on how the error
+happened to accumulate in each snippet. Neither comparison reproduces it; only
+reproducing the accumulation would, and that means giving up the frame arithmetic that
+makes the live pass and the refine pass agree. A gap of exactly `min_silence_secs` is a
+boundary, which is what the setting says it is.
+
+### The adaptive floor can only find the groove if there is enough groove
+
+`adaptive_floor` is VRipr's interpolated 3rd-percentile estimate, and the percentile is
+the whole story: the estimate lands in the inter-track groove only if the groove is
+*more* than 3% of the side. A tightly cut side is under 1% groove, and then the third
+percentile sits inside the quietest music. Two tests were written against the wrong
+premise before this was measured - they asked for a floor near the groove on traces that
+were exactly 3% groove, and got -30.2 dB and -23.3 dB instead. The limitation is now
+documented on the function, and it is why `adaptive_margin_db` is as wide as 12 dB.
+
+### Contrast is a median, because a padded boundary straddles the transition
+
+Boundary confidence comes from the contrast between the music before a boundary and the
+gap after it, over five windows each way. Taking the mean failed a 50 dB test case at
+44.8 dB, and the reason is not noise: the padding puts a window or two of the *other*
+side inside the look-back range, and a vinyl pop drags a mean up on its own. A max/min
+would fix both and bias every score upward, which is the one direction a confidence must
+not be wrong in. The median fixes both and biases nothing.
+
+### Smoothing costs the flatness detector two or three windows of position
+
+`spectral::smooth` is VRipr's ±3-window rolling mean, 700 ms at the default window, and
+it moves a boundary by two or three windows - pinned at window 302 becoming 303 in
+`smoothing_costs_the_boundary_a_few_windows_and_that_is_the_trade`. The same blur
+corrupts the measurement of the thing being scored: reading flatness at the boundary
+understates the gap-to-music separation by a factor of two, so the score stands back
+`SKIP = SMOOTHING + 1` windows. And the order of the pipeline matters more than it looks:
+a 200 ms tonal pop inside a 1.2 s flatness gap erases the gap through the rolling mean
+entirely, so the transient filter runs *before* gap-fill, not after.
+
+### The HMM posterior saturates, so it is a veto and never a score
+
+This is the session's headline finding and it changed the design. Forward-backward
+returns a posterior of **1.0 for every boundary Viterbi commits to** - across a 60 s
+fade, and at only 3 dB of real contrast. It has to: the emissions are fitted to the
+quietest 15% and the loudest 40% *of the data being classified*, and a Gaussian
+log-likelihood is quadratic, so whatever the side contains, the two states end up
+separated in the model that was built from them. A posterior used as a confidence would
+report total certainty about a boundary that is not there.
+
+So `confidence = min(level_confidence, posterior)`: the posterior can only ever veto.
+And it has one exception, because a capture edge has no transition to measure - the first
+boundary of a side that begins in music scored 0.0002, which is the correct posterior for
+a state change that never happened and a useless confidence for a boundary that is
+certainly real. Inside `EDGE_WINDOWS` of either end the veto is skipped, and
+`hmm.posterior_applies` records which way it went, so the evidence says whether the veto
+was in force rather than leaving a reader to infer it.
+
+Three other HMM premises were disproved by probes before they became tests: with
+indifferent emissions a chain drifts to *Music*, not to the biased start state, because
+`min_sound > min_silence` makes music the stickier of the two; a featureless side comes
+back as one Music region rather than none; and posteriors sum to 2.015 rather than 2.000
+for two boundaries, because some paths cross more than twice.
+
+### The HMM over-segments a real side, faithfully
+
+266 boundaries on the side above, against six from each of the other two. It is not a
+defect in the port - the parity harness puts the HMM at 98.01% of VRipr's own answers,
+and VRipr's HMM does the same thing - it is what a self-fitted two-state model does to a
+record with quiet passages in it: the quietest 15% of a real side *is* music, so the gap
+state gets fitted to quiet music and then finds it everywhere.
+
+This is the case the resolver exists for. Every one of those 264 unsupported boundaries
+comes back at confidence 0.50 with `agreement() == 1`, and the six a second detector
+seconded come back at 0.53 to 1.00. `vcw detect --min-sources 2` is the same filter at
+the command line, and WP-13 should not promote a boundary no second detector saw.
+
+### Agreement is counted, never multiplied
+
+`resolve` clusters observations within half a second of each other, per edge, and takes
+the **maximum** confidence in a cluster rather than a noisy-OR. Three detectors reading
+one level series and each reporting 0.5 are not three independent witnesses; they are one
+measurement counted three times, and a noisy-OR would turn it into 0.875. The position
+goes in the safe direction - earliest start, latest end - so a padding error clips
+silence rather than music. A boundary a person placed fixes the position of its cluster,
+cannot be merged away, and two user boundaries close together stay two boundaries (§24).
+
+### The live pass is the refine pass with less audio
+
+Not an approximation of it. The live worker keeps the whole feature trace - 15,000
+windows for a 25-minute side, about 200 KB - and re-runs the detector on every drain,
+which costs well under a millisecond. So a provisional marker is the final answer
+computed from the audio that has arrived so far, and
+`the_live_pass_and_the_refine_pass_agree` proves the two produce identical regions and
+boundaries to the frame when one is fed ragged 7,331-byte chunks and the other the lot.
+
+A marker is published only once it cannot move, which is `min_silence + gap_fill +
+pre + post` behind the analysed position: **1.2 s at the defaults**. A marker is never
+retracted, and an adaptive live pass settles nothing at all - the threshold depends on
+the whole side - which `Live::settled` reports honestly by returning 0.
+
+The live pass is levels only: no FFT on a tap of the capture stream. The refine pass is
+where the spectral extraction happens, once, with all three detectors reading its
+frames. That buys a property worth having: a disagreement between two detectors on the
+same side cannot be a disagreement about what they were looking at.
+
+### Parity, measured
+
+`crates/signal/tests/vripr_parity.rs`, `#[ignore]`d because it reads 294 MB from outside
+the repo. `/data2/vripr_training` is 595 snippets VRipr cut from its own track tables -
+16 s of mono 16 kHz audio centred on a boundary, peak-normalised, with a JSON sidecar
+naming the kind. The reference is **VRipr's own detectors run over the same snippets**,
+computed out of tree at `/data2/vcw-scratch/parity` from a verbatim copy of
+`/data2/vripr/src/audio/mod.rs` and checked in as
+`crates/signal/tests/fixtures/vripr_answers.jsonl`, so the reference outlives the other
+repository.
+
+| Detector | Fixed threshold | Adaptive | Snippets identical | Offset |
+|---|---|---|---|---|
+| `silence` | 99.52% | 97.63% | 98.66% / 95.29% | 0.000 s |
+| `spectral-change` | 99.71% | 98.71% | 97.98% / 96.13% | 0.000 s |
+| `hmm` | 98.01% | 98.01% | 93.95% | 0.000 s |
+
+Every agreement is at the identical frame; the test asserts that, not a tolerance. The
+HMM is the same under both thresholds because it never reads one - it fits its own. The
+gate fails below 97% of VRipr's boundaries or 90% of snippets matching exactly.
+
+### Agreement with the *labels* is low, and VRipr's is lower
+
+The same harness scores both against what the sidecars say, and the numbers are
+uncomfortable until you see the second column:
+
+| Detector | VCW | VRipr | `mid` snippets left alone |
+|---|---|---|---|
+| `silence` | 17.1% | 16.3% | 99.5% |
+| `spectral-change` | 11.3% | 10.8% | 99.5% |
+| `hmm` | 30.9% | 30.7% | 82.7% |
+| resolved, 2+ detectors | 12.3% | - | 99.5% |
+
+VCW is a hair ahead of VRipr on every row, which is the only thing this comparison can
+establish. The corpus is dominated by ambient and drone records whose tracks segue with
+no silence at all, and the labels are the track table - which for those records came
+from a release listing or from a person, not from any detector. The `.onnx` file sitting
+in the corpus directory is the rest of the story: VRipr was training a learned detector
+on this material precisely because its classical ones could not do it. §22 lists the
+three that are required, and this is what they are worth on the hard cases; §22's
+"expected track count, release durations, fingerprints, side topology" are the rest of
+the answer, and they arrive with WP-12 and WP-13. The resolver already takes a boundary
+from a release listing without a line of new code
+(`a_boundary_from_a_release_listing_needs_no_new_code_to_be_heard`).
+
+### Cost
+
+A 26-minute side at 192 kHz: **12.8 s** for the refine pass in release, 15,658 windows,
+one FFT each. That is 120x faster than the side plays, and it is dominated by the
+extraction rather than the detectors. The live pass costs a 250 ms drain of a 2 s lossy
+tap and a re-scan of at most 15,000 frames, and the capture it hangs off reports the
+same zero dropped frames and zero overruns it did with only the meter attached
+(`detection_costs_the_capture_nothing`).
+
+### The CLI
+
+`vcw detect <project>` runs the refine pass and prints the boundaries with their
+provenance, confidence, agreement and - with `--evidence` - every measurement behind
+them. `--threshold-db`, `--adaptive`, `--min-silence` and `--min-sound` reach the
+detectors; `--min-sources` filters by agreement; `--json` gives a UI the same thing.
+`vcw session --json` now renders `track-detected` as it happens, which is how the live
+half is visible with nothing else running.
+
+Nothing here writes. A boundary becomes a track in WP-13, and the tracks `vcw detect`
+prints are labelled implied for that reason.
+
+### Tests
+
+496 in the workspace pass and 4 are `#[ignore]`d, the full gate is green, `cargo deny`
+is clean and so is the doc leg. 77 of them are in `vcw-signal`'s lib covering the five
+new modules, four are on the engine's detection path, three go through the shipped
+binary, and one is the parity harness, which is `#[ignore]`d and was run.
+
+### What is not verified
+
+The parity figure is parity, not accuracy. Nothing here has been checked against a
+boundary anyone confirmed by ear; the labelled corpus is VRipr's own reading of its own
+records, and on the hardest third of it both implementations are mostly wrong together.
+
+The live pass has only ever been fed the simulated source through the engine - uniform
+noise, which has exactly one boundary. The live/refine agreement test uses real
+synthesised material but drives `Live` directly rather than through a capture, so what
+has never happened is a live pass over a real record with real gaps in it, on a real
+device. That wants a turntable and a side, and it is the first thing to do with WP-11
+when there is one to hand.
+
+Adaptive mode has no live story worth the name, as above. And the HMM's over-segmentation
+is reproduced rather than solved: the resolver makes it harmless, but §22's guided
+detection - expected track count, release durations, side topology - is what would
+actually fix it, and that is WP-12 and WP-13 work.
+
 ## Next up
 
-**Where to pick up.** WP-10 is finished and gate-green but **not yet committed** - the
-whole of it is in the working tree, along with `docs/STATUS.md` from the session before
-it. Committing is the first thing the next session does, and nothing about the work is
-half-done.
+**Where to pick up.** WP-11 is finished and gate-green but **not yet committed** - the
+whole of it is in the working tree along with this file. Committing is the first thing
+the next session does, and nothing about the work is half-done.
 
 **`WP-12`, metadata, is next** and needs no device at all: a provider trait, Discogs,
 MusicBrainz, genre normalisation, artwork, caching, rate limits, timeouts and
@@ -1706,9 +1964,21 @@ with networking disabled, so the tests are fixture-backed and offline by constru
 and §39's rule that no credential is ever written into a project file is a constraint on
 the design rather than a check at the end.
 
-WP-11, editing, and WP-13, boundary detection, are the two that would build directly on
-WP-10 instead. WP-13 is also what turns `SKIP FORWARD` and `SKIP BACK` from a fixed ten
-seconds into what §21 actually wants, which is the next boundary either way.
+**`WP-13`, the vinyl data model and editing, is the alternative, and WP-11 just
+unblocked it.** Detection publishes boundaries and deliberately writes no tracks, per
+§23, so WP-13 is where a boundary becomes one - and where §24's locking, which `resolve`
+already honours for any observation handed to it, finally has something to lock. It is
+also what turns `SKIP FORWARD` and `SKIP BACK` from a fixed ten seconds into what §21
+actually wants, the next boundary either way: the boundaries now exist, but nothing
+stores them, so the transport has nothing to ask.
+
+Two things WP-11 leaves on the table for whoever takes WP-13. The HMM's
+over-segmentation is real and faithful, so **a boundary with `agreement() == 1` should
+not become a track** without a person saying so; `vcw detect --min-sources 2` is the
+same rule at the command line. And §22's guided detection - expected track count,
+release durations, fingerprints, side topology - is the part of the requirement that is
+*not* built, and it is what would actually fix the hard cases the corpus is full of. The
+resolver takes such a boundary already; something has to produce one.
 
 The plumbing is in place for whichever comes first. `Tee` takes any number of taps, the
 meter uses one, and a playback monitor or a live waveform feed is a second `tap()` call
@@ -1747,6 +2017,24 @@ the spike harness.
   first change since WP-02 to touch the schema, so `docs/SCHEMA.md` was regenerated with
   it; regenerate with `VCW_BLESS=1 cargo test -p vcw-project --test schema_doc` whenever
   the schema moves, or `the_committed_document_matches_the_schema` fails.
+- **`RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps` is part of the gate.**
+  It had never been run, and it found ten broken doc links across four crates that
+  `clippy -D warnings` does not see: private items linked from public docs
+  (`GAP_SHARE`, `sizing`), a link to a crate `vcw-signal` does not depend on, a file
+  path written as an intra-doc link, a module and a function called `validate` needing
+  `mod@` to disambiguate, and `crate::schema::markdown` for what is really
+  `crate::doc::markdown`. It also found a real defect: the doc comment on
+  `playback::choose` had been cut in half by a `const` inserted into the middle of it,
+  so half the paragraph was documenting `TARGET_BUFFER_MILLIS` and `choose` began
+  mid-sentence. Both halves are reunited. Run the doc leg with the others from now on.
+- **`/data2/vcw-scratch/parity/`** is the A/B reference generator for WP-11: a scratch
+  crate holding a verbatim copy of `/data2/vripr/src/audio/mod.rs`, run over
+  `/data2/vripr_training` to produce `vripr-answers.jsonl`. Its output is checked in at
+  `crates/signal/tests/fixtures/vripr_answers.jsonl`; the crate itself is not, so that
+  nothing in the repository carries a second copy of VRipr's algorithm. Regenerate with
+  `cargo run --release -- /data2/vripr_training vripr-answers.jsonl` from that directory
+  if the reference ever needs rebuilding, and expect the parity floors in
+  `tests/vripr_parity.rs` to need re-reading against the new figures.
 - **`/data2/vcw-scratch/`** is the measurement bench for WP-09 and WP-10, none of it in
   the repository
   and all of it disposable. `realrip/` is a throwaway crate that pushes a headerless WAV

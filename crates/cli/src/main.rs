@@ -48,6 +48,7 @@
 //! export verbs follow at WP-13 onwards.
 
 mod capture;
+mod detect;
 mod devices;
 mod play;
 mod recover;
@@ -230,6 +231,42 @@ enum Command {
         #[arg(long)]
         render: Option<std::path::PathBuf>,
         /// Machine-readable output: one JSON object per line.
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Find the track boundaries in a stored capture (§22, §24).
+    ///
+    /// Runs the post-capture pass: one spectral extraction, all three
+    /// detectors, one resolver. Writes nothing - a boundary becomes a track in
+    /// the editor, and this is how to see what the editor would be handed.
+    Detect {
+        /// Project to analyse.
+        project: std::path::PathBuf,
+        /// Capture to analyse. Omit for the most recent.
+        #[arg(long)]
+        capture: Option<i64>,
+        /// Level a window must reach to count as music, in dBFS.
+        #[arg(long)]
+        threshold_db: Option<f64>,
+        /// Derive the threshold from the side's own noise floor (§22).
+        #[arg(long)]
+        adaptive: bool,
+        /// Shortest gap that can separate two tracks, in seconds.
+        #[arg(long)]
+        min_silence: Option<f64>,
+        /// Shortest span that can be a track, in seconds.
+        #[arg(long)]
+        min_sound: Option<f64>,
+        /// Report only boundaries this many detectors reported. The HMM finds
+        /// one at every quiet bar of a real side, so 2 is how to see the
+        /// boundaries a second detector seconded.
+        #[arg(long, default_value_t = 1)]
+        min_sources: usize,
+        /// Print every measurement behind every boundary (§24).
+        #[arg(long)]
+        evidence: bool,
+        /// Machine-readable output.
         #[arg(long)]
         json: bool,
     },
@@ -427,6 +464,27 @@ fn main() -> anyhow::Result<()> {
             mode,
             script,
             render,
+            json,
+        }),
+        Command::Detect {
+            project,
+            capture,
+            threshold_db,
+            adaptive,
+            min_silence,
+            min_sound,
+            min_sources,
+            evidence,
+            json,
+        } => detect::run(&detect::Args {
+            project,
+            capture,
+            threshold_db,
+            adaptive,
+            min_silence,
+            min_sound,
+            min_sources,
+            evidence,
             json,
         }),
         Command::Waveform {

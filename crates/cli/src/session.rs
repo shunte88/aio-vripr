@@ -296,6 +296,19 @@ pub(crate) fn detail(event: &Event) -> serde_json::Value {
                 }))
                 .collect::<Vec<_>>(),
         }),
+        Event::Detected {
+            frame,
+            seconds,
+            edge,
+            confidence,
+            provenance,
+        } => serde_json::json!({
+            "frame": frame,
+            "seconds": seconds,
+            "edge": edge.as_str(),
+            "confidence": confidence,
+            "provenance": provenance.as_str(),
+        }),
         Event::Warning { code, detail } => serde_json::json!({
             "code": code, "detail": detail,
         }),

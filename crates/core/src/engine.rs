@@ -34,7 +34,7 @@
 //!
 //! The engine is one dedicated OS thread that owns the transport. Commands go
 //! in through a channel, events come out through a [`Bus`], and the
-//! [`Machine`](crate::state::Machine) it holds lives on that thread's stack -
+//! [`Machine`] it holds lives on that thread's stack -
 //! so there is no lock around the transport, no shared mutable phase, and no
 //! instant at which it is between states.
 //!
@@ -90,9 +90,10 @@ use vcw_audio::devices::{self, Direction};
 use vcw_audio::source::{Pace, Simulated, Source};
 use vcw_project::persistence::{self, Handle, Outcome};
 use vcw_project::{Project, Session};
-use vcw_types::{CaptureInfo, CaptureState, Diagnostics, SampleRate};
+use vcw_types::{BoundaryObservation, CaptureInfo, CaptureState, Diagnostics, SampleRate};
 
 use crate::commands::{Command, Setup};
+use crate::detection::{self, Detectors};
 use crate::events::{Bus, Event, Events};
 use crate::metering::{self, Meters};
 use crate::state::{Deck, Machine, Phase, Reply, Step, Yield};
@@ -148,11 +149,15 @@ pub struct Recorded {
 ///
 /// The meter worker starts with it, on a lossy tap of the same stream, which
 /// is what makes §50's "set the level" step possible before anything is being
-/// recorded.
+/// recorded. The live detector starts on a second tap of the same stream, for
+/// §22's provisional markers, and is as droppable as the meter is: everything
+/// either of them sees, the refine pass can see again in the project.
 pub struct Recorder {
     source: Box<dyn Source>,
     writer: Option<Handle>,
     meters: Option<Meters>,
+    detectors: Option<Detectors>,
+    detected: Vec<BoundaryObservation>,
     path: PathBuf,
     capture_id: i64,
     info: CaptureInfo,
@@ -223,12 +228,15 @@ impl Recorder {
         // reader of the device has to exist.
         let mut tee = Tee::new(reader);
         let meters = Meters::spawn(tee.tap(metering::tap_bytes(&info)), &info, bus.clone());
+        let detectors = Detectors::spawn(tee.tap(detection::tap_bytes(&info)), &info, bus.clone());
         let writer = persistence::spawn_on(project, session, &info, config, tee)?;
 
         Ok(Self {
             source,
             writer: Some(writer),
             meters: Some(meters),
+            detectors: Some(detectors),
+            detected: Vec::new(),
             path: setup.project.clone(),
             capture_id,
             info,
@@ -307,6 +315,18 @@ impl Recorder {
         Ok(())
     }
 
+    /// The provisional boundaries the live pass announced.
+    ///
+    /// Empty until the capture has been stopped, because the worker owns them
+    /// until then and publishes each one on the bus as it settles. Kept so that
+    /// a capture which is never refined still has boundaries, and so that the
+    /// refine pass can be handed the live pass's answers to corroborate rather
+    /// than starting from nothing.
+    #[must_use]
+    pub fn detected(&self) -> &[BoundaryObservation] {
+        &self.detected
+    }
+
     /// Stops the writer and the device and reports the result.
     fn halt(&mut self, state: CaptureState) -> Result<Outcome, Error> {
         // The meter goes before the writer, so the last `meter-update` is on
@@ -314,6 +334,13 @@ impl Recorder {
         // the capture finishes should not then be handed one more frame.
         if let Some(meters) = self.meters.take() {
             meters.stop();
+        }
+        // And the detector before the writer for the same reason: a
+        // `track-detected` after `capture-finished` would arrive at a UI that
+        // has already drawn the final waveform. What it found is kept rather
+        // than discarded - see `Recorder::detected`.
+        if let Some(detectors) = self.detectors.take() {
+            self.detected = detectors.stop();
         }
         let Some(writer) = self.writer.take() else {
             return Err(Error::Project(vcw_project::Error::WriterLost));

@@ -51,12 +51,12 @@
 //! A process killed mid-capture leaves `state` reading `recording`, but so
 //! would a bug that forgot to update it, and so would a future version with a
 //! different idea of the vocabulary. `finished_at` is only ever written by
-//! [`Session::finish`], in the same transaction as the state. Its absence is
+//! [`Session::finish`](crate::session::Session::finish), in the same transaction as the state. Its absence is
 //! the absence of a write, which is the one thing a crash cannot forge.
 //!
 //! # Why the blocks outrank the row
 //!
-//! [`Session::advance`] moves `captures.frames` forward *inside the block
+//! [`Session::advance`](crate::session::Session::advance) moves `captures.frames` forward *inside the block
 //! transaction*, so the two cannot disagree - and recovery still recomputes the
 //! count from the blocks rather than trusting it. The invariant is the thing
 //! being checked; a recovery tool that assumes it can only confirm what it

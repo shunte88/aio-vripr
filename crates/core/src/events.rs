@@ -69,7 +69,7 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
 use vcw_signal::meter::Snapshot;
-use vcw_types::{CaptureState, Diagnostics};
+use vcw_types::{CaptureState, Diagnostics, Edge, Provenance};
 
 use crate::state::Phase;
 
@@ -125,6 +125,31 @@ pub enum Event {
     Meter {
         /// Peak, RMS, peak-hold and the clip latch, per channel.
         levels: Snapshot,
+    },
+    /// A track boundary was detected. §35's `track-detected`.
+    ///
+    /// One event per boundary, not one per track, because that is what §24
+    /// describes and what analysis actually produces: an edge with a case
+    /// attached. Two of them make a track, and deciding which two is the
+    /// resolver's job rather than this bus's.
+    ///
+    /// Published by the live pass while the record turns, so a boundary
+    /// announced here is provisional in the sense §22 means - and it is only
+    /// announced once it cannot move, so a UI can draw the marker and leave it
+    /// there. The refine pass after the capture is where the same boundary may
+    /// be superseded, which is visible in the provenance and the confidence
+    /// rather than implied by the order events arrived in.
+    Detected {
+        /// Where the boundary is, in frames.
+        frame: u64,
+        /// The same thing in seconds.
+        seconds: f64,
+        /// Whether a track starts or ends here.
+        edge: Edge,
+        /// How much to trust it, in 0..=1.
+        confidence: f32,
+        /// Which analysis said so.
+        provenance: Provenance,
     },
     /// Something went wrong that did not stop the capture. §35's
     /// `capture-warning`.
@@ -249,6 +274,7 @@ impl Event {
             Self::Armed { .. } => "armed",
             Self::Position { .. } => "recording-position",
             Self::Meter { .. } => "meter-update",
+            Self::Detected { .. } => "track-detected",
             Self::Warning { .. } => "capture-warning",
             Self::Finished { .. } => "capture-finished",
             Self::Refused { .. } => "command-refused",
@@ -289,6 +315,18 @@ impl fmt::Display for Event {
             }
             Self::Position { frames, seconds } => write!(f, "{frames} frames, {seconds:.3} s"),
             Self::Meter { levels } => write!(f, "{levels}"),
+            Self::Detected {
+                seconds,
+                edge,
+                confidence,
+                provenance,
+                ..
+            } => write!(
+                f,
+                "{} at {seconds:.3} s, confidence {confidence:.2}, from {}",
+                edge.as_str(),
+                provenance.as_str()
+            ),
             Self::Warning { code, detail } => write!(f, "{code}: {detail}"),
             Self::Finished {
                 capture_id,

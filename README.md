@@ -149,6 +149,37 @@ underruns on every single callback while every counter except that one reports h
 and a seek needs the reader to be holding an empty buffer at the moment it lands or it
 costs a buffer of silence however fast everything else is.
 
+Detection (WP-11) closes the third milestone: **it finds tracks.** VRipr's three
+detectors - RMS energy, spectral flatness and an adaptive HMM - are ported into
+`vcw-signal`, and the port is measured rather than asserted: over all 595 snippets of
+the labelled corpus it reproduces **97.6% to 99.7% of VRipr's own boundaries, every
+agreement at the identical frame**, and the residue comes down to one documented
+rounding difference.
+
+The shape of the port is different from the original, though, and deliberately. VRipr's
+detectors take a file and decode it; VCW's take feature frames, because §22 asks for
+analysis *while the record is still turning* and there is no file yet. So there are two
+passes over the same extractor: a live one on a lossy tap of the capture stream, levels
+only, publishing a marker about 1.2 s behind the needle and never retracting one; and a
+post-capture one that reads the committed side back, runs all three detectors over one
+spectral extraction, and resolves what they say.
+
+Nothing is decided by a detector. Each publishes an *observation* carrying position,
+confidence, provenance and the measurements behind it (§23, §24), and a resolver turns
+those into decisions - counting agreement rather than multiplying it, refusing to move a
+boundary a person placed, and erring towards clipping silence rather than music. It
+matters on real records: on a 26-minute side the HMM reports 266 boundaries and the
+other two detectors report six, so what the resolver says is that six of them have a
+second witness and 264 do not.
+
+```sh
+vcw detect side-a.vcw --min-sources 2      # boundaries a second detector seconded
+vcw detect side-a.vcw --evidence --json    # every measurement behind every boundary
+```
+
+Nothing here writes a track. That is WP-13's, and §23 is the reason: an analysis
+subsystem publishes what it saw, and a project decides what to do about it.
+
 ## Layout
 
 ```
@@ -237,6 +268,26 @@ on any machine:
 Add `--rebuild` to recompute the summaries from the stored audio first. It writes only
 summaries, never samples, and only for blocks VCW recorded - an imported Audacity
 project cannot be rewritten by a redraw.
+
+`detect` runs the post-capture pass and shows its working:
+
+```sh
+vcw detect side-a.vcw
+vcw detect side-a.vcw --adaptive --min-sources 2 --evidence
+```
+
+```
+  analysis   15658 window(s), 3 detector(s), 12.839 s
+  showing    6 of 270 boundary/ies, those 2 or more detectors reported
+     1  start      0.000 s  conf 1.00  silence+spectral-change (2)
+     2  end      282.800 s  conf 0.53  silence+spectral-change (2)
+     3  start    283.800 s  conf 1.00  silence+spectral-change+hmm (3)
+```
+
+`--threshold-db`, `--adaptive`, `--min-silence` and `--min-sound` are the detector
+settings; `--evidence` prints the measurements each boundary rests on. It opens the
+project read-only and writes nothing, so a side can be examined while another one is
+recording.
 
 Requires a Rust toolchain at 1.90 or newer and, on Linux, `libasound2-dev`. SQLite is
 compiled in, so there is no system SQLite to match.

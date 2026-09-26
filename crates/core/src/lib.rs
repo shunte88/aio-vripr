@@ -47,6 +47,7 @@
 //! is `!Send`, so the thread that opens a device is the thread that keeps it.
 
 pub mod commands;
+pub mod detection;
 pub mod engine;
 pub mod events;
 pub mod metering;
@@ -54,6 +55,7 @@ pub mod playback;
 pub mod state;
 
 pub use commands::{Command, Setup};
+pub use detection::{Detectors, Refined};
 pub use engine::{Engine, Recorded, Recorder};
 pub use events::{Bus, Event, Events};
 pub use metering::Meters;

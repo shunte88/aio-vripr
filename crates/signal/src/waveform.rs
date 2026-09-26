@@ -49,7 +49,7 @@
 //!
 //! `vcw-signal` touches no database, so this module does not do the reading. It
 //! knows how to *choose* a resolution and how to *fold* what comes back; the SQL
-//! lives in [`vcw_project::waveform`], which is a thin shim over
+//! lives in `vcw_project::waveform`, which is a thin shim over
 //! [`Painter`]. That split is what lets every rule below be tested against
 //! hand-written triplets with no SQLite anywhere near it.
 //!
