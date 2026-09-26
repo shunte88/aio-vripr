@@ -36,8 +36,13 @@
 //! codebase says that; most of them are wrong somewhere, because nothing checks.
 //! This file checks.
 //!
+//! Both callbacks are covered: [`Sink::on_data`], which takes bytes off the
+//! device, and [`Source::on_data`], which puts them back. Playback's has more to
+//! go wrong in it, because a seek is serviced *on the audio thread* - the
+//! callback is the only thing that can discard audio it has already been handed.
+//!
 //! **Allocation is measured.** A counting global allocator is installed for this
-//! test binary, armed only around [`Sink::on_data`], and the assertion is that
+//! test binary, armed only around the callback body, and the assertion is that
 //! the count does not move. `the_harness_itself_can_see_an_allocation` is the
 //! control: without it, a broken counter would silently "prove" every other test
 //! in the file.
@@ -58,8 +63,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use vcw_audio::buffers;
 use vcw_audio::capture::{Counters, Sink};
+use vcw_audio::playback::{Counters as PlaybackCounters, Cursor, Source};
+use vcw_audio::{buffers, chunks};
 
 /// An allocator that counts, but only while this thread has armed it.
 ///
@@ -258,5 +264,172 @@ fn a_stalled_reader_cannot_block_the_callback() {
     assert!(
         c.snapshot().overruns > 0,
         "the ring should have filled, which is the correct outcome"
+    );
+}
+
+/// Playback's callback, wired to a queue with nothing else attached.
+fn source(chunks: usize) -> (chunks::Feeder, Source, Arc<Cursor>, Arc<PlaybackCounters>) {
+    let (feeder, drain) = chunks::queue(chunks::chunk_bytes(FRAME, RATE), chunks);
+    let cursor = Arc::new(Cursor::default());
+    let counters = Arc::new(PlaybackCounters::default());
+    cursor.set_playing(true);
+    let source = Source::new(drain, Arc::clone(&cursor), Arc::clone(&counters), FRAME);
+    (feeder, source, cursor, counters)
+}
+
+/// Fills every spare chunk the feeder holds, outside any measured window.
+fn top_up(feeder: &mut chunks::Feeder, epoch: u64, frame: &mut u64) {
+    top_up_with(feeder, epoch, frame, 0x5A);
+}
+
+fn top_up_with(feeder: &mut chunks::Feeder, epoch: u64, frame: &mut u64, byte: u8) {
+    while let Some(mut chunk) = feeder.take() {
+        let capacity = chunk.capacity();
+        chunk.spare_mut().fill(byte);
+        chunk.mark(epoch, *frame, capacity);
+        *frame += (capacity / FRAME) as u64;
+        feeder.send(chunk).expect("send");
+    }
+}
+
+#[test]
+fn the_playback_callback_allocates_nothing_on_the_ordinary_path() {
+    // Chunks are handed over by move and handed back by move, so the audio
+    // thread never sees an allocator. This is what pays for the chunk design:
+    // a byte ring would have been simpler and could not discard a seek.
+    let (mut feeder, mut source, _cursor, counters) = source(8);
+    let mut out = vec![0u8; FRAME * 480];
+    let mut frame = 0u64;
+
+    // Warm every path once outside the window.
+    top_up(&mut feeder, 0, &mut frame);
+    source.on_data(&mut out);
+
+    let mut seen = 0;
+    for _ in 0..50 {
+        top_up(&mut feeder, 0, &mut frame);
+        seen += allocations_during(|| {
+            for _ in 0..8 {
+                source.on_data(&mut out);
+            }
+        });
+    }
+    assert_eq!(seen, 0, "§10: the playback callback allocated {seen} times");
+    assert!(counters.snapshot().frames > 0);
+    assert_eq!(counters.snapshot().underruns, 0);
+}
+
+#[test]
+fn reaching_past_what_a_seek_invalidated_allocates_nothing() {
+    // The arrangement a gapless seek actually produces on a device: the queue
+    // holds the audio the seek invalidated *and*, behind it, the audio for the
+    // new position, filled out of the feeder's reserve before the callback ran.
+    // The callback has to walk past the first to reach the second, in one pass,
+    // without allocating and without counting a starvation it did not suffer.
+    let (mut feeder, mut source, cursor, counters) = source(9);
+    feeder.hold_back(4);
+    let mut frame = 0u64;
+    top_up(&mut feeder, 0, &mut frame);
+
+    let epoch = cursor.seek(500_000);
+    feeder.release_reserve();
+    let mut at = 500_000;
+    top_up_with(&mut feeder, epoch, &mut at, 0xA5);
+
+    // One callback: four chunks, which is exactly the reserve.
+    let mut out = vec![0u8; chunks::chunk_bytes(FRAME, RATE) * 4];
+    let seen = allocations_during(|| source.on_data(&mut out));
+    assert_eq!(seen, 0, "walking past stale audio allocated {seen} times");
+
+    assert!(
+        out.iter().all(|&b| b == 0xA5),
+        "the callback played the old position, or silence, or both"
+    );
+    let health = counters.snapshot();
+    assert_eq!(
+        health.stale_chunks, 5,
+        "the invalidated audio was not dropped"
+    );
+    assert_eq!(health.underruns, 0, "a served seek was called a starvation");
+    assert_eq!(health.silence_frames, 0);
+    assert_eq!(cursor.frame(), 500_000 + (out.len() / FRAME) as u64);
+}
+
+#[test]
+fn discarding_the_audio_a_seek_invalidated_allocates_nothing() {
+    // The seek path is the one that tempts an implementation into clearing a
+    // collection, and it runs on the audio thread by design - the callback is
+    // the only thing that can drop what is already queued.
+    let (mut feeder, mut source, cursor, counters) = source(8);
+    let mut out = vec![0u8; FRAME * 64];
+    let mut frame = 0u64;
+    top_up(&mut feeder, 0, &mut frame);
+    source.on_data(&mut out);
+
+    let mut seen = 0;
+    for round in 1..=50u64 {
+        // Everything queued belongs to the old epoch and must be discarded.
+        let epoch = cursor.seek(round * 100_000);
+        seen += allocations_during(|| source.on_data(&mut out));
+        let mut at = round * 100_000;
+        top_up(&mut feeder, epoch, &mut at);
+        seen += allocations_during(|| source.on_data(&mut out));
+    }
+    assert_eq!(seen, 0, "a seek allocated {seen} times on the audio thread");
+    assert!(counters.snapshot().stale_chunks >= 50);
+}
+
+#[test]
+fn the_playback_callback_allocates_nothing_when_it_starves() {
+    // The failure path again, and here it also has to write silence - which is
+    // a fill over a borrowed slice, not a new buffer.
+    let (_feeder, mut source, _cursor, counters) = source(4);
+    let mut out = vec![0u8; FRAME * 480];
+    source.on_data(&mut out);
+
+    let seen = allocations_during(|| {
+        for _ in 0..1_000 {
+            source.on_data(&mut out);
+        }
+    });
+    assert_eq!(seen, 0, "a starved callback allocated {seen} times");
+    assert_eq!(counters.snapshot().underruns, 1_001);
+    assert_eq!(out, vec![0u8; FRAME * 480], "starvation made noise");
+}
+
+#[test]
+fn a_stalled_feeder_cannot_block_the_playback_callback() {
+    // The mirror of the stalled-reader test. A feeder thread that parks - stuck
+    // on a slow disk, or descheduled - must cost the listener silence, not a
+    // stopped audio thread.
+    let (feeder, mut source, _cursor, counters) = source(8);
+    let stop = Arc::new(AtomicBool::new(false));
+    let parked = {
+        let stop = Arc::clone(&stop);
+        std::thread::spawn(move || {
+            let _feeder = feeder;
+            while !stop.load(Ordering::Relaxed) {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        })
+    };
+
+    let mut out = vec![0u8; FRAME * 480];
+    let mut worst = Duration::ZERO;
+    for _ in 0..2_000 {
+        let at = Instant::now();
+        source.on_data(&mut out);
+        worst = worst.max(at.elapsed());
+    }
+    stop.store(true, Ordering::Relaxed);
+    parked.join().unwrap();
+
+    assert!(
+        worst < Duration::from_millis(100),
+        "a playback callback took {worst:?} with the feeder stalled"
+    );
+    assert!(
+        counters.snapshot().underruns > 0,
+        "silence and a counter is the correct outcome"
     );
 }

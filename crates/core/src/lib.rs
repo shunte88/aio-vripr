@@ -50,10 +50,12 @@ pub mod commands;
 pub mod engine;
 pub mod events;
 pub mod metering;
+pub mod playback;
 pub mod state;
 
 pub use commands::{Command, Setup};
 pub use engine::{Engine, Recorded, Recorder};
 pub use events::{Bus, Event, Events};
 pub use metering::Meters;
+pub use playback::{Audition, Cue, Player, Scope, Verb};
 pub use state::{Deck, Machine, Phase, Rehearsal};

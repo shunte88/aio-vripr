@@ -70,6 +70,8 @@
 
 pub mod buffers;
 pub mod capture;
+pub mod chunks;
+pub mod convert;
 pub mod devices;
 pub mod error;
 pub mod playback;

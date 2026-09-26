@@ -42,11 +42,14 @@
 //! answers "and what did it actually do" (WP-04), and `soak`, which is how
 //! WP-05's writer is measured on a machine before it is trusted with a side.
 //! `session` arrives with the engine at WP-07 and is the one that matters: a
-//! whole capture, driven by transport commands, with no UI present. The
-//! editing and export verbs follow at WP-10 onwards.
+//! whole capture, driven by transport commands, with no UI present. `play` is
+//! its opposite number from WP-10, and carries the device-free `--render` path
+//! that makes §21's gapless seek testable without a sound card. The editing and
+//! export verbs follow at WP-13 onwards.
 
 mod capture;
 mod devices;
+mod play;
 mod recover;
 mod session;
 mod soak;
@@ -180,6 +183,55 @@ enum Command {
         /// Print the 50 Hz level meters too. Loud, and off by default.
         #[arg(long)]
         meters: bool,
+    },
+
+    /// Play a capture, a region, a track or a boundary (§21).
+    ///
+    /// VCW does not resample: a capture plays at its own rate or the device is
+    /// refused, which is why this can be honest about bit-perfect playback.
+    /// With `--render` it needs no device at all and writes the bytes the
+    /// converter would have been handed.
+    Play {
+        /// Project to play from.
+        project: std::path::PathBuf,
+        /// Capture to play. Omit for the most recent.
+        #[arg(long)]
+        capture: Option<i64>,
+        /// Where to start, in seconds. Omit for the beginning.
+        #[arg(long)]
+        start: Option<f64>,
+        /// Where to end, in seconds. Omit for the end of the capture.
+        #[arg(long)]
+        end: Option<f64>,
+        /// Audition the boundary at this many seconds, with three seconds of
+        /// context either side.
+        #[arg(long, conflicts_with_all = ["start", "end"])]
+        boundary: Option<f64>,
+        /// Call the region a track. Needs --start and --end until WP-13
+        /// records boundaries in the project.
+        #[arg(long)]
+        track: Option<u32>,
+        /// Output device id, as printed by `vcw devices --which output`. Omit
+        /// for the system default.
+        #[arg(long)]
+        device: Option<String>,
+        /// Stream format to insist on. Omit to let playback pick the one that
+        /// converts least, which is usually none at all.
+        #[arg(long, value_enum)]
+        format: Option<Format>,
+        /// How to open the device. Only exclusive can be bit-perfect (§9).
+        #[arg(long, value_enum, default_value_t = Mode::Exclusive)]
+        mode: Mode,
+        /// A whole audition on one line: --script "play,sleep 2,seek 30,stop".
+        #[arg(long)]
+        script: Option<String>,
+        /// Write raw interleaved audio here instead of playing it. Needs no
+        /// device, and is what makes a gapless seek something a test can check.
+        #[arg(long)]
+        render: Option<std::path::PathBuf>,
+        /// Machine-readable output: one JSON object per line.
+        #[arg(long)]
+        json: bool,
     },
 
     /// Draw a capture's waveform at the terminal (§19).
@@ -349,6 +401,33 @@ fn main() -> anyhow::Result<()> {
             script,
             json,
             meters,
+        }),
+        Command::Play {
+            project,
+            capture,
+            start,
+            end,
+            boundary,
+            track,
+            device,
+            format,
+            mode,
+            script,
+            render,
+            json,
+        } => play::run(&play::Args {
+            project,
+            capture,
+            start,
+            end,
+            boundary,
+            track,
+            device,
+            format,
+            mode,
+            script,
+            render,
+            json,
         }),
         Command::Waveform {
             project,

@@ -60,6 +60,7 @@ pub mod doc;
 pub mod error;
 pub mod meta;
 pub mod migrate;
+pub mod pcm;
 pub mod persistence;
 pub mod recovery;
 pub mod schema;
@@ -71,9 +72,14 @@ pub mod validate;
 pub mod waveform;
 
 pub use error::{Error, Result};
+// Re-exported because the project layer's own surface already speaks it:
+// `Session::advance` and `pcm::Reader::open` both take one, so a caller that
+// cannot name the type cannot call them.
 pub use migrate::{MIGRATIONS, Migration};
+pub use pcm::Layout;
 pub use persistence::{Checkpoint, Writer};
 pub use recovery::{Assessment, Plan, Recovered, Sidecars, recover, recover_all, survey};
+pub use rusqlite::Connection;
 pub use schema::{APPLICATION_ID, EXTENSION, FORMAT_VERSION, SCHEMA_VERSION};
 pub use session::Session;
 pub use sqlite::{Access, Project, block_checksum};

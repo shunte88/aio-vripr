@@ -1,13 +1,16 @@
 # VCW - project status
 
-**As of:** 2026-09-25
-**Phase:** 1 is underway - WP-01 through WP-09 are built, all on Linux x86_64 only.
+**As of:** 2026-09-26
+**Phase:** 1 is underway - WP-01 through WP-10 are built, all on Linux x86_64 only.
 All five Phase 0 spikes returned verdicts on their primary platform; gate G0 remains
 open on hardware coverage, WP-05's soak settled D3's firmed-config run, **WP-06 closes
 milestone M1, *it records*,** WP-07 locks D8, WP-08 adds the meters and the §10 fan-out
-they read through, and WP-09 draws the waveform - and cost the schema two covering
-indexes to do it in milliseconds rather than seconds.
-**Branch:** `main` at `75123ab` (WP-08), plus WP-09 in the working tree.
+they read through, WP-09 draws the waveform - and cost the schema two covering
+indexes to do it in milliseconds rather than seconds - and **WP-10 closes milestone M2,
+*it plays back*,** with a seek that joins in a median 19.8 ms on hardware and byte-exactly
+in CI.
+**Branch:** `main` at `807d097` (WP-09), pushed. WP-10 is in the working tree,
+gate-green, uncommitted.
 
 This is the running snapshot: where Phase 0 actually stands, what is proven versus
 assumed, what is waiting on a decision, and what is waiting on hardware. The plan of
@@ -1511,12 +1514,201 @@ publishes a waveform event yet either - §19's progressive build exists on the *
 side, where the writer summarises every block as it commits, but the read side is polled
 rather than pushed, which is a WP-16 question about what the view wants.
 
+## Phase 1 - WP-10, playback
+
+Built 2026-09-26. `vcw-audio::playback` owns the output stream, `vcw-project::pcm` reads
+the PCM back, `vcw-core::playback` is the transport, and `vcw play` drives all of it from
+a script. Exit criterion met on both halves: **a gapless seek**, proved byte-for-byte in
+CI with no sound card and measured at **median 19.8 ms** on a real device, and **a
+bit-perfect path reported honestly**, which on this machine reads `bit-perfect playback,
+confirmed against the OS` and on a converting path says so instead.
+
+**Milestone M2, *it plays back*, is met.** The whole chain runs headless and was run
+end to end on hardware for the record:
+
+```sh
+vcw session m2.vcw --script "arm, record, sleep 20, stop, quit" --rate 48000 --format s32
+vcw waveform m2.vcw --pixels 100 --rows 11
+vcw play m2.vcw --capture 1 --device alsa:hw:CARD=PCH,DEV=1 \
+    --script "play, sleep 2, seek 15, sleep 2, skip-back, sleep 2, stop"
+```
+
+Capture, progressive waveform, playback, seek. 960,480 frames recorded with no loss,
+288,000 frames played with 0 gaps across a seek and a skip.
+
+### The four targets of §21 are one span
+
+§21 asks for playback of the complete capture, a selected region, an individual track and
+a boundary audition. They differ only in which frames they cover, so `Scope` resolves all
+four to a `Span` and everything below it plays a span and knows nothing else. A boundary
+audition is [`BOUNDARY_CONTEXT_SECONDS`] of 3 s each side of a frame, clamped, which is
+the only one of the four that needed a number invented; §21 does not give one.
+
+The transport reduces the same way. Six verbs - `PLAY PAUSE STOP SEEK SKIP FORWARD
+SKIP BACK` - and the last three are all `seek` with the arithmetic done first. `SKIP` is
+[`SKIP_SECONDS`] of 10 s until WP-13 records boundaries, at which point the skips become
+"next boundary" and "previous boundary", which is what they are for.
+
+### Epoch-tagged chunks, not a byte ring
+
+Capture's ring works because the producer is the callback. Playback inverts that, and a
+ring inverts badly: the producer would be the feeder, which cannot clear a ring it does
+not consume, so a seek would leave up to a second of the old position queued and the
+listener would hear it. The queue is therefore chunks, each tagged with the epoch it was
+filled in and the frame it starts at. A seek bumps the epoch; the callback discards every
+chunk that does not match, unplayed, and recycles it.
+
+Two things fall out of that for free. The position is **exact rather than inferred** -
+the callback knows the frame number of the chunk in its hand, so nothing subtracts a
+buffer depth it cannot see - and `drained` is per-epoch, so running out of audio at the
+end of a span is the end of it while running out mid-span is an underrun, and the two
+are never confused.
+
+The chunks themselves are allocated once and circulate through two SPSC queues, full one
+way and spent the other, exactly as capture's buffers do. `tests/rt_safety.rs` covers
+`Source::on_data` under a counting allocator on four paths - the ordinary one, a seek, a
+starved feeder and a stalled feeder - because the seek path is the one that tempts an
+implementation into clearing a collection, and it runs *on the audio thread* by design.
+
+### No resampler, and a capture plays at its own rate or not at all
+
+Locked as [ADR-0006](adr/0006-playback-rate-policy.md). The rate is not a preference. A device that cannot do 192 kHz cannot play a 192 kHz
+capture, and the answer is `Error::RateUnavailable` naming the rates the device does
+offer, not a silently resampled side. The format is a preference, and the order is the
+*opposite* of capture's: capture takes the best the device offers because a better
+capture is strictly better, and playback takes the format that matches what is on disk
+because anything else is a conversion.
+
+`convert::natural` is what "matches" means: the device format a stored format would
+rather be played in. Int24Padded maps to S24 rather than S32, because the bytes are the
+same three bytes and the narrower stream is the one that can still be called
+bit-perfect. It is lossless for every stored format, which is what lets the render path
+be byte-exact.
+
+### Two findings, both measured, both invisible from the code
+
+**The queue depth is not a tuning knob, it is a correctness constraint.** The first live
+run played at half speed with 16 underruns, while every counter except `underruns` said
+the device was healthy. ALSA's own default buffer on this machine is **350 ms**; the
+queue was `QUEUE_CHUNKS` of 20 ms, which is **160 ms**. A queue shallower than one
+callback underruns on *every* callback and cannot be rescued by a faster feeder. So
+playback now asks for a buffer it chose - [`TARGET_BUFFER_MILLIS`], four chunks, 80 ms -
+and derives the queue from it; a backend that will not be told gets a
+[`FALLBACK_QUEUE_MILLIS`] second-deep queue instead of an argument. On this device the
+request is honoured: `buffer 3840 frames, fixed`.
+
+**A gapless seek needs the feeder to be holding an empty chunk when the seek lands.**
+With the buffer fixed and the queue sized, five seeks on a real device still cost exactly
+five underruns and 34,560 frames of silence - one buffer per seek - while the render path
+cost none. The render path tops the queue up synchronously before each callback; a real
+feeder does not. When a seek lands, every chunk in the queue is stale *and* every empty
+chunk is in the queue, so the feeder has nothing to fill and cannot take one back out of
+an SPSC queue it is the producer of. The callback then discards the lot in one pass,
+finds nothing behind them and plays a buffer of silence.
+
+The fix is a reserve: `Feeder::hold_back` keeps one callback's worth of chunks out of
+ordinary filling, and the feeder spends them the moment it sees the epoch change. The
+new position is queued *behind* the audio the seek invalidated, so the callback walks
+past the stale chunks and keeps reading in the same pass. The feeder's idle sleeps became
+interruptible at the same time, because a 50 ms sleep is 50 ms of a 80 ms budget.
+
+After both: **0 underruns** across five seeks, three consecutive runs reporting
+identical counters.
+
+### The seek join latency, measured
+
+| | |
+|---|---|
+| min | 11.7 ms |
+| median | 19.8 ms |
+| max | 20.4 ms |
+
+Five seeks per run, three runs, on `alsa:hw:CARD=PCH,DEV=1` at 48 kHz S32 with a
+3,840-frame buffer. The median is one chunk, which is the granularity the design chose,
+and the ceiling the test enforces is 500 ms.
+
+The first version of that measurement reported 0.00 ms and was worthless, which is worth
+recording because it is the shape of mistake a latency test invites. It polled
+`Player::position` after `Player::seek`, and `seek` *stores* the frame it asked for -
+so the poll was reading the write it had just made and nothing the device had done. The
+playhead reading the target immediately is right for a UI and useless for a measurement,
+so the callback now records `Cursor::delivered`, the epoch it last copied audio out of.
+A seek has joined when `delivered` catches up with `epoch`, and that is a fact about the
+device rather than about the caller.
+
+### The render path is why gaplessness is testable without a device
+
+`playback::render` drives the same `Pump`, the same epoch-tagged queue and the same
+`Source::on_data`, synchronously, and writes the audio frames to a file. Silence is
+reported in `health` and never written. So a gapless seek becomes a byte comparison that
+runs in CI: play 0-2 s, seek to 4 s, and the output must equal `whole[..2 s] ++
+whole[4 s..]` with nothing repeated and nothing missing.
+
+Cues are reported rather than rounded away. A cue fires at the first period boundary at
+or after the frame it names, so `Rendered::applied` carries `{ verb, after, landed }` and
+the test computes its expectation from the join that actually happened. That turned a
+flaky assertion into a documented granularity, and gave the CLI something true to print.
+
+### Fidelity is three-way, like capture's verdict
+
+`Fidelity` is Confirmed, Refuted or Unconfirmed, and "nothing rules it out" is never a
+pass. One refutation is unique to this side: **the samples were converted for the
+device.** A 24-bit side played on a 32-bit stream sounds identical and is not
+bit-perfect, and it says so. A render is never verified against hardware, because there
+is no hardware under it.
+
+### The CLI
+
+```sh
+vcw play side.vcw --capture 1                       # the whole capture
+vcw play side.vcw --start 65 --end 130               # a region
+vcw play side.vcw --track 3                          # one track
+vcw play side.vcw --boundary 65.4                    # 3 s either side of a boundary
+vcw play side.vcw --render out.raw --start 0 --end 5  # no device needed
+vcw play side.vcw --script "play, sleep 2, seek 15, skip-back, stop" --json
+```
+
+`--script` is a comma-separated list of the six verbs plus `sleep <seconds>`; it opens
+paused, so a script that never says `play` plays nothing, deliberately. Three events go
+on the bus - `auditioning`, `playback-position` and `playback-finished` - and §35 names
+neither, so the names follow its kebab-case convention.
+
+### Tests
+
+411 in the workspace, full gate green, `cargo deny` clean. 15 on the transport, four
+through the shipped binary including the byte-exact gapless seek, four on the real-time
+contract of the playback callback, two on the chunk reserve, and two `#[ignore]`d
+hardware tests that measured the numbers above.
+
+### What is not verified
+
+Linux x86_64 and ALSA only, like everything above it. The device half was run on this
+machine's S/PDIF output, chosen because the simulated source is full-scale noise and the
+digital output has nothing plugged into it; `VCW_TEST_OUTPUT` overrides it. WASAPI in
+exclusive mode, CoreAudio and AAudio are all untried for output, and the buffer
+negotiation is exactly where they are most likely to differ - the fallback path exists
+for them and has never run.
+
+Nothing has played a 192 kHz side yet, and nothing has played for an hour. The reserve
+fixes the seek that lands between callbacks; a seek storm has not been tried.
+
 ## Next up
 
-**`WP-10`, playback, and `WP-12`, metadata.** Both branch off WP-07, neither blocks the
-other, and they can be interleaved. WP-10 is the first work package that needs a device
-for *output*, which is a second reason S1's open platforms start to matter; WP-12 needs
-no device at all and is the larger of the two at weight 9.
+**Where to pick up.** WP-10 is finished and gate-green but **not yet committed** - the
+whole of it is in the working tree, along with `docs/STATUS.md` from the session before
+it. Committing is the first thing the next session does, and nothing about the work is
+half-done.
+
+**`WP-12`, metadata, is next** and needs no device at all: a provider trait, Discogs,
+MusicBrainz, genre normalisation, artwork, caching, rate limits, timeouts and
+cancellation, at weight 9. Its exit criterion is that the application stays fully usable
+with networking disabled, so the tests are fixture-backed and offline by construction,
+and §39's rule that no credential is ever written into a project file is a constraint on
+the design rather than a check at the end.
+
+WP-11, editing, and WP-13, boundary detection, are the two that would build directly on
+WP-10 instead. WP-13 is also what turns `SKIP FORWARD` and `SKIP BACK` from a fixed ten
+seconds into what §21 actually wants, which is the next boundary either way.
 
 The plumbing is in place for whichever comes first. `Tee` takes any number of taps, the
 meter uses one, and a playback monitor or a live waveform feed is a second `tap()` call
@@ -1527,9 +1719,9 @@ pushed.** The writer summarises every block as it commits, so the rows are there
 instant they land, but nothing publishes a waveform event and a UI would have to ask. It
 is a WP-16 question about what the view wants, and cheap either way.
 
-Still open on WP-03 and WP-04, and both for the same reason: **Windows and macOS.** The
-device matrix is reported on one OS, and the OS format verifier exists for Linux/ALSA
-only. On the other two the verdict degrades to `Unconfirmed` rather than to a false
+Still open on WP-03, WP-04 and now WP-10, and all for the same reason: **Windows and
+macOS.** The device matrix is reported on one OS, the OS format verifier exists for
+Linux/ALSA only, and playback's buffer negotiation has only ever met one backend. On the other two the verdict degrades to `Unconfirmed` rather than to a false
 pass, which is the right failure, but neither work package can close on it.
 
 WP-05 and WP-06 have the same shape of gap: the 90-minute soak and the kill suite have
@@ -1551,9 +1743,20 @@ the spike harness.
   at `a28fd85`, the S3 IPC bench at `096a8a0`, and S4, S5 and the AUP4 delta at
   `19dd459`. WP-01 is committed at `cd8e445`, WP-02 at `acb8835`, WP-03 at `941981a`,
   WP-04 at `95f1f52`, WP-05 at `358c44a`, WP-06 at `b2a517b` and WP-07 at `051a648`.
-  WP-08 is committed at `75123ab`. **WP-09 is the current working-tree change and is
-  uncommitted**; it is the first change since WP-02 to touch the schema, so
-  `docs/SCHEMA.md` is regenerated in the same commit.
+  WP-08 is committed at `75123ab`, and WP-09 at `ae9b6d8` and `807d097`. WP-09 is the
+  first change since WP-02 to touch the schema, so `docs/SCHEMA.md` was regenerated with
+  it; regenerate with `VCW_BLESS=1 cargo test -p vcw-project --test schema_doc` whenever
+  the schema moves, or `the_committed_document_matches_the_schema` fails.
+- **`/data2/vcw-scratch/`** is the measurement bench for WP-09 and WP-10, none of it in
+  the repository
+  and all of it disposable. `realrip/` is a throwaway crate that pushes a headerless WAV
+  through `persistence::Writer` at full tilt - there is no CLI path for that yet, and it
+  is how the 26-minute side got into a project. `evict.py` is the two-line
+  `posix_fadvise(DONTNEED)` cache-evictor every cold number was taken with; without it
+  the readings are RAM readings. `side-a.vcw` is the 2.33 GiB real side, `soak90.log` the
+  passing 90-minute run and `soak90-contended.log` the spoiled one. `play/` holds WP-10's
+  six-second project and the `.raw` renders taken off it by hand; `m2/m2.vcw` is the
+  twenty-second capture the M2 chain above was demonstrated on.
 - **`/data2/vcw_soak/`** holds what is left of the WP-05 soak: `wp05.log`, the run
   transcript quoted above, and `live.vcw`, the four-second hardware capture. The 5.94
   GiB `wp05.vcw` has been deleted, as have the two three-minute WAL-pair projects.

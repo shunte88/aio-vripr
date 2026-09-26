@@ -110,6 +110,45 @@ against what the kernel says the card is actually running. That cross-check is t
 point - the audio API's report of its own success is not evidence, and on the same card
 through a converting path the claim is correctly refused.
 
+Playback (WP-10) closes the second milestone: **it plays back.** Capture, waveform,
+playback and seek all run headless:
+
+```sh
+vcw play side-a.vcw --capture 1                          # the whole capture
+vcw play side-a.vcw --start 65 --end 130                  # a region
+vcw play side-a.vcw --track 3                             # one track
+vcw play side-a.vcw --boundary 65.4                       # 3 s either side of a boundary
+vcw play side-a.vcw --render out.raw --start 0 --end 5     # no device needed
+vcw play side-a.vcw --script "play, sleep 2, seek 15, skip-back, stop"
+```
+
+There is **no resampler**, and that is a feature
+([ADR-0006](docs/adr/0006-playback-rate-policy.md)). A capture plays at its own rate or not
+at all, and a device that cannot do 192 kHz is told so by name rather than handed a
+silently converted side. The format preference is the opposite of capture's: capture
+takes the best the device offers because a better capture is strictly better, while
+playback takes whatever matches the bytes on disk, because anything else is a conversion
+and a converted path is not bit-perfect however good it sounds. It says which it was.
+
+Seeking is the part that had to be designed rather than written. The queue between the
+reader and the audio callback is not a byte ring but **chunks tagged with an epoch**: a
+seek bumps the epoch and the callback discards everything that no longer matches,
+unplayed, instead of the listener hearing out the second of old audio a ring would still
+be holding. Two useful things fall out of it for nothing - the reported position is the
+frame the callback has in its hand rather than a guess with the buffer subtracted, and
+running out of audio at the end of a side is distinguishable from running out in the
+middle of one, which is the difference between "finished" and "your machine is too busy".
+
+It is measured both ways. Byte-for-byte in CI with no sound card, because `--render`
+drives the same queue and the same callback synchronously, so playing two seconds and
+then seeking to four must produce exactly the first two seconds followed by everything
+from the fourth: nothing repeated, nothing missing. And on a real device, where a seek
+reaches the converter in a **median 19.8 ms**, one chunk. Getting there cost two findings
+that only a device could have produced: a queue shallower than one hardware buffer
+underruns on every single callback while every counter except that one reports health,
+and a seek needs the reader to be holding an empty buffer at the moment it lands or it
+costs a buffer of silence however fast everything else is.
+
 ## Layout
 
 ```

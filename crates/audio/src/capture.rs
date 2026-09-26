@@ -697,7 +697,11 @@ fn choose(matrix: &Matrix, request: &Request, report: &DeviceReport) -> Result<C
 /// virtual PCMs are shared by construction. So there is nothing to ask the
 /// backend for - the answer is already determined by which path the user picked,
 /// and the honest thing is to say so rather than report the request back.
-fn negotiate_mode(
+///
+/// Shared with playback, which negotiates the same way for the same reason: the
+/// rule is about the path to the device, not about which direction audio is
+/// travelling along it.
+pub(crate) fn negotiate_mode(
     requested: CaptureMode,
     transport: Transport,
 ) -> (CaptureMode, Option<Divergence>) {

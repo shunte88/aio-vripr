@@ -138,6 +138,26 @@ pub enum Error {
         offered: String,
     },
 
+    /// The device cannot play audio at the rate it was recorded at.
+    ///
+    /// Its own variant, and not [`Error::NoConfiguration`], because it is the
+    /// one playback failure with a concrete answer: there is no resampler in
+    /// VCW (§21), so a 192 kHz side needs a device that does 192 kHz. Saying so
+    /// is more useful than an unannounced conversion, and far more useful than
+    /// a generic refusal.
+    #[error(
+        "{device} cannot play {wanted} Hz audio; it offers {offered}. VCW does not \
+         resample, so this capture needs a device that can play its own rate"
+    )]
+    RateUnavailable {
+        /// The device, as a user would recognise it.
+        device: String,
+        /// The rate the capture was recorded at.
+        wanted: u32,
+        /// What the device does offer.
+        offered: String,
+    },
+
     /// Whatever the backend said, passed through unedited. Its own wording is
     /// usually more specific than anything we could put in front of it.
     #[error(transparent)]

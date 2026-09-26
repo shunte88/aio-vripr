@@ -147,6 +147,57 @@ pub enum Event {
         /// Whether the capture can honestly be called bit-perfect.
         bit_perfect: bool,
     },
+    /// Playback opened on a device, and this is what it is playing through.
+    ///
+    /// The playback analogue of [`Event::Armed`], and it carries the same
+    /// awkward truth: §21 wants bit-perfect playback where supported, so a
+    /// consumer needs to know whether the samples reaching the converter are
+    /// the samples in the project or a conversion of them.
+    Auditioning {
+        /// The capture being played.
+        capture_id: i64,
+        /// What is being auditioned: the whole side, a region, a track or a
+        /// boundary, with its extent in seconds.
+        scope: String,
+        /// How the output stream is actually running, as a line of text.
+        opened: String,
+        /// What has to happen to the stored samples on the way out, or
+        /// `"straight through"` when the answer is nothing.
+        conversion: String,
+        /// Every field that was asked for and not granted.
+        divergences: Vec<String>,
+    },
+    /// Where the playhead is. The playback counterpart of
+    /// [`Event::Position`].
+    ///
+    /// The frame being fed to the converter, not an estimate from a buffer
+    /// depth: the chunk the callback is reading carries the frame it starts
+    /// at, so this is exact to within one period.
+    Playhead {
+        /// The frame now playing, absolute within the capture.
+        frame: u64,
+        /// The same thing in seconds.
+        seconds: f64,
+    },
+    /// Playback stopped, and this is how it went.
+    ///
+    /// An underrun here is a gap the listener heard. It cannot be repaired
+    /// afterwards the way a capture's can be re-run, so it is reported
+    /// plainly rather than folded into a health score.
+    Ended {
+        /// The capture that was playing.
+        capture_id: i64,
+        /// Frames delivered to the device.
+        frames: u64,
+        /// Gaps the listener heard.
+        underruns: u64,
+        /// Whether the audio reaching the converter can honestly be called
+        /// the audio in the project.
+        fidelity: String,
+        /// Whether that answer was a confirmation rather than an absence of
+        /// evidence.
+        bit_perfect: bool,
+    },
     /// A command was legal here and the deck refused it.
     ///
     /// The transport did not move. Kept apart from [`Event::Rejected`] because
@@ -202,6 +253,9 @@ impl Event {
             Self::Finished { .. } => "capture-finished",
             Self::Refused { .. } => "command-refused",
             Self::Rejected { .. } => "command-rejected",
+            Self::Auditioning { .. } => "auditioning",
+            Self::Playhead { .. } => "playback-position",
+            Self::Ended { .. } => "playback-finished",
             Self::Status { .. } => "status",
             Self::Closed => "closed",
         }
@@ -251,6 +305,35 @@ impl fmt::Display for Event {
                 diagnostics.underruns,
                 diagnostics.dropped_frames,
                 diagnostics.stream_errors,
+                if *bit_perfect { "yes" } else { "no" }
+            ),
+            Self::Auditioning {
+                capture_id,
+                scope,
+                opened,
+                conversion,
+                divergences,
+            } => {
+                write!(
+                    f,
+                    "auditioning {scope} of capture {capture_id} on {opened}, {conversion}"
+                )?;
+                for divergence in divergences {
+                    write!(f, "; {divergence}")?;
+                }
+                Ok(())
+            }
+            Self::Playhead { frame, seconds } => write!(f, "{frame} ({seconds:.3} s)"),
+            Self::Ended {
+                capture_id,
+                frames,
+                underruns,
+                fidelity,
+                bit_perfect,
+            } => write!(
+                f,
+                "capture {capture_id} played {frames} frames with {underruns} gap(s): \
+                 {fidelity}, bit-perfect {}",
                 if *bit_perfect { "yes" } else { "no" }
             ),
             Self::Refused {

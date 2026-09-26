@@ -44,9 +44,11 @@
 pub mod capture;
 pub mod format;
 pub mod rate;
+pub mod span;
 pub mod summary;
 
 pub use capture::{CaptureInfo, CaptureState, Diagnostics, PcmSource};
 pub use format::{CaptureMode, SampleFormat, StorageFormat};
 pub use rate::{STANDARD_RATES, SampleRate};
+pub use span::Span;
 pub use summary::{Summary, TRIPLET_BYTES};

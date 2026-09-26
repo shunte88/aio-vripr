@@ -259,7 +259,9 @@ fn print_event(event: &Event, started: Instant, json: bool) {
 }
 
 /// One event's fields, for a consumer that would rather not parse prose.
-fn detail(event: &Event) -> serde_json::Value {
+///
+/// Shared with `vcw play`, which prints the same bus.
+pub(crate) fn detail(event: &Event) -> serde_json::Value {
     match event {
         Event::Phase { from, to } => serde_json::json!({
             "from": from.as_str(), "to": to.as_str(),
@@ -328,12 +330,41 @@ fn detail(event: &Event) -> serde_json::Value {
         Event::Status { phase, frames } => serde_json::json!({
             "phase": phase.as_str(), "frames": frames,
         }),
+        Event::Auditioning {
+            capture_id,
+            scope,
+            opened,
+            conversion,
+            divergences,
+        } => serde_json::json!({
+            "capture_id": capture_id,
+            "scope": scope,
+            "opened": opened,
+            "conversion": conversion,
+            "divergences": divergences,
+        }),
+        Event::Playhead { frame, seconds } => serde_json::json!({
+            "frame": frame, "seconds": seconds,
+        }),
+        Event::Ended {
+            capture_id,
+            frames,
+            underruns,
+            fidelity,
+            bit_perfect,
+        } => serde_json::json!({
+            "capture_id": capture_id,
+            "frames": frames,
+            "underruns": underruns,
+            "fidelity": fidelity,
+            "bit_perfect": bit_perfect,
+        }),
         Event::Closed => serde_json::json!({}),
         // `Event` is `#[non_exhaustive]`, and from outside the crate that
-        // makes this arm compulsory rather than optional. A variant WP-10 adds
-        // still gets its name, its time and its prose - the fields are what it
-        // loses, which is the right way round for a consumer that has not been
-        // taught about it yet.
+        // makes this arm compulsory rather than optional. A variant a later
+        // work package adds still gets its name, its time and its prose - the
+        // fields are what it loses, which is the right way round for a
+        // consumer that has not been taught about it yet.
         other => serde_json::json!({ "detail": other.to_string() }),
     }
 }

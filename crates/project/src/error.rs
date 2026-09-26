@@ -156,6 +156,26 @@ pub enum Error {
         capture_id: i64,
     },
 
+    /// A capture's blocks do not describe audio that can be played.
+    ///
+    /// Distinct from [`Error::Invalid`], which is what a whole-project
+    /// validation returns: this one is raised by the reader, in the middle of
+    /// playback, about one block it was asked for and cannot honour. Playback
+    /// refusing to invent audio for a hole in the timeline is the point -
+    /// silence in place of a missing block would be indistinguishable from
+    /// silence that was recorded.
+    #[error("capture {capture_id} cannot be played: channel {channel} of block {sequence} {why}")]
+    Unplayable {
+        /// The capture concerned.
+        capture_id: i64,
+        /// The channel whose block is wrong.
+        channel: u16,
+        /// The block's sequence number within the capture.
+        sequence: u64,
+        /// What is wrong with it.
+        why: String,
+    },
+
     /// SQLite said no.
     #[error(transparent)]
     Sqlite(#[from] rusqlite::Error),
